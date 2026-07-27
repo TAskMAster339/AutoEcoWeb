@@ -1,3 +1,4 @@
+from config import settings
 from fastapi import FastAPI
 
 app = FastAPI()
@@ -5,7 +6,7 @@ app = FastAPI()
 
 @app.get("/")
 def read_root():
-    return {"Hello": "world"}
+    return {"Hello": settings.postgres_host}
 
 
 @app.get("/items/{item_id}")
