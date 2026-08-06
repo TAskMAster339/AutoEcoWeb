@@ -7,17 +7,24 @@ services:
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_DB_NAME=${POSTGRES_DB_NAME}
-    ports: 
-    - 80:80
+    ports:
+      - 80:80
+    volumes:
+      - ./backend:/app
+      - /app/.venv
     develop:
       watch:
-      - action: sync+restart
-        path: ./backend
-        target: ./app
-      - action: rebuild
-        path: backend/requirements.txt
+        - action: sync+restart
+          path: ./backend
+          target: /app
+          ignore:
+            - .venv/
+            - __pycache__/
+            - .env
+        - action: rebuild
+          path: backend/requirements.txt
     depends_on:
-     - postgres
+      - postgres
 
   adminer:
     image: adminer
