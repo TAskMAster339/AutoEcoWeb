@@ -1,8 +1,14 @@
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.database import get_db
+from src.core.enums.user_status import UserStatus
+from src.core.security import decode_access_token
+from src.models.user import User
+from src.repositories.refresh_token import RefreshTokenRepository
 from src.repositories.user import UserRepository
 
 DBSession = Annotated[AsyncSession, Depends(get_db)]
@@ -13,3 +19,43 @@ async def get_user_repo(session: DBSession) -> UserRepository:
 
 
 UserRepo = Annotated[UserRepository, Depends(get_user_repo)]
+
+
+async def get_refresh_repo(session: DBSession) -> RefreshTokenRepository:
+    return RefreshTokenRepository(session)
+
+
+RefreshRepo = Annotated[RefreshTokenRepository, Depends(get_refresh_repo)]
+
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+
+
+async def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    repo: UserRepo,
+) -> User:
+    credentials_error = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Не удалось проверить credentials",  # noqa: RUF001
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        user_id = decode_access_token(token)
+    except (JWTError, ValueError):
+        raise credentials_error  # noqa: B904
+
+    user = await repo.get(user_id)
+    if user is None:
+        raise credentials_error
+
+    if user.status != UserStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Аккаунт неактивен или заблокирован",
+        )
+
+    return user
+
+
+CurrentUser = Annotated[User, Depends(get_current_user)]
