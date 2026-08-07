@@ -1,0 +1,77 @@
+# AutoEcoWeb — local development stack.
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# backend  : FastAPI + uvicorn with hot-reload (port 80)
+# frontend : Vite dev server with HMR (port 5173, proxies /api -> backend)
+# postgres : database (port 5432)
+# adminer  : DB UI (port 8080)
+
+services:
+  backend:
+    build: ./backend
+    # env_file: the whole root .env (POSTGRES_*, JWT_SECRET) becomes the
+    # container environment — no per-variable listing. Copy .env.example.
+    env_file:
+      - .env
+    ports:
+      - 80:80
+    volumes:
+      - ./backend:/app
+      - /app/.venv
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./backend
+          target: /app
+          ignore:
+            - .venv/
+            - __pycache__/
+            - .env
+        - action: rebuild
+          path: backend/requirements.txt
+    depends_on:
+      - postgres
+
+  frontend:
+    build:
+      context: ./frontend
+      target: build
+    image: autoecoweb-frontend-dev
+    command: npm run dev -- --host 0.0.0.0
+    # VITE_* vars come from the root .env (single env source). Vite dev
+    # exposes them to the client as import.meta.env; VITE_PROXY_TARGET is
+    # read server-side by vite.config.ts (http://backend:80 inside compose).
+    env_file:
+      - .env
+    ports:
+      - 5173:5173
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:17-alpine
+    restart: always
+    shm_size: 128mb
+    # POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB_NAME from root .env.
+    # The image ignores the extra vars (HOST/PORT/JWT_SECRET) it receives.
+    env_file:
+      - .env
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres:/var/lib/postgresql/data
+
+volumes:
+  postgres:
+    driver: local

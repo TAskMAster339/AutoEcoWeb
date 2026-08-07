@@ -1,0 +1,109 @@
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+  overflow-x: clip;
+}
+
+/* Numbers should look clean and aligned (mockup style) */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+/* Subtle scrollbar */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 140, 0.45);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Safe area helpers for mobile bottom bars */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* AG Grid: mockup look — tight rows, light surface, subtle borders.
+   Light values are scoped to .ag-theme-quartz (specificity 0-2-0) because
+   AG Grid's own theme CSS is injected later (lazy chunk) and would win any
+   tie against a bare .ag-theme-autoeco (0-1-0) selector. */
+.ag-theme-autoeco.ag-theme-quartz {
+  --ag-font-family: 'Inter', system-ui, sans-serif;
+  --ag-font-size: 13px;
+  --ag-border-color: #ececf3;
+  --ag-row-border-color: #f1f1f6;
+  --ag-row-hover-color: #faf9ff;
+  --ag-header-background-color: #fbfbfd;
+  --ag-header-foreground-color: #6b7280;
+  --ag-foreground-color: #111827;
+  --ag-background-color: #ffffff;
+  --ag-odd-row-background-color: #fbfbfd;
+  --ag-selected-row-background-color: #e9e4fb;
+  /* Match the wrapper Box frame (borderRadius 6px + own border) so AG Grid's
+     inner .ag-root-wrapper has the same radius and no border of its own. */
+  --ag-border-radius: 6px;
+  --ag-wrapper-border-radius: 6px;
+  --ag-borders: none;
+  --ag-cell-horizontal-padding: 12px;
+  --ag-header-column-separator-display: none;
+  /* Native selection checkboxes follow the app's purple accent (MUI primary). */
+  --ag-checkbox-checked-color: #6c5ce7;
+  --ag-checkbox-indeterminate-color: #6c5ce7;
+  --ag-checkbox-unchecked-color: #c9c9d4;
+  /* No blue focus ring on checkbox click (quartz default is a #2196f3 ring). */
+  --ag-input-focus-box-shadow: none;
+}
+
+/* Dark AG Grid: muted, cohesive with the app's dark surface (#17171c).
+   No zebra striping (bright bands), explicit secondary-foreground so
+   pagination/sort icons are not bright white. */
+.ag-theme-autoeco.ag-theme-quartz-dark {
+  /* Match the container's own frame (borderRadius 6px + border on the
+     wrapper Box): AG Grid's .ag-root-wrapper gets the same radius and no
+     border, so no corner gap / double border between the two rectangles. */
+  --ag-border-radius: 6px;
+  --ag-wrapper-border-radius: 6px;
+  --ag-borders: none;
+  --ag-border-color: #23232b;
+  --ag-row-border-color: #1f1f27;
+  --ag-cell-horizontal-padding: 12px;
+  --ag-row-background-color: #17171c;
+  --ag-odd-row-background-color: #17171c;
+  --ag-row-hover-color: #1e1e26;
+  --ag-header-background-color: #15151b;
+  --ag-header-foreground-color: #9c9ca8;
+  --ag-foreground-color: #ececf1;
+  --ag-secondary-foreground-color: #8f8f9c;
+  --ag-background-color: #17171c;
+  --ag-selected-row-background-color: #2a2347;
+  /* Native selection checkboxes: lighter purple reads better on dark. */
+  --ag-checkbox-checked-color: #8b7ff0;
+  --ag-checkbox-indeterminate-color: #8b7ff0;
+  --ag-checkbox-unchecked-color: #3a3a44;
+  /* No blue focus ring on checkbox click (quartz default is a #2196f3 ring). */
+  --ag-input-focus-box-shadow: none;
+}
+
+/* Mockup pagination: hide AG Grid's "1 из 13 из 13" row summary —
+   the "Всего записей: N" label is rendered by TransactionsGrid instead. */
+.ag-theme-autoeco .ag-paging-row-summary-panel {
+  display: none;
+}
+
+/* Keep the page-size selector away from the custom total label */
+.ag-theme-autoeco .ag-paging-panel {
+  padding-left: 148px;
+}

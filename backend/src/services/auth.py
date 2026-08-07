@@ -18,7 +18,7 @@ def _hash_refresh_token(token: str) -> str:
 
 
 class AuthService:
-    def init(
+    def __init__(
         self,
         user_repo: UserRepository,
         refresh_repo: RefreshTokenRepository,

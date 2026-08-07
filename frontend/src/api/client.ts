@@ -1,0 +1,135 @@
+/**
+ * Thin fetch wrapper around the backend API.
+ *
+ * - attaches Bearer token read from the READONLY cookie (src/lib/cookie.ts)
+ * - transparently refreshes the access token once on 401
+ * - surfaces a typed ApiError with a human-readable Russian message
+ */
+
+import {
+  clearAuthTokens,
+  getAccessToken,
+  getRefreshToken,
+  setAuthTokens,
+} from '../lib/cookie'
+import { API_URL } from '../lib/config'
+import type { TokenPair } from './types'
+
+export class ApiError extends Error {
+  readonly status: number
+  readonly detail?: string
+
+  constructor(status: number, message: string, detail?: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.detail = detail
+  }
+}
+
+export function messageFromError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 0) return 'Нет соединения с сервером'
+    if (err.status === 401) return 'Неверный email или пароль'
+    if (err.status === 403) return 'Недостаточно прав'
+    if (err.status === 409) return 'Пользователь с таким email уже существует'
+    if (err.detail && typeof err.detail === 'string') return err.detail
+    return err.message
+  }
+  return 'Что-то пошло не так'
+}
+
+type UnauthorizedHandler = () => void
+let unauthorizedHandler: UnauthorizedHandler | null = null
+
+/** authStore registers a handler that signs the user out when refresh fails. */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
+  unauthorizedHandler = handler
+}
+
+export const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+let refreshPromise: Promise<boolean> | null = null
+
+async function tryRefresh(): Promise<boolean> {
+  const refreshToken = getRefreshToken()
+  if (!refreshToken) return false
+  try {
+    const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    })
+    if (!res.ok) return false
+    const data = (await res.json()) as TokenPair
+    setAuthTokens(data.access_token, data.refresh_token)
+    return true
+  } catch {
+    return false
+  }
+}
+
+interface RequestOptions {
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+  body?: unknown
+  /** set false for endpoints that must never trigger refresh (e.g. login) */
+  auth?: boolean
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const headers: Record<string, string> = {}
+  if (options.body !== undefined) headers['Content-Type'] = 'application/json'
+  const token = getAccessToken()
+  if (options.auth !== false && token) headers.Authorization = `Bearer ${token}`
+
+  let res: Response
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method: options.method ?? 'GET',
+      headers,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      credentials: 'include',
+    })
+  } catch {
+    throw new ApiError(0, 'Нет соединения с сервером')
+  }
+
+  // One transparent refresh attempt on 401 (except auth-less calls like login).
+  if (res.status === 401 && options.auth !== false) {
+    refreshPromise ??= tryRefresh().finally(() => {
+      refreshPromise = null
+    })
+    const refreshed = await refreshPromise
+    if (refreshed) {
+      return request<T>(path, options)
+    }
+    clearAuthTokens()
+    unauthorizedHandler?.()
+    throw new ApiError(401, 'Сессия истекла. Войдите снова.')
+  }
+
+  if (!res.ok) {
+    let detail: string | undefined
+    try {
+      const json: unknown = await res.json()
+      if (typeof json === 'object' && json !== null && 'detail' in json) {
+        const d = (json as { detail?: unknown }).detail
+        detail = typeof d === 'string' ? d : JSON.stringify(d)
+      }
+    } catch {
+      // non-JSON error body — ignore
+    }
+    throw new ApiError(res.status, `Ошибка сервера (${res.status})`, detail)
+  }
+
+  if (res.status === 204) return undefined as T
+  return (await res.json()) as T
+}
+
+export const api = {
+  get: <T>(path: string): Promise<T> => request<T>(path),
+  post: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'POST', body }),
+  patch: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'PATCH', body }),
+  del: <T = void>(path: string, body?: unknown): Promise<T> =>
+    request<T>(path, { method: 'DELETE', body }),
+}
