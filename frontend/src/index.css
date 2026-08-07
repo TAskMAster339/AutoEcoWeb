@@ -18,14 +18,22 @@ body {
   font-feature-settings: 'tnum' on, 'lnum' on;
 }
 
-/* Subtle scrollbar */
+/* Purple scrollbars — palette primary #6C5CE7 (dark hover #5A4BD1).
+   Firefox uses scrollbar-color; WebKit/Blink use ::-webkit-scrollbar. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #6c5ce7 transparent;
+}
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 140, 0.45);
+  background: #6c5ce7;
   border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #5a4bd1;
 }
 *::-webkit-scrollbar-track {
   background: transparent;

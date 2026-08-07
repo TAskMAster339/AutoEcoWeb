@@ -28,6 +28,7 @@ async def _get_user_or_404(repo: UserRepo, user_id: UUID) -> User:
 
 @router.get("/users", response_model=CursorPage[UserAdminResponse])
 async def list_users(  # noqa: PLR0913
+    _current_admin: CurrentAdmin,
     repo: UserRepo,
     limit: int = Query(50, ge=1, le=100),
     cursor: str | None = Query(None),
@@ -42,11 +43,11 @@ async def list_users(  # noqa: PLR0913
         status=user_status,
         q=q,
     )
-    return CursorPage[UserAdminResponse]
+    return CursorPage[UserAdminResponse](items=items, next_cursor=next_cursor)
 
 
 @router.get("/users/{user_id}", response_model=UserAdminResponse)
-async def get_user(user_id: UUID, repo: UserRepo) -> User:
+async def get_user(user_id: UUID, _current_admin: CurrentAdmin, repo: UserRepo) -> User:
     return await _get_user_or_404(repo, user_id)
 
 

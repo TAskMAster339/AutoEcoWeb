@@ -1,13 +1,12 @@
 /**
  * Auth store (Zustand).
  *
- * Holds ONLY the user + status. Raw tokens live in the READONLY cookie
- * (src/lib/cookie.ts) — this store never sees them.
+ * Holds ONLY the user + status. Tokens live in backend-set HttpOnly cookies
+ * (Set-Cookie) — the store and the whole app never see them.
  */
 import { create } from 'zustand'
 import * as authApi from '../api/auth'
 import { setUnauthorizedHandler } from '../api/client'
-import { clearAuthTokens, getRefreshToken, setAuthTokens } from '../lib/cookie'
 import { messageFromError } from '../api/client'
 import type { User } from '../api/types'
 
@@ -36,8 +35,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await authApi.fetchMe()
       set({ user, status: 'authenticated' })
     } catch {
-      // client already attempted a refresh; if it failed, tokens are cleared.
-      clearAuthTokens()
+      // client already attempted a refresh; if it failed, the backend cleared
+      // the cookies. Nothing to wipe locally — tokens never live in JS.
       set({ user: null, status: 'unauthenticated' })
     }
   },
@@ -45,9 +44,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (email, password) => {
     set({ status: 'loading', error: null })
     try {
-      const res = await authApi.login(email, password)
-      setAuthTokens(res.access_token, res.refresh_token)
-      set({ user: res.user, status: 'authenticated' })
+      const user = await authApi.login(email, password)
+      set({ user, status: 'authenticated' })
       return true
     } catch (err) {
       set({ status: 'unauthenticated', error: messageFromError(err) })
@@ -73,14 +71,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
-    const refreshToken = getRefreshToken()
     set({ status: 'loading' })
     try {
-      if (refreshToken) await authApi.logout(refreshToken)
+      await authApi.logout()
     } catch {
-      // even if the server call fails, drop the local session
+      // even if the server call fails, drop the local session (the backend
+      // clears the HttpOnly cookies on its side when it can)
     } finally {
-      clearAuthTokens()
       set({ user: null, status: 'unauthenticated', error: null })
     }
   },

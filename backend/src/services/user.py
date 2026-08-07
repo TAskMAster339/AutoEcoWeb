@@ -41,7 +41,7 @@ class UserService:
 
 
 class AdminUserService:
-    def init(self, repo: UserRepository) -> None:
+    def __init__(self, repo: UserRepository) -> None:
         self._repo = repo
 
     async def list_users(

@@ -84,8 +84,12 @@ export function buildTheme(mode: 'light' | 'dark'): Theme {
 
   return createTheme({
     palette,
-    // Mockup: slightly rounded, not "blob" corners
-    shape: { borderRadius: 8 },
+    // MUI v6 multiplies NUMERIC borderRadius values in sx/styleOverrides by
+    // theme.shape.borderRadius (default 4): borderRadius: 10 would render as
+    // 40px (and as 80px with the old 8 here). Every radius in this codebase is
+    // written as a px-intent number (dialog 10, chip 6, button/icon 8…), so the
+    // multiplier must be 1. String radii ('8px') are never multiplied.
+    shape: { borderRadius: 1 },
     typography: {
       fontFamily:
         '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',

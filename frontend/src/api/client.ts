@@ -1,19 +1,14 @@
 /**
  * Thin fetch wrapper around the backend API.
  *
- * - attaches Bearer token read from the READONLY cookie (src/lib/cookie.ts)
- * - transparently refreshes the access token once on 401
+ * - auth is cookie-driven: the backend sets HttpOnly cookies (Set-Cookie) and
+ *   the browser sends them automatically — no Authorization header, JS never
+ *   sees a token (credentials: 'include')
+ * - transparently refreshes the session once on 401 (backend rotates cookies)
  * - surfaces a typed ApiError with a human-readable Russian message
  */
 
-import {
-  clearAuthTokens,
-  getAccessToken,
-  getRefreshToken,
-  setAuthTokens,
-} from '../lib/cookie'
 import { API_URL } from '../lib/config'
-import type { TokenPair } from './types'
 
 export class ApiError extends Error {
   readonly status: number
@@ -52,18 +47,14 @@ export const delay = (ms: number): Promise<void> => new Promise((r) => setTimeou
 let refreshPromise: Promise<boolean> | null = null
 
 async function tryRefresh(): Promise<boolean> {
-  const refreshToken = getRefreshToken()
-  if (!refreshToken) return false
+  // The refresh token lives in an HttpOnly cookie — the browser sends it with
+  // the request automatically; the backend rotates both cookies on success.
   try {
     const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      credentials: 'include',
     })
-    if (!res.ok) return false
-    const data = (await res.json()) as TokenPair
-    setAuthTokens(data.access_token, data.refresh_token)
-    return true
+    return res.ok
   } catch {
     return false
   }
@@ -79,8 +70,6 @@ interface RequestOptions {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {}
   if (options.body !== undefined) headers['Content-Type'] = 'application/json'
-  const token = getAccessToken()
-  if (options.auth !== false && token) headers.Authorization = `Bearer ${token}`
 
   let res: Response
   try {
@@ -103,7 +92,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (refreshed) {
       return request<T>(path, options)
     }
-    clearAuthTokens()
+    // Refresh failed: the backend has already cleared the cookies — sign out.
     unauthorizedHandler?.()
     throw new ApiError(401, 'Сессия истекла. Войдите снова.')
   }

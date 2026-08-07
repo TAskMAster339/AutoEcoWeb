@@ -17,14 +17,22 @@ export interface User {
   status: UserStatus
 }
 
-export interface TokenPair {
-  access_token: string
-  refresh_token: string
-  token_type: string
+/** Admin view of a user (GET /api/v1/admin/users) — mirrors UserAdminResponse. */
+export interface AdminUser extends User {
+  created_at: string
+  updated_at: string
 }
 
-export interface LoginResponse extends TokenPair {
-  user: User
+/** Cursor-based page envelope — mirrors backend src/schemas/pagination.py. */
+export interface CursorPage<T> {
+  items: T[]
+  next_cursor: string | null
+}
+
+export interface AdminUserFilters {
+  role?: UserRole
+  status?: UserStatus
+  q?: string
 }
 
 /* ---------- Domain (mock until backend provides endpoints) ---------- */
