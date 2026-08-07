@@ -10,8 +10,14 @@ from src.core.enums.user_role import UserRole
 from src.core.enums.user_status import UserStatus
 from src.core.security import decode_access_token
 from src.models.user import User
+from src.repositories.alias import AliasRepository
+from src.repositories.receipt import ReceiptRepository
+from src.repositories.receipt_item import ReceiptItemRepository
 from src.repositories.refresh_token import RefreshTokenRepository
+from src.repositories.tag import TagRepository
 from src.repositories.user import UserRepository
+from src.services.proverkacheka import ProverkachekaClient
+from src.services.receipt_item import ReceiptItemService
 
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 
@@ -28,6 +34,55 @@ async def get_refresh_repo(session: DBSession) -> RefreshTokenRepository:
 
 
 RefreshRepo = Annotated[RefreshTokenRepository, Depends(get_refresh_repo)]
+
+
+async def get_receipt_repo(session: DBSession) -> ReceiptRepository:
+    return ReceiptRepository(session)
+
+
+ReceiptRepo = Annotated[ReceiptRepository, Depends(get_receipt_repo)]
+
+
+async def get_receipt_item_repo(session: DBSession) -> ReceiptItemRepository:
+    return ReceiptItemRepository(session)
+
+
+ReceiptItemRepo = Annotated[ReceiptItemRepository, Depends(get_receipt_item_repo)]
+
+
+async def get_receipt_item_service(
+    session: DBSession,
+    receipt_repo: ReceiptRepo,
+) -> ReceiptItemService:
+    return ReceiptItemService(
+        ReceiptItemRepository(session),
+        receipt_repo,
+        TagRepository(session),
+    )
+
+
+ReceiptItemSvc = Annotated[ReceiptItemService, Depends(get_receipt_item_service)]
+
+
+async def get_tag_repo(session: DBSession) -> TagRepository:
+    return TagRepository(session)
+
+
+TagRepo = Annotated[TagRepository, Depends(get_tag_repo)]
+
+
+async def get_alias_repo(session: DBSession) -> AliasRepository:
+    return AliasRepository(session)
+
+
+AliasRepo = Annotated[AliasRepository, Depends(get_alias_repo)]
+
+
+def get_proverkacheka_client() -> ProverkachekaClient:
+    return ProverkachekaClient()
+
+
+Proverkacheka = Annotated[ProverkachekaClient, Depends(get_proverkacheka_client)]
 
 
 oauth2_scheme = OAuth2PasswordBearer(

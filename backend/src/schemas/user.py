@@ -32,6 +32,18 @@ class UserUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=8, max_length=128)
 
 
+class ProverkachekaTokenUpdate(BaseModel):
+    """Тело PUT /auth/me/proverkacheka-token."""
+
+    token: str = Field(min_length=1, max_length=256)
+
+
+class ProverkachekaTokenStatus(BaseModel):
+    """Признак наличия токена — сам токен в ответе не отдаётся."""
+
+    has_token: bool
+
+
 class AdminUserUpdate(BaseModel):
     role: UserRole | None = None
     status: UserStatus | None = None

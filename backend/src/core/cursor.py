@@ -9,7 +9,13 @@ _SEP = "|"
 
 
 def encode_cursor(created_at: datetime, user_id: UUID) -> str:
-    """Кодирует (created_at, user_id) в непрозрачный курсор. Всегда в UTC."""
+    """Кодирует (created_at, user_id) в непрозрачный курсор. Всегда в UTC.
+
+    sqlite отдаёт naive datetime (tz не хранится) — трактуем его как UTC,
+    иначе astimezone(utc) посчитает его локальным временем и сдвинет курсор.
+    """  # noqa: RUF002
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
     created_at_utc = created_at.astimezone(timezone.utc)
     raw = f"{created_at_utc.isoformat()}{_SEP}{user_id}"
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii")

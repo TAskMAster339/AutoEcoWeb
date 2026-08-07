@@ -7,7 +7,14 @@ from src.core.cookies import REFRESH_COOKIE, clear_auth_cookies, set_auth_cookie
 from src.core.dependencies import CurrentUser, RefreshRepo, UserRepo
 from src.models.user import User
 from src.schemas.auth import LogoutRequest, RefreshRequest, TokenPair
-from src.schemas.user import UserCreate, UserLogin, UserResponse, UserUpdate
+from src.schemas.user import (
+    ProverkachekaTokenStatus,
+    ProverkachekaTokenUpdate,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+    UserUpdate,
+)
 from src.services.auth import AuthService
 from src.services.user import UserService
 
@@ -98,6 +105,23 @@ async def update_me(
     repo: UserRepo,
 ) -> UserResponse:
     return await UserService(repo).update_profile(current_user, data)
+
+
+@router.get("/me/proverkacheka-token", response_model=ProverkachekaTokenStatus)
+async def get_proverkacheka_token(
+    current_user: CurrentUser,
+) -> ProverkachekaTokenStatus:
+    return ProverkachekaTokenStatus(has_token=bool(current_user.proverkacheka_token))
+
+
+@router.put("/me/proverkacheka-token", response_model=ProverkachekaTokenStatus)
+async def update_proverkacheka_token(
+    data: ProverkachekaTokenUpdate,
+    current_user: CurrentUser,
+    repo: UserRepo,
+) -> ProverkachekaTokenStatus:
+    user = await UserService(repo).update_proverkacheka_token(current_user, data.token)
+    return ProverkachekaTokenStatus(has_token=bool(user.proverkacheka_token))
 
 
 @router.post("/token", response_model=TokenPair)

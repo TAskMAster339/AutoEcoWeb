@@ -1,4 +1,4 @@
-from sqlalchemy import Enum, String, Index
+from sqlalchemy import Enum, Index, String
 from sqlalchemy.orm import Mapped, mapped_column
 from src.core.enums.user_role import UserRole
 from src.core.enums.user_status import UserStatus
@@ -35,4 +35,10 @@ class User(BaseModel):
         Enum(UserStatus, values_callable=_enum_values),
         default=UserStatus.PENDING,
         nullable=False,
+    )
+
+    # Персональный токен proverkacheka.com; используется при автозагрузке
+    proverkacheka_token: Mapped[str | None] = mapped_column(
+        String(256),
+        nullable=True,
     )

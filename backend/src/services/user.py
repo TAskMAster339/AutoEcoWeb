@@ -39,6 +39,15 @@ class UserService:
 
         return await self._repo.update(user, **changes)
 
+    async def update_proverkacheka_token(self, user: User, token: str) -> User:
+        token = token.strip()
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Токен не может быть пустым",
+            )
+        return await self._repo.update(user, proverkacheka_token=token)
+
 
 class AdminUserService:
     def __init__(self, repo: UserRepository) -> None:
