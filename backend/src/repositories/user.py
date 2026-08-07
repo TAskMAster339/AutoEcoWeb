@@ -1,7 +1,10 @@
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from src.core.enums.user_role import UserRole
+from src.core.enums.user_status import UserStatus
 from src.models.user import User
 
 
@@ -19,6 +22,40 @@ class UserRepository:
     async def get(self, user_id: UUID) -> User | None:
         stmt = select(User).where(User.id == user_id)
         return await self._session.scalar(stmt)
+
+    async def list_cursor(
+        self,
+        *,
+        limit: int,
+        cursor: tuple[datetime, UUID] | None = None,
+        role: UserRole | None = None,
+        status: UserStatus | None = None,
+        q: str | None = None,
+    ) -> list[User]:
+        conditions: list[object] = []
+        if role is not None:
+            conditions.append(User.role == role)
+        if status is not None:
+            conditions.append(User.status == status)
+        if q:
+            conditions.append(User.email.ilike(f"%{q.lower()}%"))
+        if cursor is not None:
+            cursor_created_at, cursor_id = cursor
+            conditions.append(
+                or_(
+                    User.created_at < cursor_created_at,
+                    and_(User.created_at == cursor_created_at, User.id < cursor_id),
+                ),
+            )
+        stmt = select(User)
+        if conditions:
+            stmt = stmt.where(*conditions)
+        stmt = stmt.order_by(User.created_at.desc(), User.id.desc()).limit(limit)
+        return list((await self._session.scalars(stmt)).all())
+
+    async def count_admins(self) -> int:
+        stmt = select(User).where(User.role == UserRole.ADMIN)
+        return len(list((await self._session.scalars(stmt)).all()))
 
     async def get_by_email(self, email: str) -> User | None:
         stmt = select(User).where(User.email == email)

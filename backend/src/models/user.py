@@ -1,4 +1,4 @@
-from sqlalchemy import Enum, String
+from sqlalchemy import Enum, String, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from src.core.enums.user_role import UserRole
 from src.core.enums.user_status import UserStatus
@@ -11,6 +11,7 @@ def _enum_values(enum_cls: type) -> list[str]:
 
 class User(BaseModel):
     __tablename__ = "users"
+    __table_args__ = (Index("ix_users_created_at_id", "created_at", "id"),)
 
     email: Mapped[str] = mapped_column(
         String(255),

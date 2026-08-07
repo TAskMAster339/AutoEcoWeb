@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
@@ -34,3 +35,8 @@ class UserUpdate(BaseModel):
 class AdminUserUpdate(BaseModel):
     role: UserRole | None = None
     status: UserStatus | None = None
+
+
+class UserAdminResponse(UserResponse):
+    created_at: datetime
+    updated_at: datetime

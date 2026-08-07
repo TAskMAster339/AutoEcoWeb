@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.database import get_db
+from src.core.enums.user_role import UserRole
 from src.core.enums.user_status import UserStatus
 from src.core.security import decode_access_token
 from src.models.user import User
@@ -59,3 +60,15 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_current_admin(current_user: CurrentUser) -> User:
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Требуются права администратора",
+        )
+    return current_user
+
+
+CurrentAdmin = Annotated[User, Depends(get_current_admin)]
