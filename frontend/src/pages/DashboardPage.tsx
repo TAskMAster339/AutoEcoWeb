@@ -48,7 +48,7 @@ export function DashboardPage() {
       .map(mapReceipt)
     return q
       ? inRange.filter((r) =>
-          `${r.store} ${r.items.map((i) => i.description).join(' ')}`.toLowerCase().includes(q),
+          `${r.store} ${r.items.map((i) => i.name).join(' ')}`.toLowerCase().includes(q),
         )
       : inRange
   }, [data, range, search])

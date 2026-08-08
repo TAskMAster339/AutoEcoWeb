@@ -86,6 +86,12 @@ class Transaction(BaseModel):
         nullable=False,
     )
 
+    # Необязательный комментарий пользователя; по умолчанию пустой
+    comment: Mapped[str | None] = mapped_column(
+        String(1000),
+        nullable=True,
+    )
+
     # 1 = приход/покупка (расход), 2 = расход/возврат (доход), 3/4 = возвраты
     operation_type: Mapped[int] = mapped_column(
         SmallInteger,

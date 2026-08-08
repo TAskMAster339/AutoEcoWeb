@@ -12,12 +12,13 @@ from src.core.security import decode_access_token
 from src.models.user import User
 from src.repositories.alias import AliasRepository
 from src.repositories.receipt import ReceiptRepository
-from src.repositories.transaction import TransactionRepository
-from src.services.transaction import TransactionService
 from src.repositories.refresh_token import RefreshTokenRepository
 from src.repositories.tag import TagRepository
+from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
+from src.services.import_export import ImportExportService
 from src.services.proverkacheka import ProverkachekaClient
+from src.services.transaction import TransactionService
 
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 
@@ -69,6 +70,19 @@ async def get_tag_repo(session: DBSession) -> TagRepository:
 
 
 TagRepo = Annotated[TagRepository, Depends(get_tag_repo)]
+
+
+async def get_import_export_service(
+    session: DBSession,
+) -> ImportExportService:
+    return ImportExportService(
+        session,
+        TransactionRepository(session),
+        TagRepository(session),
+    )
+
+
+ImportExportSvc = Annotated[ImportExportService, Depends(get_import_export_service)]
 
 
 async def get_alias_repo(session: DBSession) -> AliasRepository:

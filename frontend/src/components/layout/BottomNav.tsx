@@ -7,6 +7,7 @@ import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
 import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined'
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz'
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
+import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined'
 import { useAuthStore } from '../../store/authStore'
@@ -60,6 +61,7 @@ export function BottomNav() {
 
   const moreItems = [
     { to: '/rules', label: 'Правила и алиасы', icon: LinkOutlinedIcon },
+    { to: '/data', label: 'Данные', icon: StorageOutlinedIcon },
     { to: '/settings', label: 'Настройки', icon: SettingsOutlinedIcon },
     ...(role === 'admin' ? [{ to: '/admin', label: 'Администрирование', icon: AdminPanelSettingsOutlinedIcon }] : []),
   ]

@@ -17,6 +17,7 @@ import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined'
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
 import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined'
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
+import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
@@ -32,6 +33,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'Чеки', icon: ReceiptLongOutlinedIcon },
   { to: '/tags', label: 'Теги', icon: LabelOutlinedIcon },
   { to: '/rules', label: 'Правила и алиасы', icon: LinkOutlinedIcon },
+  { to: '/data', label: 'Данные', icon: StorageOutlinedIcon },
   { to: '/settings', label: 'Настройки', icon: SettingsOutlinedIcon },
 ] as const
 

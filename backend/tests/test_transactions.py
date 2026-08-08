@@ -213,6 +213,63 @@ async def test_create_standalone_with_tag(session):
     assert tx.tag_id == tag.id
 
 
+async def test_create_standalone_comment_defaults_empty(session):
+    """Комментарий необязателен: без него — None, с пустой строкой — None."""
+    user = await _make_user(session)
+    service = _tx_service(session)
+
+    no_comment = await service.create_standalone(
+        user,
+        TransactionCreate(name="Без комментария", amount=Decimal("10.00")),
+    )
+    assert no_comment.comment is None
+
+    empty_comment = await service.create_standalone(
+        user,
+        TransactionCreate(name="Пустой комментарий", amount=Decimal("10.00"), comment="   "),
+    )
+    assert empty_comment.comment is None
+
+
+async def test_create_standalone_with_comment(session):
+    user = await _make_user(session)
+    tx = await _tx_service(session).create_standalone(
+        user,
+        TransactionCreate(
+            name="Подарок",
+            amount=Decimal("999.00"),
+            comment="  Подарок маме на день рождения  ",
+        ),
+    )
+    assert tx.comment == "Подарок маме на день рождения"
+
+
+async def test_update_comment_set_and_clear(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    tx = await service.create_standalone(
+        user,
+        TransactionCreate(name="Без комментария", amount=Decimal("10.00")),
+    )
+    assert tx.comment is None
+
+    # установить
+    updated = await service.update(
+        user,
+        tx.id,
+        TransactionUpdate(comment="Записать на работу"),
+    )
+    assert updated.comment == "Записать на работу"
+
+    # очистить явным null
+    cleared = await service.update(
+        user,
+        tx.id,
+        TransactionUpdate(comment=None),
+    )
+    assert cleared.comment is None
+
+
 async def test_create_standalone_foreign_tag_404(session):
     user = await _make_user(session)
     other = await UserRepository(session).create(

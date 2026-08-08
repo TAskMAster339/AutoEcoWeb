@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Box, Card, Collapse, IconButton, Typography, useTheme } from '@mui/material'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { TagChip } from '../common/TagChip'
 import { formatCurrency, formatLongDate } from '../../lib/format'
@@ -11,12 +12,14 @@ interface TransactionCardProps {
   tx: TransactionView
   tagsMap: Map<string, Tag>
   onDelete: (id: string) => void
+  /** Открыть модалку редактирования. */
+  onEdit?: (tx: TransactionView) => void
 }
 
 /**
  * Mobile transaction card — expandable details + swipe-left reveal of Delete.
  */
-export function TransactionCard({ tx, tagsMap, onDelete }: TransactionCardProps) {
+export function TransactionCard({ tx, tagsMap, onDelete, onEdit }: TransactionCardProps) {
   const theme = useTheme()
   const [expanded, setExpanded] = useState(false)
   const [offset, setOffset] = useState(0)
@@ -89,7 +92,7 @@ export function TransactionCard({ tx, tagsMap, onDelete }: TransactionCardProps)
               </Typography>
             </Box>
             <Typography variant="body2" color="text.secondary" noWrap sx={{ mt: 0.25 }}>
-              {tx.description}
+              {tx.name}
             </Typography>
             <Box sx={{ display: 'flex', gap: 0.5, mt: 0.75, flexWrap: 'wrap' }}>
               {tag && <TagChip key={tag.id} tag={tag} />}
@@ -130,6 +133,35 @@ export function TransactionCard({ tx, tagsMap, onDelete }: TransactionCardProps)
             <Detail label="Цена" value={formatCurrency(tx.price)} />
             <Detail label="Баланс" value={formatCurrency(tx.balance)} />
           </Box>
+          {tx.comment && (
+            <Box sx={{ mt: 1.25, pt: 1.25, borderTop: `1px solid ${theme.palette.divider}` }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+                Комментарий
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {tx.comment}
+              </Typography>
+            </Box>
+          )}
+          {onEdit && (
+            <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEdit(tx)
+                }}
+                aria-label="Изменить"
+                sx={{
+                  borderRadius: '8px',
+                  border: `1px solid ${theme.palette.divider}`,
+                  color: 'text.secondary',
+                }}
+              >
+                <EditOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          )}
         </Collapse>
       </Card>
     </Box>

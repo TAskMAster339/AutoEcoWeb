@@ -82,7 +82,7 @@ export function ReceiptCard({ receipt, tagsMap }: ReceiptCardProps) {
             <Box key={item.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" noWrap>
-                  {item.description}
+                  {item.name}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 0.5, mt: 0.25 }}>
                   {item.quantity !== null && (

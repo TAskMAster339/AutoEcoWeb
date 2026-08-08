@@ -30,6 +30,17 @@ class TransactionRepository:
         await self._session.commit()
         return transactions
 
+    async def create_many_standalone(
+        self,
+        transactions: list[Transaction],
+    ) -> list[Transaction]:
+        """Ручные транзакции без чека (импорт): bulk-insert, receipt_id = None."""
+        if not transactions:
+            return []
+        self._session.add_all(transactions)
+        await self._session.commit()
+        return transactions
+
     async def list_by_receipt(self, receipt_id: UUID) -> list[Transaction]:
         stmt = (
             select(Transaction)
@@ -37,6 +48,20 @@ class TransactionRepository:
             .order_by(Transaction.position.asc(), Transaction.id.asc())
         )
         return list((await self._session.scalars(stmt)).all())
+
+    async def list_all(
+        self,
+        user_id: UUID,
+    ) -> list[tuple[Transaction, str | None]]:
+        """Все транзакции пользователя + seller_name из чека (для экспорта)."""
+        stmt = (
+            select(Transaction, Receipt.seller_name)
+            .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .where(Transaction.user_id == user_id)
+            .order_by(Transaction.check_datetime.asc(), Transaction.id.asc())
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return [(tx, seller_name) for tx, seller_name in rows]
 
     async def list_by_receipts(self, receipt_ids: list[UUID]) -> list[Transaction]:
         if not receipt_ids:

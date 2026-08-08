@@ -15,6 +15,7 @@ const DashboardPage = page(() => import('./pages/DashboardPage'), 'DashboardPage
 const AnalyticsPage = page(() => import('./pages/AnalyticsPage'), 'AnalyticsPage')
 const TagsPage = page(() => import('./pages/TagsPage'), 'TagsPage')
 const RulesPage = page(() => import('./pages/RulesPage'), 'RulesPage')
+const DataPage = page(() => import('./pages/DataPage'), 'DataPage')
 const SettingsPage = page(() => import('./pages/SettingsPage'), 'SettingsPage')
 const AdminPage = page(() => import('./pages/AdminPage'), 'AdminPage')
 
@@ -43,6 +44,7 @@ const router = createBrowserRouter([
           { path: '/analytics', element: suspense(<AnalyticsPage />) },
           { path: '/tags', element: suspense(<TagsPage />) },
           { path: '/rules', element: suspense(<RulesPage />) },
+          { path: '/data', element: suspense(<DataPage />) },
           { path: '/settings', element: suspense(<SettingsPage />) },
           { path: '/admin', element: suspense(<AdminPage />) },
         ],

@@ -91,32 +91,32 @@ const columnDefs: ColDef<TransactionView>[] = [
     valueGetter: (p) => p.data?.tagId ?? null,
   },
   {
-    field: 'description',
-    headerName: 'Описание',
+    field: 'name',
+    headerName: 'Название',
     flex: 1,
     // Перенос разрешён только здесь: длинный текст заворачивается,
     // строка растёт по высоте (autoHeight per-column).
     wrapText: true,
     autoHeight: true,
-    minWidth: Math.max(140, headerMinWidth('Описание')),
+    minWidth: Math.max(140, headerMinWidth('Название')),
   },
   {
-    field: 'quantity',
-    headerName: 'Кол-во',
-    width: 76,
-    minWidth: headerMinWidth('Кол-во'),
-    ...rightAligned,
-    valueFormatter: (p) => formatNumber(p.value),
-  },
-  {
+      field: 'quantity',
+      headerName: 'Кол-во',
+      width: 76,
+      minWidth: headerMinWidth('Кол-во'),
+      ...rightAligned,
+      valueFormatter: (p) => formatNumber(p.value),
+    },
+    {
     field: 'price',
     headerName: 'Цена',
     width: 92,
     minWidth: headerMinWidth('Цена'),
     ...rightAligned,
     valueFormatter: (p) => formatCurrency(p.value),
-  },
-  {
+},
+{
     field: 'income',
     headerName: 'Доход',
     width: 104,
@@ -124,8 +124,8 @@ const columnDefs: ColDef<TransactionView>[] = [
     ...rightAligned,
     cellStyle: { color: 'var(--ag-income-color, #16A34A)', fontWeight: 600 },
     valueFormatter: (p) => formatCurrency(p.value),
-  },
-  {
+},
+{
     field: 'expense',
     headerName: 'Расход',
     width: 104,
@@ -133,24 +133,39 @@ const columnDefs: ColDef<TransactionView>[] = [
     ...rightAligned,
     cellStyle: { color: 'var(--ag-expense-color, #DC2626)', fontWeight: 600 },
     valueFormatter: (p) => formatCurrency(p.value),
-  },
-  {
+},
+{
     field: 'balance',
     headerName: 'Баланс',
     width: 112,
     minWidth: headerMinWidth('Баланс'),
     ...rightAligned,
     valueFormatter: (p) => formatCurrency(p.value),
-  },
+},
+{
+  field: 'comment',
+  headerName: 'Комментарий',
+  flex: 1.2,
+  wrapText: true,
+  autoHeight: true,
+  minWidth: Math.max(120, headerMinWidth('Комментарий')),
+  valueFormatter: (p) => p.value || '—',
+  cellStyle: (p) =>
+    p.value ? undefined : { color: 'var(--ag-secondary-foreground-color, #9ca3af)' },
+},
 ]
 
 interface TransactionsGridProps {
   rows: TransactionView[]
   tagsMap: Map<string, Tag>
+  /** Выбранные строки (по чекбоксам) — живой список, вызывается при изменении. */
+  onSelectionChange?: (ids: string[]) => void
+  /** Двойной клик по строке — редактирование. */
+  onEdit?: (tx: TransactionView) => void
 }
 
 /** Desktop data table (AG Grid). */
-export function TransactionsGrid({ rows, tagsMap }: TransactionsGridProps) {
+export function TransactionsGrid({ rows, tagsMap, onSelectionChange, onEdit }: TransactionsGridProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const gridRef = useRef<AgGridReact<TransactionView>>(null)
@@ -171,6 +186,22 @@ export function TransactionsGrid({ rows, tagsMap }: TransactionsGridProps) {
     api.addEventListener('paginationChanged', sync)
     return () => api.removeEventListener('paginationChanged', sync)
   }, [])
+
+  // ESC — снять выделение строк (если оно есть)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const api = gridRef.current?.api
+      if (!api) return
+      const selected = api.getSelectedRows()
+      if (selected.length > 0) {
+        api.deselectAll()
+        onSelectionChange?.([])
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onSelectionChange])
 
   const pageButtons = useMemo(() => {
     const count = Math.max(1, totalPages)
@@ -243,6 +274,19 @@ export function TransactionsGrid({ rows, tagsMap }: TransactionsGridProps) {
             resizable: false,
             suppressHeaderMenuButton: true,
           }}
+          onSelectionChanged={() => {
+            const ids = gridRef.current?.api
+              ?.getSelectedRows()
+              .map((r) => r.id)
+              .filter(Boolean) ?? []
+            onSelectionChange?.(ids)
+          }}
+          onRowDoubleClicked={(e) => {
+            if (e.data) onEdit?.(e.data)
+          }}
+          // Стабильный id строки: выделение переживает refetch/сортировку/пагинацию
+          // (без getRowId AG Grid считает новые rowData «другими» и сбрасывает выбор)
+          getRowId={(p) => p.data.id}
           animateRows
           domLayout="normal"
         />

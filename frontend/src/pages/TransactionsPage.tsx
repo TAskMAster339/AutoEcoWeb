@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Badge,
   Box,
@@ -15,28 +15,32 @@ import {
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined'
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import { useNavigate } from 'react-router-dom'
 import { StatisticCard } from '../components/common/StatisticCard'
 import { PeriodSelector } from '../components/common/PeriodSelector'
+import { ConfirmDialog } from '../components/common/ConfirmDialog'
 import { rangeFor } from '../lib/period'
 import { TransactionsGrid } from '../components/transactions/TransactionsGrid'
 import { TransactionCard } from '../components/transactions/TransactionCard'
 import { AddTransactionSheet } from '../components/transactions/AddTransactionSheet'
 import { AddReceiptSheet } from '../components/transactions/AddReceiptSheet'
 import { FilterSheet } from '../components/transactions/FilterSheet'
+import { EditTransactionDialog } from '../components/transactions/EditTransactionDialog'
 import { LoadingState, EmptyState, ErrorState, OfflineState } from '../components/common/States'
 import { useSummary } from '../hooks/useSummary'
 import { useTransactionViews, useDeleteTransaction } from '../hooks/useTransactions'
 import { useTags } from '../hooks/useTags'
 import { useOnline } from '../hooks/useOnline'
 import { useUiStore } from '../store/uiStore'
-import { formatCurrency } from '../lib/format'
+import { formatCurrency, pluralRu } from '../lib/format'
+import { colors } from '../theme'
 import type { TransactionView } from '../api/types'
 
 function exportCsv(rows: TransactionView[]) {
-  const header = ['Дата', 'Магазин', 'Теги', 'Описание', 'Кол-во', 'Цена', 'Доход', 'Расход', 'Баланс']
+  const header = ['Дата', 'Магазин', 'Теги', 'Название', 'Кол-во', 'Цена', 'Доход', 'Расход', 'Баланс', 'Комментарий']
   const lines = rows.map((t) =>
-    [t.date, t.store, t.tagId ?? '', t.description, t.quantity ?? '', t.price ?? '', t.income ?? '', t.expense ?? '', t.balance]
+    [t.date, t.store, t.tagId ?? '', t.name, t.quantity ?? '', t.price ?? '', t.income ?? '', t.expense ?? '', t.balance, t.comment ?? '']
       .map((v) => `"${String(v).replaceAll('"', '""')}"`)
       .join(';'),
   )
@@ -96,6 +100,24 @@ export function TransactionsPage() {
   const { data: tags } = useTags()
   const deleteTx = useDeleteTransaction()
 
+  // Выбранные в таблице строки (чекбоксы) → панель «Удалить (N)».
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [bulkError, setBulkError] = useState<string | null>(null)
+  // Транзакция для модалки редактирования (null = закрыта).
+  const [editingTx, setEditingTx] = useState<TransactionView | null>(null)
+
+  const bulkDelete = async () => {
+    setBulkError(null)
+    try {
+      await Promise.all(selectedIds.map((id) => deleteTx.mutateAsync(id)))
+      setSelectedIds([])
+      setConfirmDeleteOpen(false)
+    } catch (e) {
+      setBulkError(e instanceof Error ? e.message : 'Не удалось удалить транзакции')
+    }
+  }
+
   const periodKey = useUiStore((s) => s.periodKey)
   const customFrom = useUiStore((s) => s.customFrom)
   const customTo = useUiStore((s) => s.customTo)
@@ -117,7 +139,7 @@ export function TransactionsPage() {
       if (t.date < range.from || t.date > range.to) return false
       if (tagFilterId && t.tagId !== tagFilterId) return false
       if (storeFilter && t.store !== storeFilter) return false
-      if (q && !`${t.store ?? ''} ${t.description}`.toLowerCase().includes(q)) return false
+      if (q && !`${t.store ?? ''} ${t.name} ${t.comment ?? ''}`.toLowerCase().includes(q)) return false
       return true
     })
   }, [data, range, search, tagFilterId, storeFilter])
@@ -185,19 +207,95 @@ export function TransactionsPage() {
       ) : isMobile ? (
         <Stack spacing={1.25}>
           {filtered.map((t) => (
-            <TransactionCard key={t.id} tx={t} tagsMap={tagsMap} onDelete={(id) => void deleteTx.mutate(id)} />
+            <TransactionCard key={t.id} tx={t} tagsMap={tagsMap} onDelete={(id) => void deleteTx.mutate(id)} onEdit={setEditingTx} />
           ))}
           <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
             Показано {filtered.length} из {data?.length ?? 0} · свайп влево — удалить
           </Typography>
         </Stack>
       ) : (
-        <TransactionsGrid rows={filtered} tagsMap={tagsMap} />
+        <Box
+          sx={{
+            position: 'relative',
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            minWidth: 0,
+          }}
+        >
+          {/* Панель удаления выделенных строк — плавающая поверх таблицы,
+              не толкает её вниз (absolute, не в потоке) */}
+          {selectedIds.length > 0 && (
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 60,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 10,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                px: 1.75,
+                py: 1,
+                borderRadius: '8px',
+                border: `1px solid ${theme.palette.divider}`,
+                bgcolor: 'background.paper',
+                boxShadow: theme.shadows[6],
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                Выбрано: {selectedIds.length}
+              </Typography>
+              <Box sx={{ flex: 1 }} />
+              <Button
+                variant="outlined"
+                color="error"
+                size="small"
+                startIcon={<DeleteOutlineIcon />}
+                onClick={() => {
+                  setBulkError(null)
+                  setConfirmDeleteOpen(true)
+                }}
+                sx={{
+                  borderRadius: '8px',
+                  borderColor: colors.red,
+                  color: colors.red,
+                  '&:hover': { borderColor: colors.red, bgcolor: 'rgba(220, 38, 38, 0.08)' },
+                }}
+              >
+                Удалить ({selectedIds.length})
+              </Button>
+            </Box>
+          )}
+          <TransactionsGrid
+            rows={filtered}
+            tagsMap={tagsMap}
+            onSelectionChange={setSelectedIds}
+            onEdit={setEditingTx}
+          />
+        </Box>
       )}
 
       <AddTransactionSheet />
       <AddReceiptSheet />
       <FilterSheet tags={tags} stores={stores} />
+
+      {/* Редактирование транзакции */}
+      <EditTransactionDialog tx={editingTx} onClose={() => setEditingTx(null)} />
+
+      {/* Подтверждение массового удаления */}
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title={`Удалить ${pluralRu(selectedIds.length, ['транзакцию', 'транзакции', 'транзакций'])}?`}
+        message="Операция необратима. Транзакции, привязанные к чеку, будут удалены из чека."
+        confirmLabel="Удалить"
+        pending={deleteTx.isPending}
+        error={bulkError}
+        onConfirm={() => void bulkDelete()}
+        onClose={() => setConfirmDeleteOpen(false)}
+      />
     </Stack>
   )
 }

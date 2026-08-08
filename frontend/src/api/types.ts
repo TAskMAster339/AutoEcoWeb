@@ -55,6 +55,8 @@ export interface Transaction {
   tag_id: string | null
   /** Продавец из чека (left join); None для ручных транзакций */
   seller_name: string | null
+  /** Необязательный комментарий пользователя; по умолчанию пустой */
+  comment: string | null
   created_at: string | null
 }
 
@@ -70,6 +72,8 @@ export interface TransactionDraft {
   operation_type?: number
   datetime?: string
   tag_id?: string | null
+  /** Необязательный комментарий; пустой = нет комментария */
+  comment?: string | null
 }
 
 /** PATCH /api/v1/transactions/{id} — mirrors TransactionUpdate (receipt_id не редактируется). */
@@ -85,6 +89,8 @@ export type TransactionUpdatePatch = Partial<{
   datetime: string
   /** явный null снимает тег */
   tag_id: string | null
+  /** явный null очищает комментарий */
+  comment: string | null
 }>
 
 /* ---------- Receipts (real, mirrors backend src/schemas/receipt.py) ---------- */
@@ -177,8 +183,10 @@ export interface TransactionView {
   store: string | null
   /** tag id */
   tagId: string | null
-  /** Описание */
-  description: string
+  /** Название */
+  name: string
+  /** Необязательный комментарий пользователя */
+  comment: string | null
   /** Кол-во */
   quantity: number | null
   /** Цена за единицу */

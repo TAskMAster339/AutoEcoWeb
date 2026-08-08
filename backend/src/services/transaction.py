@@ -154,6 +154,7 @@ class TransactionService:
             operation_type=data.operation_type,
             check_datetime=data.datetime,
             tag_id=data.tag_id,
+            comment=data.comment,
         )
         return await self._tx_repo.create(tx)
 
@@ -222,6 +223,9 @@ class TransactionService:
         if fields.get("seller_name") is not None:
             # пустая строка магазина — то же, что «не указан»
             fields["seller_name"] = fields["seller_name"].strip() or None
+        if "comment" in fields and fields["comment"] is not None:
+            # пустой комментарий — то же, что «нет комментария»
+            fields["comment"] = fields["comment"].strip() or None
         if fields.get("tag_id") is not None:
             await self._ensure_tag(user.id, fields["tag_id"])
         return await self._tx_repo.update(tx, **fields)

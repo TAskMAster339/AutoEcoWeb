@@ -35,6 +35,7 @@ class TransactionOut(BaseModel):
     datetime: dt
     tag_id: UUID | None = None
     seller_name: str | None = None
+    comment: str | None = None
     created_at: dt | None = None
 
     @classmethod
@@ -75,6 +76,7 @@ class TransactionOut(BaseModel):
             datetime=tx.check_datetime,
             tag_id=tx.tag_id,
             seller_name=tx.seller_name if tx.seller_name is not None else seller_name,
+            comment=tx.comment,
             created_at=tx.created_at,
         )
 
@@ -101,6 +103,7 @@ class TransactionCreate(BaseModel):
     operation_type: int = Field(default=1, ge=1, le=4)
     datetime: dt = Field(default_factory=_now_utc)
     tag_id: UUID | None = None
+    comment: str | None = Field(default=None, max_length=1000)
 
     @model_validator(mode="after")
     def _strip_name(self) -> "TransactionCreate":
@@ -108,6 +111,9 @@ class TransactionCreate(BaseModel):
         # пустая строка магазина — то же, что «не указан»
         if self.seller_name is not None:
             self.seller_name = self.seller_name.strip() or None
+        # пустой комментарий — то же, что «нет комментария»
+        if self.comment is not None:
+            self.comment = self.comment.strip() or None
         return self
 
 
@@ -142,6 +148,7 @@ class TransactionUpdate(BaseModel):
     operation_type: int | None = Field(default=None, ge=1, le=4)
     datetime: dt | None = None
     tag_id: UUID | None = None
+    comment: str | None = Field(default=None, max_length=1000)
 
 
 class TransactionInReceipt(BaseModel):

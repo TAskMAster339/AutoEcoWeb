@@ -66,18 +66,25 @@ interface RequestOptions {
   body?: unknown
   /** set false for endpoints that must never trigger refresh (e.g. login) */
   auth?: boolean
+  /** return the raw body as a Blob (file downloads) instead of parsed JSON */
+  asBlob?: boolean
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const isFormData = options.body instanceof FormData
   const headers: Record<string, string> = {}
-  if (options.body !== undefined) headers['Content-Type'] = 'application/json'
+  if (options.body !== undefined && !isFormData) headers['Content-Type'] = 'application/json'
 
   let res: Response
   try {
     res = await fetch(`${API_URL}${path}`, {
       method: options.method ?? 'GET',
       headers,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      body: isFormData
+        ? (options.body as FormData)
+        : options.body !== undefined
+          ? JSON.stringify(options.body)
+          : undefined,
       credentials: 'include',
     })
   } catch {
@@ -113,6 +120,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (res.status === 204) return undefined as T
+  if (options.asBlob) return (await res.blob()) as T
   return (await res.json()) as T
 }
 
@@ -123,4 +131,9 @@ export const api = {
   patch: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'PATCH', body }),
   del: <T = void>(path: string, body?: unknown): Promise<T> =>
     request<T>(path, { method: 'DELETE', body }),
+  /** multipart/form-data upload (file import) — browser sets the boundary */
+  upload: <T>(path: string, form: FormData): Promise<T> =>
+    request<T>(path, { method: 'POST', body: form }),
+  /** raw binary download (xlsx export) */
+  blob: (path: string): Promise<Blob> => request<Blob>(path, { asBlob: true }),
 }

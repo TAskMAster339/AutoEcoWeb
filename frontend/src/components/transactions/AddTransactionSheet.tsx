@@ -5,122 +5,20 @@ import {
   Button,
   Chip,
   CircularProgress,
-  IconButton,
-  InputAdornment,
   Stack,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
 } from '@mui/material'
-import AddIcon from '@mui/icons-material/Add'
-import RemoveIcon from '@mui/icons-material/Remove'
 import { BottomSheet } from '../common/BottomSheet'
+import { NumericField, parseNum } from '../common/NumericField'
 import { useUiStore } from '../../store/uiStore'
 import { useTags } from '../../hooks/useTags'
 import { useCreateTransaction } from '../../hooks/useTransactions'
 import { messageFromError } from '../../api/client'
 import { todayIso } from '../../lib/format'
 import { colors } from '../../theme'
-
-/** Парс числа с запятой/точкой; NaN если пусто/бито. */
-function parseNum(raw: string): number {
-  return Number.parseFloat(raw.replace(',', '.'))
-}
-
-/**
- * Числовое поле с фиолетовыми кнопками «− / +».
- * Ввод фильтруется: только цифры, один десятичный разделитель (`.`/`,`),
- * максимум 2 знака после запятой.
- * type="text" + inputMode="decimal" — у type="number" браузер сам ломает
- * дробный ввод (незаконченное «139.» схлопывается) и пропускает e/знаки.
- */
-function NumericField(props: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  required?: boolean
-  placeholder?: string
-  step?: number
-  min?: number
-  readOnly?: boolean
-  error?: boolean
-  helperText?: string
-}) {
-  const { label, value, onChange, required, placeholder, step = 1, min, readOnly, error, helperText } = props
-
-  const bump = (dir: 1 | -1) => {
-    if (readOnly || value === '') return
-    const cur = parseNum(value)
-    if (!Number.isFinite(cur)) return
-    const next = Math.round((cur + dir * step) * 100) / 100
-    if (min !== undefined && next < min) return
-    onChange(String(next))
-  }
-
-  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (readOnly) return
-    // запятая → точка, остаются только цифры и максимум один разделитель
-    const raw = e.target.value.replace(',', '.')
-    let v = raw.replace(/[^\d.]/g, '')
-    const firstDot = v.indexOf('.')
-    if (firstDot !== -1) {
-      const intPart = v.slice(0, firstDot)
-      const fracPart = v.slice(firstDot + 1).replace(/\./g, '').slice(0, 2)
-      v = intPart + '.' + fracPart
-    }
-    onChange(v)
-  }
-
-  return (
-    <TextField
-      label={label}
-      type="text"
-      inputMode="decimal"
-      value={value}
-      onChange={handleInput}
-      required={required}
-      placeholder={placeholder}
-      fullWidth
-      error={error}
-      helperText={helperText}
-      slotProps={{
-        inputLabel: { shrink: true },
-        input: {
-          readOnly,
-          startAdornment: (
-            <InputAdornment position="start">
-              <IconButton
-                size="small"
-                color="primary"
-                onClick={() => bump(-1)}
-                aria-label={`Уменьшить ${label}`}
-                disabled={readOnly}
-                sx={{ p: 0.5, borderRadius: '6px' }}
-              >
-                <RemoveIcon fontSize="small" />
-              </IconButton>
-            </InputAdornment>
-          ),
-          endAdornment: (
-            <InputAdornment position="end">
-              <IconButton
-                size="small"
-                color="primary"
-                onClick={() => bump(1)}
-                aria-label={`Увеличить ${label}`}
-                disabled={readOnly}
-                sx={{ p: 0.5, borderRadius: '6px' }}
-              >
-                <AddIcon fontSize="small" />
-              </IconButton>
-            </InputAdornment>
-          ),
-        },
-      }}
-    />
-  )
-}
 
 /**
  * Bottom sheet: ручная транзакция БЕЗ чека — минимальная единица учёта.
@@ -137,6 +35,7 @@ export function AddTransactionSheet() {
   const [date, setDate] = useState(todayIso())
   const [name, setName] = useState('')
   const [store, setStore] = useState('')
+  const [comment, setComment] = useState('')
   const [price, setPrice] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
@@ -145,6 +44,7 @@ export function AddTransactionSheet() {
   const resetForm = () => {
     setName('')
     setStore('')
+    setComment('')
     setPrice('')
     setQuantity('1')
     setSelectedTag(null)
@@ -193,6 +93,7 @@ export function AddTransactionSheet() {
         datetime: `${date}T12:00:00Z`,
         operation_type: type === 'income' ? 2 : 1,
         tag_id: selectedTag,
+        comment: comment.trim() || null,
       })
       close()
     } catch (e) {
@@ -237,6 +138,17 @@ export function AddTransactionSheet() {
           onChange={(e) => setStore(e.target.value)}
           fullWidth
           placeholder="Например: Пятёрочка, Дикси, Метро"
+        />
+
+        <TextField
+          label="Комментарий (необязательно)"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          fullWidth
+          multiline
+          minRows={2}
+          maxRows={4}
+          placeholder="Заметка к транзакции"
         />
 
         <Stack direction="row" spacing={1.5}>
