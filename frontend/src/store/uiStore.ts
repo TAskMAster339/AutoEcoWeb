@@ -21,7 +21,10 @@ interface UiState {
   search: string
   tagFilterId: string | null
   storeFilter: string | null
-  addSheetOpen: boolean
+  /** Меню «Добавить»: чек (QR/камера) или транзакция (форма). */
+  addMenuOpen: boolean
+  receiptSheetOpen: boolean
+  transactionSheetOpen: boolean
   filterSheetOpen: boolean
   /** Desktop sidebar collapsed to a narrow icon rail. */
   sidebarCollapsed: boolean
@@ -33,8 +36,12 @@ interface UiState {
   setSearch: (value: string) => void
   setTagFilter: (tagId: string | null) => void
   setStoreFilter: (store: string | null) => void
-  openAddSheet: () => void
-  closeAddSheet: () => void
+  openAddMenu: () => void
+  closeAddMenu: () => void
+  openReceiptSheet: () => void
+  closeReceiptSheet: () => void
+  openTransactionSheet: () => void
+  closeTransactionSheet: () => void
   openFilterSheet: () => void
   closeFilterSheet: () => void
   resetFilters: () => void
@@ -50,7 +57,9 @@ export const useUiStore = create<UiState>()(
       search: '',
       tagFilterId: null,
       storeFilter: null,
-      addSheetOpen: false,
+      addMenuOpen: false,
+      receiptSheetOpen: false,
+      transactionSheetOpen: false,
       filterSheetOpen: false,
       sidebarCollapsed: false,
 
@@ -62,8 +71,12 @@ export const useUiStore = create<UiState>()(
       setSearch: (search) => set({ search }),
       setTagFilter: (tagFilterId) => set({ tagFilterId }),
       setStoreFilter: (storeFilter) => set({ storeFilter }),
-      openAddSheet: () => set({ addSheetOpen: true }),
-      closeAddSheet: () => set({ addSheetOpen: false }),
+      openAddMenu: () => set({ addMenuOpen: true }),
+      closeAddMenu: () => set({ addMenuOpen: false }),
+      openReceiptSheet: () => set({ receiptSheetOpen: true }),
+      closeReceiptSheet: () => set({ receiptSheetOpen: false }),
+      openTransactionSheet: () => set({ transactionSheetOpen: true }),
+      closeTransactionSheet: () => set({ transactionSheetOpen: false }),
       openFilterSheet: () => set({ filterSheetOpen: true }),
       closeFilterSheet: () => set({ filterSheetOpen: false }),
       resetFilters: () => set({ search: '', tagFilterId: null, storeFilter: null, periodKey: 'thisMonth' }),

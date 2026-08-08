@@ -1,0 +1,514 @@
+"""Транзакции — минимальная единица учёта (сервис + репозиторий)."""
+
+from datetime import datetime, timezone
+from decimal import Decimal
+from uuid import uuid4
+
+import pytest
+from fastapi import HTTPException
+from src.models.receipt import Receipt
+from src.models.tag import Tag
+from src.models.transaction import Transaction
+from src.models.user import User
+from src.repositories.receipt import ReceiptRepository
+from src.repositories.tag import TagRepository
+from src.repositories.transaction import TransactionRepository
+from src.repositories.user import UserRepository
+from src.schemas.tag import TagCreate
+from src.schemas.transaction import (
+    TransactionCreate,
+    TransactionInReceipt,
+    TransactionManualIn,
+    TransactionOut,
+    TransactionUpdate,
+)
+from src.services.receipt_parser import ReceiptItemData
+from src.services.tags import TagService
+from src.services.transaction import TransactionService
+
+
+async def _make_user(session) -> User:
+    return await UserRepository(session).create(
+        email="owner@test.ru",
+        password_hash="x" * 60,
+    )
+
+
+async def _make_receipt(session, user: User) -> Receipt:
+    return await ReceiptRepository(session).create(
+        user_id=user.id,
+        qr="t=20260215T1902&s=100.00&fn=9288000100123456&i=20448&fp=1234567890&n=1",
+        receipt_number="48",
+        operation_type=1,
+        seller_name="ПЕРЕКРЕСТОК",
+        seller_inn="7728029110",
+        check_datetime=datetime(2026, 2, 15, 19, 2, tzinfo=timezone.utc),
+        total_sum=Decimal("100.00"),
+        cashback=None,
+        balance_after=None,
+        raw_json={},
+    )
+
+
+def _tx_service(session) -> TransactionService:
+    return TransactionService(
+        TransactionRepository(session),
+        ReceiptRepository(session),
+        TagRepository(session),
+    )
+
+
+def _item(name: str, price: str, quantity: str = "1") -> ReceiptItemData:
+    return ReceiptItemData(
+        name=name,
+        price=Decimal(price),
+        quantity=Decimal(quantity),
+        sum=Decimal(price) * Decimal(quantity),
+        nds=None,
+        unit="шт",
+    )
+
+
+# ---------- создание из чека ----------
+
+
+async def test_create_for_receipt_sets_owner_position_and_inherits(session):
+    user = await _make_user(session)
+    receipt = await _make_receipt(session, user)
+    service = _tx_service(session)
+
+    txs = await service.create_for_receipt(
+        receipt,
+        [_item("Молоко", "60.00"), _item("Хлеб", "30.00")],
+    )
+    assert len(txs) == 2  # noqa: PLR2004
+    first, second = txs
+    # владелец и «коробка» проставлены напрямую
+    assert first.user_id == user.id
+    assert first.receipt_id == receipt.id
+    # позиция — порядок в чеке
+    assert first.position == 0
+    assert second.position == 1
+    # тип операции и дата унаследованы от чека
+    assert first.operation_type == 1
+    assert first.check_datetime == receipt.check_datetime
+    # поля маппятся: product_name → name, total_price → amount
+    assert first.name == "Молоко"
+    assert first.normalized_name == "молоко"
+    assert first.amount == Decimal("60.00")
+    assert first.quantity == Decimal("1")
+    assert first.unit == "шт"
+    assert first.price == Decimal("60.00")
+    assert first.tag_id is None
+
+
+async def test_create_for_receipt_empty_items(session):
+    user = await _make_user(session)
+    receipt = await _make_receipt(session, user)
+    assert await _tx_service(session).create_for_receipt(receipt, []) == []
+
+
+async def test_create_manual_for_receipt(session):
+    user = await _make_user(session)
+    receipt = await _make_receipt(session, user)
+    service = _tx_service(session)
+
+    txs = await service.create_manual_for_receipt(
+        receipt,
+        [
+            TransactionManualIn(name="Молоко", price=Decimal("60"), quantity=Decimal("2")),
+            TransactionManualIn(
+                name="Хлеб",
+                price=Decimal("30"),
+                quantity=Decimal("1"),
+                amount=Decimal("35.00"),
+            ),
+        ],
+    )
+    assert len(txs) == 2  # noqa: PLR2004
+    assert txs[0].amount == Decimal("120.00")  # price * quantity
+    assert txs[1].amount == Decimal("35.00")  # задан явно
+    assert txs[0].unit == "шт"
+
+
+# ---------- добавление в существующий чек ----------
+
+
+async def test_add_to_receipt_continues_position(session):
+    user = await _make_user(session)
+    receipt = await _make_receipt(session, user)
+    service = _tx_service(session)
+    await service.create_for_receipt(receipt, [_item("Молоко", "60.00")])
+
+    tx = await service.add_to_receipt(
+        user,
+        receipt.id,
+        TransactionInReceipt(name="Хлеб", amount=Decimal("30.00")),
+    )
+    assert tx.position == 1  # нумерация продолжается
+    assert tx.receipt_id == receipt.id
+    assert tx.operation_type == receipt.operation_type
+    assert tx.check_datetime == receipt.check_datetime
+    assert tx.user_id == user.id
+
+
+async def test_add_to_receipt_rejects_other_users_receipt(session):
+    user = await _make_user(session)
+    other = await UserRepository(session).create(
+        email="other@test.ru",
+        password_hash="x" * 60,
+    )
+    receipt = await _make_receipt(session, user)
+    service = _tx_service(session)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.add_to_receipt(
+            other,
+            receipt.id,
+            TransactionInReceipt(name="Чужое", amount=Decimal("1")),
+        )
+    assert exc_info.value.status_code == 404  # noqa: PLR2004
+
+
+# ---------- ручные транзакции без чека ----------
+
+
+async def test_create_standalone_without_receipt(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+
+    tx = await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Зарплата",
+            amount=Decimal("50000.00"),
+            operation_type=3,  # возврат/доход
+            datetime=datetime(2026, 3, 1, tzinfo=timezone.utc),
+        ),
+    )
+    assert tx.user_id == user.id
+    assert tx.receipt_id is None  # главное: транзакция может жить без чека
+    assert tx.position is None
+    assert tx.quantity is None  # nullable для ручного ввода
+    assert tx.unit is None
+    assert tx.price is None
+    assert tx.operation_type == 3  # noqa: PLR2004
+    assert tx.normalized_name == "зарплата"
+
+
+async def test_create_standalone_with_tag(session):
+    user = await _make_user(session)
+    tag = await TagService(TagRepository(session)).create(
+        user,
+        TagCreate(name="Доходы", color="#10B981"),
+    )
+    tx = await _tx_service(session).create_standalone(
+        user,
+        TransactionCreate(
+            name="Подработка",
+            amount=Decimal("3000.00"),
+            tag_id=tag.id,
+        ),
+    )
+    assert tx.tag_id == tag.id
+
+
+async def test_create_standalone_foreign_tag_404(session):
+    user = await _make_user(session)
+    other = await UserRepository(session).create(
+        email="other@test.ru",
+        password_hash="x" * 60,
+    )
+    foreign_tag = await TagService(TagRepository(session)).create(
+        other,
+        TagCreate(name="Чужой тег", color="#FF0000"),
+    )
+    service = _tx_service(session)
+    with pytest.raises(HTTPException) as exc_info:
+        await service.create_standalone(
+            user,
+            TransactionCreate(
+                name="X",
+                amount=Decimal("1"),
+                tag_id=foreign_tag.id,
+            ),
+        )
+    assert exc_info.value.status_code == 404  # noqa: PLR2004
+
+
+# ---------- обновление ----------
+
+
+async def test_update_renames_and_recomputes_normalized(session):
+    user = await _make_user(session)
+    tx = await _tx_service(session).create_standalone(
+        user,
+        TransactionCreate(name="Молоко", amount=Decimal("60.00")),
+    )
+
+    updated = await _tx_service(session).update(
+        user,
+        tx.id,
+        TransactionUpdate(name="Молоко 3.2%", amount=Decimal("70.00")),
+    )
+    assert updated.name == "Молоко 3.2%"
+    assert updated.normalized_name == "молоко 3.2%"  # пересчитан
+    assert updated.amount == Decimal("70.00")
+
+
+async def test_update_tag_set_and_clear(session):
+    user = await _make_user(session)
+    tag = await TagService(TagRepository(session)).create(
+        user,
+        TagCreate(name="Продукты", color="#3B82F6"),
+    )
+    tx = await _tx_service(session).create_standalone(
+        user,
+        TransactionCreate(name="Молоко", amount=Decimal("60.00")),
+    )
+    service = _tx_service(session)
+
+    tagged = await service.update(user, tx.id, TransactionUpdate(tag_id=tag.id))
+    assert tagged.tag_id == tag.id
+
+    # явный null на tag_id — легальное снятие тега, не 422
+    cleared = await service.update(user, tx.id, TransactionUpdate(tag_id=None))
+    assert cleared.tag_id is None
+
+
+async def test_update_null_on_not_null_returns_422(session):
+    user = await _make_user(session)
+    tx = await _tx_service(session).create_standalone(
+        user,
+        TransactionCreate(name="Молоко", amount=Decimal("60.00")),
+    )
+    service = _tx_service(session)
+
+    for bad in (
+        TransactionUpdate(name=None),
+        TransactionUpdate(amount=None),
+        TransactionUpdate(operation_type=None),
+        TransactionUpdate(datetime=None),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            await service.update(user, tx.id, bad)
+        assert exc_info.value.status_code == 422  # noqa: PLR2004
+
+    # пустой PATCH — no-op
+    again = await service.update(user, tx.id, TransactionUpdate())
+    assert again.name == "Молоко"
+
+
+async def test_update_other_users_transaction_404(session):
+    user = await _make_user(session)
+    other = await UserRepository(session).create(
+        email="other@test.ru",
+        password_hash="x" * 60,
+    )
+    tx = await _tx_service(session).create_standalone(
+        user,
+        TransactionCreate(name="Молоко", amount=Decimal("60.00")),
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        await _tx_service(session).update(
+            other,
+            tx.id,
+            TransactionUpdate(name="Чужое"),
+        )
+    assert exc_info.value.status_code == 404  # noqa: PLR2004
+
+
+# ---------- удаление ----------
+
+
+async def test_delete(session):
+    user = await _make_user(session)
+    tx = await _tx_service(session).create_standalone(
+        user,
+        TransactionCreate(name="Молоко", amount=Decimal("60.00")),
+    )
+    service = _tx_service(session)
+    await service.delete(user, tx.id)
+    assert await TransactionRepository(session).get_by_id(tx.id) is None
+
+
+async def test_delete_other_users_transaction_404(session):
+    user = await _make_user(session)
+    other = await UserRepository(session).create(
+        email="other@test.ru",
+        password_hash="x" * 60,
+    )
+    tx = await _tx_service(session).create_standalone(
+        user,
+        TransactionCreate(name="Молоко", amount=Decimal("60.00")),
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        await _tx_service(session).delete(other, tx.id)
+    assert exc_info.value.status_code == 404  # noqa: PLR2004
+
+
+# ---------- список / пагинация / фильтры ----------
+
+
+async def test_list_all_cursor_paginates(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for i in range(5):
+        tx = await service.create_standalone(
+            user,
+            TransactionCreate(name=f"Транзакция {i}", amount=Decimal(i)),
+        )
+        # sqlite хранит created_at строкой — задаём явно, чтобы keyset был детерминирован
+        tx.created_at = base + timedelta_seconds(i)
+        await session.commit()
+
+    rows1, cursor1 = await service.list_all(
+        user,
+        limit=2,
+        cursor=None,
+        date_from=None,
+        date_to=None,
+        tag_id=None,
+        search=None,
+    )
+    rows2, cursor2 = await service.list_all(
+        user,
+        limit=2,
+        cursor=cursor1,
+        date_from=None,
+        date_to=None,
+        tag_id=None,
+        search=None,
+    )
+    rows3, cursor3 = await service.list_all(
+        user,
+        limit=2,
+        cursor=cursor2,
+        date_from=None,
+        date_to=None,
+        tag_id=None,
+        search=None,
+    )
+    assert len(rows1) == 2 and cursor1 is not None  # noqa: PLR2004
+    assert len(rows2) == 2 and cursor2 is not None  # noqa: PLR2004
+    assert len(rows3) == 1 and cursor3 is None
+    ids = {tx.id for tx, _ in rows1} | {tx.id for tx, _ in rows2} | {tx.id for tx, _ in rows3}
+    assert len(ids) == 5  # noqa: PLR2004
+
+
+def timedelta_seconds(i: int):
+    from datetime import timedelta
+
+    return timedelta(seconds=i)
+
+
+async def test_list_all_filters_by_date_tag_search(session):
+    user = await _make_user(session)
+    tag = await TagService(TagRepository(session)).create(
+        user,
+        TagCreate(name="Продукты", color="#3B82F6"),
+    )
+    service = _tx_service(session)
+    jan = await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Молоко",
+            amount=Decimal("60.00"),
+            datetime=datetime(2026, 1, 10, tzinfo=timezone.utc),
+            tag_id=tag.id,
+        ),
+    )
+    feb = await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Хлеб",
+            amount=Decimal("30.00"),
+            datetime=datetime(2026, 2, 10, tzinfo=timezone.utc),
+        ),
+    )
+
+    def _list(**kwargs):
+        params = {
+            "date_from": None,
+            "date_to": None,
+            "tag_id": None,
+            "search": None,
+        }
+        params.update(kwargs)
+        return service.list_all(
+            user,
+            limit=50,
+            cursor=None,
+            **params,
+        )
+
+    rows, _ = await _list(date_from=datetime(2026, 1, 1, tzinfo=timezone.utc))
+    assert {tx.id for tx, _ in rows} == {jan.id, feb.id}
+
+    rows, _ = await _list(date_to=datetime(2026, 1, 31, 23, 59, tzinfo=timezone.utc))
+    assert {tx.id for tx, _ in rows} == {jan.id}
+
+    rows, _ = await _list(tag_id=tag.id)
+    assert {tx.id for tx, _ in rows} == {jan.id}
+
+    # sqlite: lower() не знает кириллицу — ищем подстроку в нижнем регистре
+    rows, _ = await _list(search="леб")
+    assert {tx.id for tx, _ in rows} == {feb.id}
+
+
+async def test_list_all_joins_seller_name(session):
+    user = await _make_user(session)
+    receipt = await _make_receipt(session, user)
+    service = _tx_service(session)
+    await service.create_for_receipt(receipt, [_item("Молоко", "60.00")])
+    await service.create_standalone(
+        user,
+        TransactionCreate(name="Ручная", amount=Decimal("10.00")),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Ручная с магазином",
+            seller_name="Пятёрочка",
+            amount=Decimal("20.00"),
+        ),
+    )
+
+    rows, _ = await service.list_all(
+        user,
+        limit=50,
+        cursor=None,
+        date_from=None,
+        date_to=None,
+        tag_id=None,
+        search=None,
+    )
+    # финальный seller_name: свой у транзакции, иначе — из чека (from_model)
+    by_name = {
+        tx.name: TransactionOut.from_model(tx, seller_name=seller).seller_name
+        for tx, seller in rows
+    }
+    # из чека — продавец чека; ручная без магазина — None; ручная с магазином — свой
+    assert by_name["Молоко"] == "ПЕРЕКРЕСТОК"
+    assert by_name["Ручная"] is None
+    assert by_name["Ручная с магазином"] == "Пятёрочка"
+
+
+async def test_update_seller_name(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    tx = await service.create_standalone(
+        user,
+        TransactionCreate(name="Проезд", amount=Decimal("62.00")),
+    )
+    # поставить магазин
+    tx = await service.update(
+        user,
+        tx.id,
+        TransactionUpdate(seller_name="Метрополитен"),
+    )
+    assert tx.seller_name == "Метрополитен"
+    # снять магазин явным null
+    tx = await service.update(user, tx.id, TransactionUpdate(seller_name=None))
+    assert tx.seller_name is None

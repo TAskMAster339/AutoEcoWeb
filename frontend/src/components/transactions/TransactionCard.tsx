@@ -3,13 +3,12 @@ import { Box, Card, Collapse, IconButton, Typography, useTheme } from '@mui/mate
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { TagChip } from '../common/TagChip'
-import { PriceStatusBadge } from '../common/PriceStatusBadge'
 import { formatCurrency, formatLongDate } from '../../lib/format'
 import { colors } from '../../theme'
-import type { Tag, Transaction } from '../../api/types'
+import type { Tag, TransactionView } from '../../api/types'
 
 interface TransactionCardProps {
-  tx: Transaction
+  tx: TransactionView
   tagsMap: Map<string, Tag>
   onDelete: (id: string) => void
 }
@@ -24,7 +23,7 @@ export function TransactionCard({ tx, tagsMap, onDelete }: TransactionCardProps)
   const startX = useRef<number | null>(null)
   const dragging = useRef(false)
 
-  const tags = tx.tagIds.map((id) => tagsMap.get(id)).filter((t): t is Tag => Boolean(t))
+  const tag = tx.tagId ? tagsMap.get(tx.tagId) : undefined
   const isExpense = tx.expense !== null && tx.expense !== undefined
   const amount = isExpense ? tx.expense : tx.income
   const amountColor = isExpense ? colors.red : colors.green
@@ -84,7 +83,7 @@ export function TransactionCard({ tx, tagsMap, onDelete }: TransactionCardProps)
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography sx={{ fontWeight: 700, fontSize: 14.5 }}>{tx.store}</Typography>
+              <Typography sx={{ fontWeight: 700, fontSize: 14.5 }}>{tx.store ?? '—'}</Typography>
               <Typography variant="caption" color="text.secondary">
                 {formatLongDate(tx.date)}
               </Typography>
@@ -93,9 +92,7 @@ export function TransactionCard({ tx, tagsMap, onDelete }: TransactionCardProps)
               {tx.description}
             </Typography>
             <Box sx={{ display: 'flex', gap: 0.5, mt: 0.75, flexWrap: 'wrap' }}>
-              {tags.map((t) => (
-                <TagChip key={t.id} tag={t} />
-              ))}
+              {tag && <TagChip key={tag.id} tag={tag} />}
             </Box>
           </Box>
           <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
@@ -106,11 +103,6 @@ export function TransactionCard({ tx, tagsMap, onDelete }: TransactionCardProps)
               {isExpense ? '−' : '+'}
               {formatCurrency(amount)}
             </Typography>
-            {tx.priceStatus && (
-              <Box sx={{ mt: 0.5, display: 'flex', justifyContent: 'flex-end' }}>
-                <PriceStatusBadge status={tx.priceStatus} />
-              </Box>
-            )}
           </Box>
           <ExpandMoreIcon
             sx={{
@@ -130,14 +122,13 @@ export function TransactionCard({ tx, tagsMap, onDelete }: TransactionCardProps)
               pt: 1.25,
               borderTop: `1px solid ${theme.palette.divider}`,
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              gridTemplateColumns: 'repeat(3, 1fr)',
               gap: 1,
-              }}
+            }}
           >
-            <Detail label="Кол-во" value={tx.quantity !== null ? String(tx.quantity) : '—'} />
+            <Detail label="Кол-во" value={tx.quantity !== null && tx.quantity !== undefined ? String(tx.quantity) : '—'} />
             <Detail label="Цена" value={formatCurrency(tx.price)} />
             <Detail label="Баланс" value={formatCurrency(tx.balance)} />
-            <Detail label="Комментарий" value={tx.comment ?? '—'} />
           </Box>
         </Collapse>
       </Card>

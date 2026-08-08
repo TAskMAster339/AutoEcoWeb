@@ -1,29 +1,27 @@
 /**
- * Tags domain API (mock behind flag — see frontend/TODO.md).
+ * Tags domain API — real endpoints, mirrors backend OpenAPI
+ * (backend/src/api/v1/tags.py). Счётчик `count` бэкенд не отдаёт —
+ * вычисляется на клиенте из чеков (TagsPage через useTransactions).
  */
-import { ApiError, delay } from './client'
-import { USE_MOCK_API } from '../lib/config'
-import { TAGS } from '../data/mock'
-import { getAllTransactions } from './transactions'
+import { api } from './client'
 import type { Tag } from './types'
 
-let store: Tag[] = [...TAGS]
+/** Mirrors backend TagResponse (schemas/tag.py). */
+interface TagResponse {
+  id: string
+  name: string
+  color: string
+  icon: string | null
+  created_at: string
+}
 
-function recount(): Tag[] {
-  const counts = new Map<string, number>()
-  for (const tx of getAllTransactions()) {
-    for (const tagId of tx.tagIds) {
-      counts.set(tagId, (counts.get(tagId) ?? 0) + 1)
-    }
-  }
-  store = store.map((t) => ({ ...t, count: counts.get(t.id) ?? 0 }))
-  return store
+function toTag(t: TagResponse): Tag {
+  return { id: t.id, name: t.name, color: t.color, count: 0 }
 }
 
 export async function fetchTags(): Promise<Tag[]> {
-  if (!USE_MOCK_API) throw new ApiError(501, 'Эндпоинт /api/v1/tags ещё не реализован')
-  await delay(250)
-  return recount()
+  const tags = await api.get<TagResponse[]>('/api/v1/tags')
+  return tags.map(toTag)
 }
 
 export interface TagDraft {
@@ -32,15 +30,10 @@ export interface TagDraft {
 }
 
 export async function createTag(draft: TagDraft): Promise<Tag> {
-  if (!USE_MOCK_API) throw new ApiError(501, 'Эндпоинт POST /api/v1/tags ещё не реализован')
-  await delay(200)
-  const tag: Tag = { id: `t-${Date.now()}`, name: draft.name, color: draft.color, count: 0 }
-  store = [...store, tag]
-  return tag
+  const tag = await api.post<TagResponse>('/api/v1/tags', draft)
+  return toTag(tag)
 }
 
-export async function deleteTag(id: string): Promise<void> {
-  if (!USE_MOCK_API) throw new ApiError(501, 'Эндпоинт DELETE /api/v1/tags/{id} ещё не реализован')
-  await delay(200)
-  store = store.filter((t) => t.id !== id)
+export function deleteTag(id: string): Promise<void> {
+  return api.del(`/api/v1/tags/${id}`)
 }

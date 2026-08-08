@@ -27,8 +27,9 @@ export function messageFromError(err: unknown): string {
     if (err.status === 0) return 'Нет соединения с сервером'
     if (err.status === 401) return 'Неверный email или пароль'
     if (err.status === 403) return 'Недостаточно прав'
-    if (err.status === 409) return 'Пользователь с таким email уже существует'
+    // деталь от бэкенда приоритетнее общих текстов (напр. 409 «Этот чек уже добавлен»)
     if (err.detail && typeof err.detail === 'string') return err.detail
+    if (err.status === 409) return 'Такая запись уже существует'
     return err.message
   }
   return 'Что-то пошло не так'
@@ -61,7 +62,7 @@ async function tryRefresh(): Promise<boolean> {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   /** set false for endpoints that must never trigger refresh (e.g. login) */
   auth?: boolean
@@ -118,6 +119,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 export const api = {
   get: <T>(path: string): Promise<T> => request<T>(path),
   post: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'POST', body }),
+  put: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'PATCH', body }),
   del: <T = void>(path: string, body?: unknown): Promise<T> =>
     request<T>(path, { method: 'DELETE', body }),

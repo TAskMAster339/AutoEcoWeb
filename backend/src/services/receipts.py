@@ -15,24 +15,37 @@ from src.schemas.receipt import (
 )
 from src.services.aliases import AliasService
 from src.services.proverkacheka import ProverkachekaClient, ProverkachekaError
-from src.services.receipt_item import ReceiptItemService
+from src.services.transaction import TransactionService
 from src.services.receipt_parser import (
     NormalizedReceipt,
     ReceiptParseError,
     normalize_proverkacheka,
 )
 
+# NOT NULL колонки receipts: явный null в PATCH → 422, а не IntegrityError 500.
+# Остальные поля (receipt_number, seller_inn, cashback, balance_after) nullable —
+# явный null их очищает (см. pitfall: exclude_unset + null).
+_RECEIPT_NON_NULLABLE = frozenset(
+    {"operation_type", "seller_name", "check_datetime", "total_sum"}
+)
+
 
 class ReceiptService:
+    """Чек — «коробка» транзакций: владелец, продавец, сумма, QR.
+
+    Сами транзакции (минимальная единица учёта) создаются через
+    TransactionService.
+    """
+
     def __init__(
         self,
         repo: ReceiptRepository,
-        item_service: ReceiptItemService,
+        transaction_service: TransactionService,
         alias_repo: AliasRepository | None = None,
         proverkacheka: ProverkachekaClient | None = None,
     ) -> None:
         self._repo = repo
-        self._item_service = item_service
+        self._transaction_service = transaction_service
         self._alias_repo = alias_repo
         self._proverkacheka = proverkacheka
 
@@ -68,8 +81,8 @@ class ReceiptService:
             balance_after=data.balance_after,
             raw_json=normalized.raw_json,
         )
-        # позиции — ответственность ReceiptItemService
-        await self._item_service.create_for_receipt(receipt.id, normalized.items)
+        # транзакции — ответственность TransactionService
+        await self._transaction_service.create_for_receipt(receipt, normalized.items)
         return receipt
 
     async def create_manual(
@@ -79,7 +92,7 @@ class ReceiptService:
     ) -> Receipt:
         """Ручной чек: без QR/raw_json, без дедупликации по QR.
 
-        Позиции маппятся в ReceiptItemData и создаются ReceiptItemService
+        Транзакции маппятся в ReceiptItemData и создаются TransactionService
         (конструирование ORM — только там).
         """
         receipt = await self._repo.create(
@@ -95,8 +108,11 @@ class ReceiptService:
             balance_after=data.balance_after,
             raw_json={},
         )
-        # позиции ручного чека — ответственность ReceiptItemService
-        await self._item_service.create_manual_for_receipt(receipt.id, data.items or [])
+        # транзакции ручного чека — ответственность TransactionService
+        await self._transaction_service.create_manual_for_receipt(
+            receipt,
+            data.transactions or [],
+        )
         return receipt
 
     async def update(
@@ -114,6 +130,14 @@ class ReceiptService:
         fields = data.model_dump(exclude_unset=True)
         if not fields:
             return receipt
+        null_required = sorted(
+            f for f in fields if fields[f] is None and f in _RECEIPT_NON_NULLABLE
+        )
+        if null_required:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Поля не могут быть null: {', '.join(null_required)}",
+            )
         return await self._repo.update(receipt, **fields)
 
     async def list_all(  # noqa: PLR0913

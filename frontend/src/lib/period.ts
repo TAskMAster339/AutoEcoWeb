@@ -1,6 +1,13 @@
 import type { PeriodKey } from '../store/uiStore'
 import { daysAgoIso, todayIso } from './format'
 
+/** Локальная ISO-дата (без UTC-сдвига toISOString — иначе в МСК дата «уезжает»). */
+function localIso(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
 /** Computes the {from, to} ISO range for a period preset. */
 export function rangeFor(
   key: PeriodKey,
@@ -11,12 +18,12 @@ export function rangeFor(
   switch (key) {
     case 'thisMonth': {
       const from = new Date(now.getFullYear(), now.getMonth(), 1)
-      return { from: from.toISOString().slice(0, 10), to: todayIso() }
+      return { from: localIso(from), to: todayIso() }
     }
     case 'lastMonth': {
       const from = new Date(now.getFullYear(), now.getMonth() - 1, 1)
       const to = new Date(now.getFullYear(), now.getMonth(), 0)
-      return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
+      return { from: localIso(from), to: localIso(to) }
     }
     case '3m':
       return { from: daysAgoIso(90), to: todayIso() }

@@ -24,3 +24,13 @@ export function fetchMe(): Promise<User> {
 export function logout(): Promise<void> {
   return api.post<void>('/api/v1/auth/logout')
 }
+
+/** Статус токена proverkacheka (GET /api/v1/auth/me/proverkacheka-token). */
+export function fetchProverkachekaTokenStatus(): Promise<{ has_token: boolean }> {
+  return api.get<{ has_token: boolean }>('/api/v1/auth/me/proverkacheka-token')
+}
+
+/** Сохранение токена proverkacheka (PUT /api/v1/auth/me/proverkacheka-token). */
+export function saveProverkachekaToken(token: string): Promise<{ has_token: boolean }> {
+  return api.put<{ has_token: boolean }>('/api/v1/auth/me/proverkacheka-token', { token })
+}

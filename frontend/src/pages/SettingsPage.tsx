@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Box,
   Button,
   Card,
   Chip,
+  CircularProgress,
   Stack,
   Switch,
+  TextField,
   Typography,
   useTheme,
 } from '@mui/material'
@@ -13,9 +15,12 @@ import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined'
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined'
 import LogoutIcon from '@mui/icons-material/Logout'
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline'
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
 import { PageHeader } from '../components/common/PageHeader'
 import { useAuthStore } from '../store/authStore'
 import { useUiStore } from '../store/uiStore'
+import { fetchProverkachekaTokenStatus, saveProverkachekaToken } from '../api/auth'
+import { messageFromError } from '../api/client'
 import { USE_MOCK_API } from '../lib/config'
 import { colors, softBg, softFg } from '../theme'
 
@@ -35,6 +40,33 @@ export function SettingsPage() {
   const setThemeMode = useUiStore((s) => s.setThemeMode)
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
+
+  // токен proverkacheka (для авто-загрузки чеков по QR)
+  const [hasToken, setHasToken] = useState<boolean | null>(null)
+  const [tokenInput, setTokenInput] = useState('')
+  const [tokenBusy, setTokenBusy] = useState(false)
+  const [tokenMsg, setTokenMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchProverkachekaTokenStatus()
+      .then((r) => setHasToken(r.has_token))
+      .catch(() => setHasToken(false))
+  }, [])
+
+  const saveToken = async () => {
+    setTokenBusy(true)
+    setTokenMsg(null)
+    try {
+      const r = await saveProverkachekaToken(tokenInput.trim())
+      setHasToken(r.has_token)
+      setTokenInput('')
+      setTokenMsg('Токен сохранён')
+    } catch (e) {
+      setTokenMsg(messageFromError(e))
+    } finally {
+      setTokenBusy(false)
+    }
+  }
 
   const handleLogout = async () => {
     setBusy(true)
@@ -119,13 +151,59 @@ export function SettingsPage() {
 
       <Card sx={{ p: 2.5 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+          Сервис чеков (proverkacheka)
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          Токен нужен для автоматической загрузки чека по QR-коду (POST /receipts).
+          Хранится только в вашем аккаунте.
+        </Typography>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+          <TextField
+            label="Токен proverkacheka"
+            type="password"
+            value={tokenInput}
+            onChange={(e) => setTokenInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && tokenInput.trim() && !tokenBusy) void saveToken()
+            }}
+            fullWidth
+            size="small"
+            placeholder={hasToken ? '•••••••• (будет заменён)' : 'Вставьте токен'}
+          />
+          <Button
+            variant="contained"
+            onClick={saveToken}
+            disabled={tokenBusy || !tokenInput.trim()}
+            startIcon={tokenBusy ? <CircularProgress size={16} color="inherit" /> : <ReceiptLongOutlinedIcon />}
+            sx={{ height: 40, whiteSpace: 'nowrap' }}
+          >
+            Сохранить
+          </Button>
+        </Stack>
+        <Box sx={{ display: 'flex', gap: 1, mt: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Chip
+            size="small"
+            label={hasToken === null ? 'Проверяем…' : hasToken ? 'Токен настроен' : 'Токен не настроен'}
+            variant="outlined"
+            sx={{ height: 22, fontSize: 12 }}
+          />
+          {tokenMsg && (
+            <Typography variant="caption" color={tokenMsg === 'Токен сохранён' ? 'success.main' : 'error.main'}>
+              {tokenMsg}
+            </Typography>
+          )}
+        </Box>
+      </Card>
+
+      <Card sx={{ p: 2.5 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
           О приложении
         </Typography>
         <Typography variant="body2" color="text.secondary">
           AutoEco — учёт чеков и расходов. React 19 · Vite · MUI · Zustand · TanStack Query · AG Grid.
         </Typography>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          Мок-режим доменных данных: <strong>{USE_MOCK_API ? 'включён' : 'выключен'}</strong> (VITE_USE_MOCK_API)
+          Доменные данные: реальный API (receipts, tags, aliases). Флаг мока {USE_MOCK_API ? 'включён' : 'выключен'} (VITE_USE_MOCK_API) больше ни на что не влияет.
         </Typography>
       </Card>
 

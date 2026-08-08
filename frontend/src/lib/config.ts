@@ -2,9 +2,10 @@
  * Environment configuration.
  *
  * VITE_API_URL         — base URL of the backend API (empty = same origin / dev proxy).
- * VITE_USE_MOCK_API    — when 'true' (default) domain modules that have no backend
- *                        endpoint yet (transactions, summary, tags, rules) serve mock
- *                        data. Auth is ALWAYS wired to the real backend.
+ * VITE_USE_MOCK_API    — legacy flag. Все доменные модули (receipts, tags, aliases,
+ *                        transactions/summary/analytics — производные от чеков)
+ *                        используют реальный API; флаг ни на что не влияет и оставлен
+ *                        только для обратной совместимости сборки.
  *
  * See TODO.md for the list of endpoints the backend still has to provide.
  */

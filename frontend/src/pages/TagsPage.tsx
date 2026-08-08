@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Alert,
   Box,
@@ -16,17 +16,28 @@ import { BottomSheet } from '../components/common/BottomSheet'
 import { PageHeader } from '../components/common/PageHeader'
 import { LoadingState, EmptyState, ErrorState, OfflineState } from '../components/common/States'
 import { useTags, useCreateTag, useDeleteTag } from '../hooks/useTags'
+import { useTransactions } from '../hooks/useTransactions'
 import { useOnline } from '../hooks/useOnline'
 import { colors } from '../theme'
 
 const PALETTE = ['#16A34A', '#3B82F6', '#8B5CF6', '#F97316', '#06B6D4', '#F59E0B', '#EF4444', '#65A30D']
 
-/** Теги — manage category tags. */
+/** Теги — manage category tags (реальный API; счётчики — из чеков). */
 export function TagsPage() {
   const online = useOnline()
   const { data, isLoading, isError, error, refetch } = useTags()
+  const { data: transactions } = useTransactions()
   const createTag = useCreateTag()
   const deleteTag = useDeleteTag()
+
+  // счётчик операций по тегу — из транзакций (бэкенд его не отдаёт)
+  const counts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const tx of transactions ?? []) {
+      if (tx.tag_id) m.set(tx.tag_id, (m.get(tx.tag_id) ?? 0) + 1)
+    }
+    return m
+  }, [transactions])
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [name, setName] = useState('')
@@ -78,7 +89,7 @@ export function TagsPage() {
             <Card key={tag.id} sx={{ p: 1.75, display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: tag.color, flexShrink: 0 }} />
               <Typography sx={{ fontWeight: 600, flex: 1 }}>{tag.name}</Typography>
-              <Chip size="small" label={`${tag.count} операций`} variant="outlined" sx={{ height: 22, fontSize: 12 }} />
+              <Chip size="small" label={`${counts.get(tag.id) ?? 0} операций`} variant="outlined" sx={{ height: 22, fontSize: 12 }} />
               <IconButton
                 size="small"
                 onClick={() => void deleteTag.mutate(tag.id)}

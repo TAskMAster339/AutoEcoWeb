@@ -65,13 +65,30 @@ export function formatPercent(percent: number): string {
   return `${sign}${percent.toFixed(0)}%`
 }
 
+/** Локальная ISO-дата (без UTC-сдвига toISOString — иначе в МСК дата «уезжает»). */
+function localIso(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
 /** ISO date 30 days ago (local). */
 export function daysAgoIso(days: number): string {
   const d = new Date()
   d.setDate(d.getDate() - days)
-  return d.toISOString().slice(0, 10)
+  return localIso(d)
+}
+
+/** Русские множественные формы: pluralRu(3, ['чек', 'чека', 'чеков']) → «3 чека». */
+export function pluralRu(n: number, forms: [string, string, string]): string {
+  const abs = Math.abs(n) % 100
+  const last = abs % 10
+  if (abs > 10 && abs < 20) return `${n} ${forms[2]}`
+  if (last > 1 && last < 5) return `${n} ${forms[1]}`
+  if (last === 1) return `${n} ${forms[0]}`
+  return `${n} ${forms[2]}`
 }
 
 export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  return localIso(new Date())
 }

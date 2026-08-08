@@ -5,53 +5,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 from src.models.receipt import Receipt
-from src.models.receipt_item import ReceiptItem
+from src.schemas.transaction import TransactionManualIn, TransactionOut
 from src.services.receipt_parser import (
     NormalizedReceipt,
-    ReceiptItemData,
     ReceiptParseError,
-    normalize_product_name,
     normalize_proverkacheka,
 )
-
-
-class ReceiptItemOut(BaseModel):
-    """Позиция чека: preview (id/tag_id = None) и сохранённая (из БД)."""
-
-    id: UUID | None = None
-    product_name: str
-    normalized_name: str
-    quantity: Decimal
-    unit: str = "шт"
-    price: Decimal
-    total_price: Decimal
-    nds: int | None = None
-    tag_id: UUID | None = None
-
-    @classmethod
-    def from_parsed(cls, item: ReceiptItemData) -> "ReceiptItemOut":
-        return cls(
-            product_name=item.name,
-            normalized_name=normalize_product_name(item.name),
-            quantity=item.quantity,
-            unit=item.unit,
-            price=item.price,
-            total_price=item.sum,
-            nds=item.nds,
-        )
-
-    @classmethod
-    def from_model(cls, item: ReceiptItem) -> "ReceiptItemOut":
-        return cls(
-            id=item.id,
-            product_name=item.product_name,
-            normalized_name=item.normalized_name,
-            quantity=item.quantity,
-            unit=item.unit,
-            price=item.price,
-            total_price=item.total_price,
-            tag_id=item.tag_id,
-        )
 
 
 class ReceiptParseRequest(BaseModel):
@@ -109,61 +68,6 @@ class ReceiptUpdate(BaseModel):
     )
 
 
-class ReceiptItemUpdate(BaseModel):
-    """Точечное обновление позиции: применяются только присланные поля.
-
-    position (порядок в чеке) не редактируется.
-    """
-
-    product_name: str | None = Field(default=None, min_length=1, max_length=255)
-    quantity: Decimal | None = Field(
-        default=None,
-        ge=0,
-        max_digits=12,
-        decimal_places=3,
-    )
-    unit: str | None = Field(default=None, min_length=1, max_length=16)
-    price: Decimal | None = Field(
-        default=None,
-        ge=0,
-        max_digits=12,
-        decimal_places=2,
-    )
-    total_price: Decimal | None = Field(
-        default=None,
-        ge=0,
-        max_digits=12,
-        decimal_places=2,
-    )
-    tag_id: UUID | None = None
-
-
-class ReceiptItemManualIn(BaseModel):
-    """Позиция ручного чека: total_price = price * quantity, если не задан."""
-
-    product_name: str = Field(min_length=1, max_length=255)
-    quantity: Decimal = Field(
-        default=Decimal("1"),
-        ge=0,
-        max_digits=12,
-        decimal_places=3,
-    )
-    unit: str = Field(default="шт", min_length=1, max_length=16)
-    price: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
-    total_price: Decimal | None = Field(
-        default=None,
-        ge=0,
-        max_digits=12,
-        decimal_places=2,
-    )
-
-    @model_validator(mode="after")
-    def _default_total(self) -> "ReceiptItemManualIn":
-        if self.total_price is None:
-            self.total_price = self.price * self.quantity
-        return self
-
-
 class ReceiptManualCreate(BaseModel):
     seller_name: str = Field(min_length=1, max_length=255)
     total_sum: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
@@ -184,11 +88,7 @@ class ReceiptManualCreate(BaseModel):
         max_digits=12,
         decimal_places=2,
     )
-    items: list[ReceiptItemManualIn] | None = None
-
-
-class ReceiptItemsManualCreate(BaseModel):
-    items: list[ReceiptItemManualIn] = Field(min_length=1)
+    transactions: list[TransactionManualIn] | None = None
 
 
 class ReceiptPreviewOut(BaseModel):
@@ -199,7 +99,7 @@ class ReceiptPreviewOut(BaseModel):
     seller_inn: str | None
     datetime: dt
     total_sum: Decimal
-    items: list[ReceiptItemOut]
+    transactions: list[TransactionOut]
 
     @classmethod
     def from_normalized(
@@ -215,7 +115,10 @@ class ReceiptPreviewOut(BaseModel):
             seller_inn=receipt.seller_inn,
             datetime=receipt.check_datetime,
             total_sum=receipt.total_sum,
-            items=[ReceiptItemOut.from_parsed(item) for item in receipt.items],
+            transactions=[
+                TransactionOut.from_parsed(item, datetime=receipt.check_datetime)
+                for item in receipt.items
+            ],
         )
 
 
@@ -229,21 +132,24 @@ class ReceiptResponse(ReceiptPreviewOut):
     def from_model(
         cls,
         receipt: Receipt,
-        items: list[ReceiptItem] | None = None,
+        transactions: list | None = None,
     ) -> "ReceiptResponse":
-        if items is None:
-            parsed_items: list[ReceiptItemOut] = []
+        if transactions is None:
+            parsed: list[TransactionOut] = []
             if receipt.raw_json:
-                # Легаси-чеки, созданные до появления таблицы receipt_items
+                # Легаси-чеки, созданные до появления транзакций
                 try:
-                    parsed_items = [
-                        ReceiptItemOut.from_parsed(item)
+                    parsed = [
+                        TransactionOut.from_parsed(
+                            item,
+                            datetime=receipt.check_datetime,
+                        )
                         for item in normalize_proverkacheka(receipt.raw_json).items
                     ]
                 except ReceiptParseError:
-                    parsed_items = []
+                    parsed = []
         else:
-            parsed_items = [ReceiptItemOut.from_model(item) for item in items]
+            parsed = [TransactionOut.from_model(tx) for tx in transactions]
         return cls(
             id=receipt.id,
             qr=receipt.qr,
@@ -256,5 +162,5 @@ class ReceiptResponse(ReceiptPreviewOut):
             cashback=receipt.cashback,
             balance_after=receipt.balance_after,
             created_at=receipt.created_at,
-            items=parsed_items,
+            transactions=parsed,
         )

@@ -13,7 +13,7 @@ async def session():
         poolclass=StaticPool,  # иначе каждая сессия получит СВОЮ in-memory БД
     )
     async with engine.begin() as conn:
-        # FK-каскады (receipt_items.receipt_id CASCADE и т.п.) — как в postgres
+        # FK-каскады (transactions.receipt_id CASCADE и т.п.) — как в postgres
         await conn.exec_driver_sql("PRAGMA foreign_keys=ON")
         await conn.run_sync(Base.metadata.create_all)
     _session = async_sessionmaker(engine, expire_on_commit=False)

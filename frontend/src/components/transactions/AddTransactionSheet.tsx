@@ -1,274 +1,302 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Alert,
   Box,
   Button,
   Chip,
   CircularProgress,
+  IconButton,
+  InputAdornment,
   Stack,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
 } from '@mui/material'
-import QrCodeScannerOutlinedIcon from '@mui/icons-material/QrCodeScannerOutlined'
+import AddIcon from '@mui/icons-material/Add'
+import RemoveIcon from '@mui/icons-material/Remove'
 import { BottomSheet } from '../common/BottomSheet'
 import { useUiStore } from '../../store/uiStore'
 import { useTags } from '../../hooks/useTags'
 import { useCreateTransaction } from '../../hooks/useTransactions'
+import { messageFromError } from '../../api/client'
 import { todayIso } from '../../lib/format'
 import { colors } from '../../theme'
-import type { Tag } from '../../api/types'
 
-const STORES = ['Дикси', 'Перекрёсток', 'Пятёрочка', 'ВкусВилл', 'Магнит', 'Яндекс Лавка', 'Метро', 'Сбережения']
-
-interface Html5QrcodeLike {
-  start: (
-    facingMode: { facingMode: string },
-    config: { fps: number; qrbox: { width: number; height: number } },
-    onSuccess: (text: string) => void,
-    onError: (err: unknown) => void,
-  ) => Promise<unknown>
-  stop: () => Promise<void>
-  clear: () => void
+/** Парс числа с запятой/точкой; NaN если пусто/бито. */
+function parseNum(raw: string): number {
+  return Number.parseFloat(raw.replace(',', '.'))
 }
 
-/** Bottom sheet: manual receipt entry with graceful QR-scan fallback. */
+/**
+ * Числовое поле с фиолетовыми кнопками «− / +».
+ * Ввод фильтруется: только цифры, один десятичный разделитель (`.`/`,`),
+ * максимум 2 знака после запятой.
+ * type="text" + inputMode="decimal" — у type="number" браузер сам ломает
+ * дробный ввод (незаконченное «139.» схлопывается) и пропускает e/знаки.
+ */
+function NumericField(props: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  required?: boolean
+  placeholder?: string
+  step?: number
+  min?: number
+  readOnly?: boolean
+  error?: boolean
+  helperText?: string
+}) {
+  const { label, value, onChange, required, placeholder, step = 1, min, readOnly, error, helperText } = props
+
+  const bump = (dir: 1 | -1) => {
+    if (readOnly || value === '') return
+    const cur = parseNum(value)
+    if (!Number.isFinite(cur)) return
+    const next = Math.round((cur + dir * step) * 100) / 100
+    if (min !== undefined && next < min) return
+    onChange(String(next))
+  }
+
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (readOnly) return
+    // запятая → точка, остаются только цифры и максимум один разделитель
+    const raw = e.target.value.replace(',', '.')
+    let v = raw.replace(/[^\d.]/g, '')
+    const firstDot = v.indexOf('.')
+    if (firstDot !== -1) {
+      const intPart = v.slice(0, firstDot)
+      const fracPart = v.slice(firstDot + 1).replace(/\./g, '').slice(0, 2)
+      v = intPart + '.' + fracPart
+    }
+    onChange(v)
+  }
+
+  return (
+    <TextField
+      label={label}
+      type="text"
+      inputMode="decimal"
+      value={value}
+      onChange={handleInput}
+      required={required}
+      placeholder={placeholder}
+      fullWidth
+      error={error}
+      helperText={helperText}
+      slotProps={{
+        inputLabel: { shrink: true },
+        input: {
+          readOnly,
+          startAdornment: (
+            <InputAdornment position="start">
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => bump(-1)}
+                aria-label={`Уменьшить ${label}`}
+                disabled={readOnly}
+                sx={{ p: 0.5, borderRadius: '6px' }}
+              >
+                <RemoveIcon fontSize="small" />
+              </IconButton>
+            </InputAdornment>
+          ),
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => bump(1)}
+                aria-label={`Увеличить ${label}`}
+                disabled={readOnly}
+                sx={{ p: 0.5, borderRadius: '6px' }}
+              >
+                <AddIcon fontSize="small" />
+              </IconButton>
+            </InputAdornment>
+          ),
+        },
+      }}
+    />
+  )
+}
+
+/**
+ * Bottom sheet: ручная транзакция БЕЗ чека — минимальная единица учёта.
+ * POST /api/v1/transactions (receipt_id = null). Сумма вычисляется
+ * автоматически: цена (обязательная) × количество (по умолчанию 1).
+ */
 export function AddTransactionSheet() {
-  const open = useUiStore((s) => s.addSheetOpen)
-  const close = useUiStore((s) => s.closeAddSheet)
+  const open = useUiStore((s) => s.transactionSheetOpen)
+  const close = useUiStore((s) => s.closeTransactionSheet)
   const { data: tags } = useTags()
   const createTx = useCreateTransaction()
 
   const [type, setType] = useState<'expense' | 'income'>('expense')
-  const [store, setStore] = useState('')
   const [date, setDate] = useState(todayIso())
-  const [description, setDescription] = useState('')
-  const [amount, setAmount] = useState('')
-  const [quantity, setQuantity] = useState('')
+  const [name, setName] = useState('')
+  const [store, setStore] = useState('')
   const [price, setPrice] = useState('')
-  const [comment, setComment] = useState('')
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [quantity, setQuantity] = useState('1')
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
 
-  // scanner state
-  const [scanning, setScanning] = useState(false)
-  const [scanError, setScanError] = useState<string | null>(null)
-  const scannerRef = useRef<Html5QrcodeLike | null>(null)
+  const resetForm = () => {
+    setName('')
+    setStore('')
+    setPrice('')
+    setQuantity('1')
+    setSelectedTag(null)
+    setType('expense')
+    setFormError(null)
+  }
 
   useEffect(() => {
-    if (!open) {
-      setScanning(false)
-      setScanError(null)
-      void scannerRef.current?.stop().catch(() => undefined)
-      scannerRef.current = null
-    }
+    if (!open) resetForm()
   }, [open])
 
-  useEffect(
-    () => () => {
-      void scannerRef.current?.stop().catch(() => undefined)
-    },
-    [],
-  )
-
-  const toggleTag = (id: string) =>
-    setSelectedTags((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]))
-
-  const applyDecodedText = (text: string) => {
-    const lower = text.toLowerCase()
-    const matchedStore = STORES.find((s) => lower.includes(s.toLowerCase()))
-    setDescription(text.slice(0, 120))
-    if (matchedStore) setStore(matchedStore)
-  }
-
-  const startScan = async () => {
-    setScanError(null)
-    try {
-      const { Html5Qrcode } = await import('html5-qrcode')
-      const scanner = new Html5Qrcode('qr-reader')
-      scannerRef.current = scanner
-      setScanning(true)
-      await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 220, height: 220 } },
-        (decodedText: string) => {
-          void scanner.stop().catch(() => undefined)
-          setScanning(false)
-          applyDecodedText(decodedText)
-        },
-        () => undefined,
-      )
-    } catch {
-      setScanning(false)
-      setScanError('Не удалось запустить камеру. Добавьте чек вручную.')
-    }
-  }
+  // сумма = цена × количество (автоматически, с округлением до копеек)
+  const priceNum = price ? parseNum(price) : NaN
+  const qtyNum = quantity ? parseNum(quantity) : NaN
+  const computedAmount =
+    Number.isFinite(priceNum) && Number.isFinite(qtyNum)
+      ? Math.round(priceNum * qtyNum * 100) / 100
+      : null
+  const amountText =
+    computedAmount !== null ? computedAmount.toFixed(2).replace('.', ',') : ''
 
   const submit = async () => {
     setFormError(null)
-    const value = Number.parseFloat(amount.replace(',', '.'))
-    if (!store.trim()) {
-      setFormError('Укажите магазин')
+
+    if (!name.trim()) {
+      setFormError('Укажите название транзакции')
       return
     }
-    if (!description.trim() && !value) {
-      setFormError('Укажите описание или сумму')
+    if (!Number.isFinite(priceNum) || priceNum <= 0) {
+      setFormError('Укажите цену больше нуля')
       return
     }
-    const qty = quantity ? Number.parseFloat(quantity.replace(',', '.')) : null
-    const unitPrice = price ? Number.parseFloat(price.replace(',', '.')) : null
-    const isExpense = type === 'expense'
+    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+      setFormError('Количество должно быть больше нуля')
+      return
+    }
 
     try {
       await createTx.mutateAsync({
-        date,
-        store: store.trim(),
-        description: description.trim() || 'Без описания',
-        tagIds: selectedTags,
-        quantity: qty,
-        price: unitPrice,
-        income: isExpense ? null : value || null,
-        expense: isExpense ? value || null : null,
-        comment: comment.trim() || null,
+        name: name.trim(),
+        seller_name: store.trim() || null,
+        amount: computedAmount!,
+        quantity: qtyNum,
+        price: priceNum,
+        // полдень UTC — чтобы дата не «уезжала» ни в одном часовом поясе
+        datetime: `${date}T12:00:00Z`,
+        operation_type: type === 'income' ? 2 : 1,
+        tag_id: selectedTag,
       })
-      // reset for next time
-      setStore('')
-      setDescription('')
-      setAmount('')
-      setQuantity('')
-      setPrice('')
-      setComment('')
-      setSelectedTags([])
-      setType('expense')
       close()
-    } catch {
-      setFormError('Не удалось сохранить операцию')
+    } catch (e) {
+      setFormError(messageFromError(e))
     }
   }
 
-  const busy = createTx.isPending
-
   return (
-    <BottomSheet open={open} onClose={close} title={scanning ? 'Сканирование чека' : 'Добавить операцию'}>
-      {scanning ? (
-        <Box sx={{ textAlign: 'center' }}>
-          <Box
-            id="qr-reader"
-            sx={{
-              width: '100%',
-              maxWidth: 300,
-              mx: 'auto',
-              borderRadius: '8px',
-              overflow: 'hidden',
-              '& video': { borderRadius: '8px' },
-            }}
-          />
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-            Наведите камеру на QR-код чека
-          </Typography>
-          <Button sx={{ mt: 1 }} onClick={() => { setScanning(false); void scannerRef.current?.stop().catch(() => undefined) }}>
-            Отмена
-          </Button>
-        </Box>
-      ) : (
-        <Stack spacing={2}>
-          {scanError && <Alert severity="warning">{scanError}</Alert>}
-          {formError && <Alert severity="error">{formError}</Alert>}
+    <BottomSheet open={open} onClose={close} title="Новая транзакция">
+      <Stack spacing={2}>
+        {formError && <Alert severity="error">{formError}</Alert>}
 
-          <Button variant="outlined" startIcon={<QrCodeScannerOutlinedIcon />} onClick={startScan} fullWidth>
-            Сканировать QR-код чека
-          </Button>
+        <ToggleButtonGroup
+          value={type}
+          exclusive
+          onChange={(_, v) => v && setType(v)}
+          size="small"
+          fullWidth
+          aria-label="Тип операции"
+        >
+          <ToggleButton value="expense" sx={{ flex: 1, color: colors.red }}>
+            Расход
+          </ToggleButton>
+          <ToggleButton value="income" sx={{ flex: 1, color: colors.green }}>
+            Доход
+          </ToggleButton>
+        </ToggleButtonGroup>
 
-          <ToggleButtonGroup
-            value={type}
-            exclusive
-            onChange={(_, v) => v && setType(v)}
-            size="small"
-            fullWidth
-            aria-label="Тип операции"
-          >
-            <ToggleButton value="expense" sx={{ flex: 1, color: colors.red }}>
-              Расход
-            </ToggleButton>
-            <ToggleButton value="income" sx={{ flex: 1, color: colors.green }}>
-              Доход
-            </ToggleButton>
-          </ToggleButtonGroup>
+        <TextField
+          label="Название"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          fullWidth
+          required
+          autoFocus
+          placeholder="Например: Кофе, проезд, зарплата"
+        />
 
-          <TextField
-            label="Магазин"
-            value={store}
-            onChange={(e) => setStore(e.target.value)}
-            fullWidth
+        <TextField
+          label="Магазин (необязательно)"
+          value={store}
+          onChange={(e) => setStore(e.target.value)}
+          fullWidth
+          placeholder="Например: Пятёрочка, Дикси, Метро"
+        />
+
+        <Stack direction="row" spacing={1.5}>
+          <NumericField
+            label="Цена, ₽"
+            value={price}
+            onChange={setPrice}
             required
-            slotProps={{ htmlInput: { list: 'stores-list' } }}
+            min={0.01}
+            step={1}
+            placeholder="139,90"
+            error={price !== '' && (!Number.isFinite(priceNum) || priceNum <= 0)}
+            helperText={price !== '' && (!Number.isFinite(priceNum) || priceNum <= 0) ? 'Цена должна быть больше 0' : ' '}
           />
-          <datalist id="stores-list">
-            {STORES.map((s) => (
-              <option key={s} value={s} />
-            ))}
-          </datalist>
-
-          <Stack direction="row" spacing={1.5}>
-            <TextField label="Дата" type="date" value={date} onChange={(e) => setDate(e.target.value)} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-            <TextField
-              label="Сумма, ₽"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              inputMode="decimal"
-              fullWidth
-              placeholder="0,00"
-            />
-          </Stack>
-
-          <TextField
-            label="Описание"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            fullWidth
-            multiline
-            minRows={1}
-            maxRows={3}
-            placeholder="Например: Нап. Газ. Фрустайл"
+          <NumericField
+            label="Кол-во"
+            value={quantity}
+            onChange={setQuantity}
+            min={1}
+            step={1}
+            placeholder="1"
+            error={quantity !== '' && (!Number.isFinite(qtyNum) || qtyNum <= 0)}
+            helperText={quantity !== '' && (!Number.isFinite(qtyNum) || qtyNum <= 0) ? 'Кол-во должно быть больше 0' : ' '}
           />
-
-          <Stack direction="row" spacing={1.5}>
-            <TextField label="Кол-во" value={quantity} onChange={(e) => setQuantity(e.target.value)} inputMode="decimal" fullWidth placeholder="1" />
-            <TextField label="Цена, ₽" value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" fullWidth placeholder="139,90" />
-          </Stack>
-
-          <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-              Теги
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-              {(tags ?? []).map((t: Tag) => (
-                <Chip
-                  key={t.id}
-                  label={t.name}
-                  clickable
-                  color={selectedTags.includes(t.id) ? 'primary' : 'default'}
-                  variant={selectedTags.includes(t.id) ? 'filled' : 'outlined'}
-                  onClick={() => toggleTag(t.id)}
-                />
-              ))}
-            </Box>
-          </Box>
-
-          <TextField
-            label="Комментарий"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            fullWidth
-            placeholder="Необязательно"
-          />
-
-          <Button variant="contained" onClick={submit} disabled={busy} size="large" fullWidth>
-            {busy ? <CircularProgress size={20} color="inherit" /> : 'Сохранить'}
-          </Button>
         </Stack>
-      )}
+
+        <Stack direction="row" spacing={1.5}>
+          <TextField label="Дата" type="date" value={date} onChange={(e) => setDate(e.target.value)} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField
+            label="Сумма, ₽"
+            value={amountText}
+            fullWidth
+            slotProps={{ input: { readOnly: true } }}
+            placeholder="—"
+            helperText="Считается автоматически"
+          />
+        </Stack>
+
+        <Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+            Тег
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+            {(tags ?? []).map((t) => (
+              <Chip
+                key={t.id}
+                label={t.name}
+                clickable
+                color={selectedTag === t.id ? 'primary' : 'default'}
+                variant={selectedTag === t.id ? 'filled' : 'outlined'}
+                onClick={() => setSelectedTag((prev) => (prev === t.id ? null : t.id))}
+              />
+            ))}
+          </Box>
+        </Box>
+
+        <Button variant="contained" onClick={submit} disabled={createTx.isPending} size="large" fullWidth>
+          {createTx.isPending ? <CircularProgress size={20} color="inherit" /> : 'Сохранить'}
+        </Button>
+      </Stack>
     </BottomSheet>
   )
 }

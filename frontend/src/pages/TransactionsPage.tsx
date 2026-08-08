@@ -22,20 +22,21 @@ import { rangeFor } from '../lib/period'
 import { TransactionsGrid } from '../components/transactions/TransactionsGrid'
 import { TransactionCard } from '../components/transactions/TransactionCard'
 import { AddTransactionSheet } from '../components/transactions/AddTransactionSheet'
+import { AddReceiptSheet } from '../components/transactions/AddReceiptSheet'
 import { FilterSheet } from '../components/transactions/FilterSheet'
 import { LoadingState, EmptyState, ErrorState, OfflineState } from '../components/common/States'
 import { useSummary } from '../hooks/useSummary'
-import { useTransactions, useDeleteTransaction } from '../hooks/useTransactions'
+import { useTransactionViews, useDeleteTransaction } from '../hooks/useTransactions'
 import { useTags } from '../hooks/useTags'
 import { useOnline } from '../hooks/useOnline'
 import { useUiStore } from '../store/uiStore'
 import { formatCurrency } from '../lib/format'
-import type { Transaction } from '../api/types'
+import type { TransactionView } from '../api/types'
 
-function exportCsv(rows: Transaction[]) {
-  const header = ['Дата', 'Магазин', 'Теги', 'Описание', 'Кол-во', 'Цена', 'Доход', 'Расход', 'Баланс', 'Комментарий']
+function exportCsv(rows: TransactionView[]) {
+  const header = ['Дата', 'Магазин', 'Теги', 'Описание', 'Кол-во', 'Цена', 'Доход', 'Расход', 'Баланс']
   const lines = rows.map((t) =>
-    [t.date, t.store, t.tagIds.join('|'), t.description, t.quantity ?? '', t.price ?? '', t.income ?? '', t.expense ?? '', t.balance, t.comment ?? '']
+    [t.date, t.store, t.tagId ?? '', t.description, t.quantity ?? '', t.price ?? '', t.income ?? '', t.expense ?? '', t.balance]
       .map((v) => `"${String(v).replaceAll('"', '""')}"`)
       .join(';'),
   )
@@ -78,7 +79,7 @@ function SummaryCards() {
         <StatisticCard label="Расходы" value={formatCurrency(data.expenses)} delta={data.expensesDelta} />
       </Grid>
       <Grid size={{ xs: 6, md: 3 }}>
-        <StatisticCard label="Чеков" value={String(data.checks)} hint="За этот период" />
+        <StatisticCard label="Транзакций" value={String(data.transactions)} hint="За этот период" />
       </Grid>
     </Grid>
   )
@@ -91,7 +92,7 @@ export function TransactionsPage() {
   const navigate = useNavigate()
   const online = useOnline()
 
-  const { data, isLoading, isError, error, refetch } = useTransactions()
+  const { data, isLoading, isError, error, refetch } = useTransactionViews()
   const { data: tags } = useTags()
   const deleteTx = useDeleteTransaction()
 
@@ -102,10 +103,10 @@ export function TransactionsPage() {
   const tagFilterId = useUiStore((s) => s.tagFilterId)
   const storeFilter = useUiStore((s) => s.storeFilter)
   const openFilterSheet = useUiStore((s) => s.openFilterSheet)
-  const openAddSheet = useUiStore((s) => s.openAddSheet)
+  const openAddMenu = useUiStore((s) => s.openAddMenu)
 
   const tagsMap = useMemo(() => new Map((tags ?? []).map((t) => [t.id, t])), [tags])
-  const stores = useMemo(() => [...new Set((data ?? []).map((t) => t.store))].sort(), [data])
+  const stores = useMemo(() => [...new Set((data ?? []).map((t) => t.store).filter(Boolean))].sort() as string[], [data])
 
   const range = useMemo(() => rangeFor(periodKey, customFrom, customTo), [periodKey, customFrom, customTo])
 
@@ -114,9 +115,9 @@ export function TransactionsPage() {
     const q = search.trim().toLowerCase()
     return data.filter((t) => {
       if (t.date < range.from || t.date > range.to) return false
-      if (tagFilterId && !t.tagIds.includes(tagFilterId)) return false
+      if (tagFilterId && t.tagId !== tagFilterId) return false
       if (storeFilter && t.store !== storeFilter) return false
-      if (q && !`${t.store} ${t.description} ${t.comment ?? ''}`.toLowerCase().includes(q)) return false
+      if (q && !`${t.store ?? ''} ${t.description}`.toLowerCase().includes(q)) return false
       return true
     })
   }, [data, range, search, tagFilterId, storeFilter])
@@ -168,9 +169,9 @@ export function TransactionsPage() {
       {data && data.length === 0 ? (
         <EmptyState
           title="Пока нет операций"
-          subtitle="Добавьте первый чек, чтобы начать учёт"
-          actionLabel="Добавить чек"
-          onAction={openAddSheet}
+          subtitle="Добавьте чек или транзакцию, чтобы начать учёт"
+          actionLabel="Добавить"
+          onAction={openAddMenu}
         />
       ) : filtered.length === 0 ? (
         <EmptyState
@@ -195,6 +196,7 @@ export function TransactionsPage() {
       )}
 
       <AddTransactionSheet />
+      <AddReceiptSheet />
       <FilterSheet tags={tags} stores={stores} />
     </Stack>
   )

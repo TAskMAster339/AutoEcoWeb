@@ -40,7 +40,9 @@ export function Header() {
   const location = useLocation()
   const search = useUiStore((s) => s.search)
   const setSearch = useUiStore((s) => s.setSearch)
-  const openAddSheet = useUiStore((s) => s.openAddSheet)
+  const closeAddMenu = useUiStore((s) => s.closeAddMenu)
+  const openReceiptSheet = useUiStore((s) => s.openReceiptSheet)
+  const openTransactionSheet = useUiStore((s) => s.openTransactionSheet)
   const themeMode = useUiStore((s) => s.themeMode)
   const toggleThemeMode = useUiStore((s) => s.toggleThemeMode)
 
@@ -124,23 +126,25 @@ export function Header() {
       {/* Row 2 (mobile only): search takes the full width — no cramping */}
       {isMobile && <Box sx={{ mt: 1.25 }}>{searchField}</Box>}
 
-      {/* Добавить dropdown */}
+      {/* Добавить dropdown: чек (QR/камера) или транзакция (форма) */}
       <Menu anchorEl={addAnchor} open={Boolean(addAnchor)} onClose={() => setAddAnchor(null)}>
         <MenuItem
           onClick={() => {
             setAddAnchor(null)
-            openAddSheet()
+            closeAddMenu()
+            openReceiptSheet()
           }}
         >
-          <PlaylistAddOutlinedIcon sx={{ mr: 1.5, fontSize: 20 }} /> Добавить вручную
+          <QrCodeScannerOutlinedIcon sx={{ mr: 1.5, fontSize: 20 }} /> Добавить чек
         </MenuItem>
         <MenuItem
           onClick={() => {
             setAddAnchor(null)
-            openAddSheet()
+            closeAddMenu()
+            openTransactionSheet()
           }}
         >
-          <QrCodeScannerOutlinedIcon sx={{ mr: 1.5, fontSize: 20 }} /> Сканировать чек
+          <PlaylistAddOutlinedIcon sx={{ mr: 1.5, fontSize: 20 }} /> Добавить транзакцию
         </MenuItem>
       </Menu>
     </Box>

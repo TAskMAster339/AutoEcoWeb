@@ -5,25 +5,25 @@ from decimal import Decimal
 from uuid import uuid4
 
 from fastapi import HTTPException
-from src.models.receipt_item import ReceiptItem
+from src.models.transaction import Transaction
 from src.repositories.alias import AliasRepository
 from src.repositories.receipt import ReceiptRepository
-from src.repositories.receipt_item import ReceiptItemRepository
 from src.repositories.tag import TagRepository
+from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
 from src.schemas.alias import AliasCreate
 from src.schemas.receipt import (
     ReceiptCreate,
-    ReceiptItemManualIn,
     ReceiptManualCreate,
     ReceiptParseRequest,
     ReceiptUpdate,
 )
 from src.schemas.tag import TagCreate, TagUpdate
+from src.schemas.transaction import TransactionManualIn
 from src.services.aliases import AliasService
-from src.services.receipt_item import ReceiptItemService
 from src.services.receipts import ReceiptService
 from src.services.tags import TagService
+from src.services.transaction import TransactionService
 from test_receipt_parser import QR, sample_payload
 
 
@@ -37,14 +37,14 @@ async def _make_user_with_token(repo: UserRepository, token: str = "user-token")
 
 
 def _service(session, *, proverkacheka=None):
-    """ReceiptService: позиции создаются через ReceiptItemService."""
-    item_service = ReceiptItemService(
-        ReceiptItemRepository(session),
+    """ReceiptService: транзакции создаются через TransactionService."""
+    tx_service = TransactionService(
+        TransactionRepository(session),
         ReceiptRepository(session),
     )
     return ReceiptService(
         ReceiptRepository(session),
-        item_service,
+        tx_service,
         proverkacheka=proverkacheka,
     )
 
@@ -69,22 +69,22 @@ async def test_receipt_create_normalizes(session):
     assert receipt.operation_type == 1
     assert receipt.raw_json is not None
 
-    # позиции чека сохраняются в receipt_items (связь через FK)
-    items = await ReceiptItemRepository(session).list_by_receipt(receipt.id)
+    # транзакции чека сохраняются в transactions (связь через FK)
+    items = await TransactionRepository(session).list_by_receipt(receipt.id)
     assert len(items) == 3  # noqa: PLR2004
     first = items[0]
-    assert first.product_name == "Я САМАЯ Диски ватные 120шт"
+    assert first.name == "Я САМАЯ Диски ватные 120шт"
     assert first.normalized_name == "я самая диски ватные 120шт"
     assert first.quantity == Decimal("1")
     assert first.unit == "шт"
     assert first.price == Decimal("109.99")
-    assert first.total_price == Decimal("109.99")
+    assert first.amount == Decimal("109.99")
     assert first.tag_id is None
 
     banana = items[2]
     assert banana.unit == "кг"
     assert banana.quantity == Decimal("1.086")
-    assert banana.total_price == Decimal("152.03")
+    assert banana.amount == Decimal("152.03")
 
 
 async def test_receipt_create_dedupe_by_qr(session):
@@ -110,8 +110,8 @@ async def test_receipt_create_applies_alias(session):
     receipt = await _create_receipt(
         ReceiptService(
             ReceiptRepository(session),
-            ReceiptItemService(
-                ReceiptItemRepository(session),
+            TransactionService(
+                TransactionRepository(session),
                 ReceiptRepository(session),
             ),
             alias_repo,
@@ -163,15 +163,15 @@ async def test_receipt_get_and_delete(session):
     user = await _make_user(UserRepository(session))
     service = _service(session)
     receipt = await _create_receipt(service, user)
-    item_ids = [
-        item.id
-        for item in await ReceiptItemRepository(session).list_by_receipt(receipt.id)
+    tx_ids = [
+        tx.id
+        for tx in await TransactionRepository(session).list_by_receipt(receipt.id)
     ]
 
     found = await service.get(user, receipt.id)
     assert found.id == receipt.id
-    # позиции — отдельным запросом через репозиторий позиций
-    assert len(await ReceiptItemRepository(session).list_by_receipt(receipt.id)) == 3  # noqa: PLR2004
+    # транзакции — отдельным запросом через репозиторий транзакций
+    assert len(await TransactionRepository(session).list_by_receipt(receipt.id)) == 3  # noqa: PLR2004
 
     await service.delete(user, receipt.id)
     try:
@@ -181,9 +181,9 @@ async def test_receipt_get_and_delete(session):
     else:
         raise AssertionError("ожидался 404 после удаления")
 
-    # позиции чека удаляются каскадом
-    for item_id in item_ids:
-        assert await session.get(ReceiptItem, item_id) is None
+    # транзакции чека удаляются каскадом
+    for tx_id in tx_ids:
+        assert await session.get(Transaction, tx_id) is None
 
 
 async def test_receipt_repo_scoped_to_user(session):
@@ -210,8 +210,8 @@ async def test_receipt_create_fetches_by_qr(session):
 
     service = ReceiptService(
         ReceiptRepository(session),
-        ReceiptItemService(
-            ReceiptItemRepository(session),
+        TransactionService(
+            TransactionRepository(session),
             ReceiptRepository(session),
         ),
         proverkacheka=FakeClient(),  # type: ignore[arg-type]
@@ -219,9 +219,9 @@ async def test_receipt_create_fetches_by_qr(session):
     receipt = await service.create(user, ReceiptCreate(qr=QR))
     assert receipt.qr == QR
     assert receipt.total_sum == Decimal("1522.95")
-    # позиции, загруженные с proverkacheka, сохранены через ReceiptItemService
+    # транзакции, загруженные с proverkacheka, сохранены через TransactionService
     assert (
-        len(await ReceiptItemRepository(session).list_by_receipt(receipt.id)) == 3  # noqa: PLR2004
+        len(await TransactionRepository(session).list_by_receipt(receipt.id)) == 3  # noqa: PLR2004
     )
 
 
@@ -235,8 +235,8 @@ async def test_receipt_create_qr_without_user_token(session):
 
     service = ReceiptService(
         ReceiptRepository(session),
-        ReceiptItemService(
-            ReceiptItemRepository(session),
+        TransactionService(
+            TransactionRepository(session),
             ReceiptRepository(session),
         ),
         proverkacheka=FakeClient(),  # type: ignore[arg-type]
@@ -412,6 +412,25 @@ async def test_receipt_update_unknown_404(session):
         raise AssertionError("ожидался 404 на несуществующий чек")
 
 
+async def test_receipt_update_null_required_422(session):
+    user = await _make_user(UserRepository(session))
+    service = _service(session)
+    receipt = await _create_receipt(service, user)
+
+    # явный null на NOT NULL колонку → 422, а не IntegrityError 500
+    for bad in (ReceiptUpdate(seller_name=None), ReceiptUpdate(total_sum=None)):
+        try:
+            await service.update(user, receipt.id, bad)
+        except HTTPException as exc:
+            assert exc.status_code == 422  # noqa: PLR2004
+        else:
+            raise AssertionError("ожидался 422 на null в NOT NULL колонке")
+
+    # nullable поля — явный null разрешён (очистка, не ошибка)
+    cleared = await service.update(user, receipt.id, ReceiptUpdate(cashback=None))
+    assert cleared.cashback is None
+
+
 # ---------- ручной ввод чека (без QR/raw_json) ----------
 
 
@@ -424,17 +443,17 @@ async def test_receipt_manual_create_with_items(session):
         ReceiptManualCreate(
             seller_name="Магазин у дома",
             total_sum=Decimal("150.00"),
-            items=[
-                ReceiptItemManualIn(
-                    product_name="Молоко",
+            transactions=[
+                TransactionManualIn(
+                    name="Молоко",
                     price=Decimal("60"),
                     quantity=Decimal("2"),
                 ),
-                ReceiptItemManualIn(
-                    product_name="Хлеб",
+                TransactionManualIn(
+                    name="Хлеб",
                     price=Decimal("30"),
                     quantity=Decimal("1"),
-                    total_price=Decimal("35.00"),  # задан явно — не пересчитывается
+                    amount=Decimal("35.00"),  # задан явно — не пересчитывается
                 ),
             ],
         ),
@@ -445,13 +464,13 @@ async def test_receipt_manual_create_with_items(session):
     assert receipt.total_sum == Decimal("150.00")
     assert receipt.operation_type == 1  # noqa: PLR2004  (SALE по умолчанию)
 
-    items = await ReceiptItemRepository(session).list_by_receipt(receipt.id)
+    items = await TransactionRepository(session).list_by_receipt(receipt.id)
     assert len(items) == 2  # noqa: PLR2004
     assert items[0].position == 0
-    assert items[0].product_name == "Молоко"
+    assert items[0].name == "Молоко"
     assert items[0].normalized_name == "молоко"
-    assert items[0].total_price == Decimal("120.00")  # price * quantity
-    assert items[1].total_price == Decimal("35.00")  # как задан
+    assert items[0].amount == Decimal("120.00")  # price * quantity
+    assert items[1].amount == Decimal("35.00")  # как задан
 
 
 async def test_receipt_manual_create_without_items(session):
@@ -464,5 +483,5 @@ async def test_receipt_manual_create_without_items(session):
     )
     assert receipt.qr is None
     assert (
-        await ReceiptItemRepository(session).list_by_receipt(receipt.id) == []
+        await TransactionRepository(session).list_by_receipt(receipt.id) == []
     )

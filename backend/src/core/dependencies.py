@@ -12,12 +12,12 @@ from src.core.security import decode_access_token
 from src.models.user import User
 from src.repositories.alias import AliasRepository
 from src.repositories.receipt import ReceiptRepository
-from src.repositories.receipt_item import ReceiptItemRepository
+from src.repositories.transaction import TransactionRepository
+from src.services.transaction import TransactionService
 from src.repositories.refresh_token import RefreshTokenRepository
 from src.repositories.tag import TagRepository
 from src.repositories.user import UserRepository
 from src.services.proverkacheka import ProverkachekaClient
-from src.services.receipt_item import ReceiptItemService
 
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 
@@ -43,25 +43,25 @@ async def get_receipt_repo(session: DBSession) -> ReceiptRepository:
 ReceiptRepo = Annotated[ReceiptRepository, Depends(get_receipt_repo)]
 
 
-async def get_receipt_item_repo(session: DBSession) -> ReceiptItemRepository:
-    return ReceiptItemRepository(session)
+async def get_transaction_repo(session: DBSession) -> TransactionRepository:
+    return TransactionRepository(session)
 
 
-ReceiptItemRepo = Annotated[ReceiptItemRepository, Depends(get_receipt_item_repo)]
+TransactionRepo = Annotated[TransactionRepository, Depends(get_transaction_repo)]
 
 
-async def get_receipt_item_service(
+async def get_transaction_service(
     session: DBSession,
     receipt_repo: ReceiptRepo,
-) -> ReceiptItemService:
-    return ReceiptItemService(
-        ReceiptItemRepository(session),
+) -> TransactionService:
+    return TransactionService(
+        TransactionRepository(session),
         receipt_repo,
         TagRepository(session),
     )
 
 
-ReceiptItemSvc = Annotated[ReceiptItemService, Depends(get_receipt_item_service)]
+TransactionSvc = Annotated[TransactionService, Depends(get_transaction_service)]
 
 
 async def get_tag_repo(session: DBSession) -> TagRepository:

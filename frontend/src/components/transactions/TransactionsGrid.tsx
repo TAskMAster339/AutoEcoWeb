@@ -15,10 +15,9 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
 import { TagChip } from '../common/TagChip'
-import { PriceStatusBadge } from '../common/PriceStatusBadge'
 import { formatCurrency, formatNumber, formatShortDate } from '../../lib/format'
 import { colors } from '../../theme'
-import type { Tag, Transaction } from '../../api/types'
+import type { Tag, TransactionView } from '../../api/types'
 
 interface GridContext {
   tagsMap: Map<string, Tag>
@@ -36,43 +35,23 @@ const RU_LOCALE = {
   loadingOoo: 'Загрузка…',
 }
 
-function TagsCell(props: CustomCellRendererProps<Transaction, string[]>) {
+function TagsCell(props: CustomCellRendererProps<TransactionView, string | null>) {
   const ctx = props.context as GridContext
-  const tags = (props.value ?? [])
-    .slice(0, 2)
-    .map((id) => ctx.tagsMap.get(id))
-    .filter((t): t is Tag => Boolean(t))
-  const extra = Math.max(0, (props.value?.length ?? 0) - 2)
+  const tag = props.value ? ctx.tagsMap.get(props.value) : undefined
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, height: '100%' }}>
-      {tags.map((t) => (
-        <TagChip key={t.id} tag={t} size="compact" icon={<ReceiptLongOutlinedIcon sx={{ fontSize: 13 }} />} />
-      ))}
-      {extra > 0 && (
-        <Typography variant="caption" color="text.secondary">
-          +{extra}
+      {tag ? (
+        <TagChip key={tag.id} tag={tag} size="compact" icon={<ReceiptLongOutlinedIcon sx={{ fontSize: 13 }} />} />
+      ) : (
+        <Typography component="span" sx={{ color: 'text.secondary' }}>
+          –
         </Typography>
       )}
     </Box>
   )
 }
 
-function StatusCell(props: CustomCellRendererProps<Transaction>) {
-  return <PriceStatusBadge status={props.value ?? null} variant="dot" />
-}
-
-/** Mockup: empty values render as a muted «–». */
-function DashCell(props: CustomCellRendererProps<Transaction, string | null>) {
-  if (!props.value)
-    return (
-      <Typography component="span" sx={{ color: 'text.secondary' }}>
-        –
-      </Typography>
-    )
-  return <>{props.value}</>
-}
-
-const rightAligned: Partial<ColDef<Transaction>> = {
+const rightAligned: Partial<ColDef<TransactionView>> = {
   type: 'rightAligned',
   headerClass: 'ag-right-aligned-header',
 }
@@ -86,7 +65,7 @@ function headerMinWidth(headerName: string): number {
   return Math.ceil(headerName.length * 8.4) + 24
 }
 
-const columnDefs: ColDef<Transaction>[] = [
+const columnDefs: ColDef<TransactionView>[] = [
   {
     field: 'date',
     headerName: 'Дата',
@@ -101,22 +80,22 @@ const columnDefs: ColDef<Transaction>[] = [
     width: 108,
     minWidth: headerMinWidth('Магазин'),
     cellStyle: { fontWeight: 600 },
+    valueFormatter: (p) => p.value ?? '—',
   },
   {
-    field: 'tagIds',
+    field: 'tagId',
     headerName: 'Теги',
-    // Два компактных чипа + «+N»; минимум под один чип с иконкой.
     width: 164,
     minWidth: 140,
     cellRenderer: TagsCell,
-    valueGetter: (p) => p.data?.tagIds ?? [],
+    valueGetter: (p) => p.data?.tagId ?? null,
   },
   {
     field: 'description',
     headerName: 'Описание',
     flex: 1,
-    // Перенос разрешён только здесь (и в «Комментарии»): длинный текст
-    // заворачивается, строка растёт по высоте (autoHeight per-column).
+    // Перенос разрешён только здесь: длинный текст заворачивается,
+    // строка растёт по высоте (autoHeight per-column).
     wrapText: true,
     autoHeight: true,
     minWidth: Math.max(140, headerMinWidth('Описание')),
@@ -163,36 +142,18 @@ const columnDefs: ColDef<Transaction>[] = [
     ...rightAligned,
     valueFormatter: (p) => formatCurrency(p.value),
   },
-  {
-    field: 'priceStatus',
-    headerName: 'Статус',
-    width: 92,
-    minWidth: headerMinWidth('Статус'),
-    cellRenderer: StatusCell,
-    valueGetter: (p) => p.data?.priceStatus ?? null,
-  },
-  {
-    field: 'comment',
-    headerName: 'Комментарий',
-    width: 160,
-    minWidth: headerMinWidth('Комментарий'),
-    wrapText: true,
-    autoHeight: true,
-    cellRenderer: DashCell,
-    valueGetter: (p) => p.data?.comment ?? null,
-  },
 ]
 
 interface TransactionsGridProps {
-  rows: Transaction[]
+  rows: TransactionView[]
   tagsMap: Map<string, Tag>
 }
 
-/** Desktop data table (AG Grid) — mirrors the designer's mockup columns. */
+/** Desktop data table (AG Grid). */
 export function TransactionsGrid({ rows, tagsMap }: TransactionsGridProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
-  const gridRef = useRef<AgGridReact<Transaction>>(null)
+  const gridRef = useRef<AgGridReact<TransactionView>>(null)
 
   const [pageSize, setPageSize] = useState(50)
   const [page, setPage] = useState(1)
@@ -256,7 +217,7 @@ export function TransactionsGrid({ rows, tagsMap }: TransactionsGridProps) {
           '& .ag-paging-panel': { display: 'none' },
         }}
       >
-        <AgGridReact<Transaction>
+        <AgGridReact<TransactionView>
           ref={gridRef}
           rowData={rows}
           columnDefs={columnDefs}

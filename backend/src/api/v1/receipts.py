@@ -6,22 +6,20 @@ from src.core.dependencies import (
     AliasRepo,
     CurrentUser,
     Proverkacheka,
-    ReceiptItemRepo,
-    ReceiptItemSvc,
     ReceiptRepo,
+    TransactionRepo,
+    TransactionSvc,
 )
 from src.schemas.pagination import CursorPage
 from src.schemas.receipt import (
     ReceiptCreate,
-    ReceiptItemOut,
-    ReceiptItemsManualCreate,
-    ReceiptItemUpdate,
     ReceiptManualCreate,
     ReceiptParseRequest,
     ReceiptPreviewOut,
     ReceiptResponse,
     ReceiptUpdate,
 )
+from src.schemas.transaction import TransactionInReceipt, TransactionOut
 from src.services.receipts import ReceiptService
 
 router = APIRouter(prefix="/api/v1/receipts", tags=["receipts"])
@@ -38,13 +36,13 @@ async def parse_receipt(  # noqa: PLR0913
     data: ReceiptParseRequest,
     current_user: CurrentUser,
     receipt_repo: ReceiptRepo,
-    item_service: ReceiptItemSvc,
+    transaction_service: TransactionSvc,
     alias_repo: AliasRepo,
     proverkacheka: Proverkacheka,
 ) -> ReceiptPreviewOut:
     normalized, seller_name = await ReceiptService(
         receipt_repo,
-        item_service,
+        transaction_service,
         alias_repo,
         proverkacheka,
     ).parse(current_user, data)
@@ -60,15 +58,15 @@ async def create_manual_receipt(
     data: ReceiptManualCreate,
     current_user: CurrentUser,
     receipt_repo: ReceiptRepo,
-    item_repo: ReceiptItemRepo,
-    item_service: ReceiptItemSvc,
+    tx_repo: TransactionRepo,
+    transaction_service: TransactionSvc,
 ) -> ReceiptResponse:
     receipt = await ReceiptService(
         receipt_repo,
-        item_service,
+        transaction_service,
     ).create_manual(current_user, data)
-    items = await item_repo.list_by_receipt(receipt.id)
-    return ReceiptResponse.from_model(receipt, items=items)
+    transactions = await tx_repo.list_by_receipt(receipt.id)
+    return ReceiptResponse.from_model(receipt, transactions=transactions)
 
 
 @router.post("", response_model=ReceiptResponse, status_code=status.HTTP_201_CREATED)
@@ -76,36 +74,36 @@ async def create_receipt(  # noqa: PLR0913
     data: ReceiptCreate,
     current_user: CurrentUser,
     receipt_repo: ReceiptRepo,
-    item_repo: ReceiptItemRepo,
-    item_service: ReceiptItemSvc,
+    tx_repo: TransactionRepo,
+    transaction_service: TransactionSvc,
     alias_repo: AliasRepo,
     proverkacheka: Proverkacheka,
 ) -> ReceiptResponse:
     receipt = await ReceiptService(
         receipt_repo,
-        item_service,
+        transaction_service,
         alias_repo,
         proverkacheka,
     ).create(current_user, data)
-    items = await item_repo.list_by_receipt(receipt.id)
-    return ReceiptResponse.from_model(receipt, items=items)
+    transactions = await tx_repo.list_by_receipt(receipt.id)
+    return ReceiptResponse.from_model(receipt, transactions=transactions)
 
 
 @router.get("", response_model=CursorPage[ReceiptResponse])
 async def list_receipts(  # noqa: PLR0913
     _current_user: CurrentUser,
     receipt_repo: ReceiptRepo,
-    item_repo: ReceiptItemRepo,
-    item_service: ReceiptItemSvc,
+    tx_repo: TransactionRepo,
+    transaction_service: TransactionSvc,
     limit: int = Query(50, ge=1, le=100),
     cursor: str | None = Query(None),
     date_from: date | None = Query(None),  # noqa: B008
     date_to: date | None = Query(None),  # noqa: B008
     seller: str | None = Query(None, max_length=255),
 ) -> CursorPage[ReceiptResponse]:
-    items, next_cursor = await ReceiptService(
+    receipts, next_cursor = await ReceiptService(
         receipt_repo,
-        item_service,
+        transaction_service,
     ).list_all(
         _current_user,
         limit=limit,
@@ -114,14 +112,19 @@ async def list_receipts(  # noqa: PLR0913
         date_to=_day_bounds(date_to, end_of_day=True) if date_to else None,
         seller=seller,
     )
-    # позиции всех чеков страницы — одним запросом (без N+1)
-    receipt_items = await item_repo.list_by_receipts([r.id for r in items])
+    # транзакции всех чеков страницы — одним запросом (без N+1)
+    receipt_transactions = await tx_repo.list_by_receipts([r.id for r in receipts])
     by_receipt: dict[UUID, list] = {}
-    for item in receipt_items:
-        by_receipt.setdefault(item.receipt_id, []).append(item)
+    for tx in receipt_transactions:
+        if tx.receipt_id is not None:
+            by_receipt.setdefault(tx.receipt_id, []).append(tx)
     return CursorPage[ReceiptResponse](
         items=[
-            ReceiptResponse.from_model(r, items=by_receipt.get(r.id, [])) for r in items
+            ReceiptResponse.from_model(
+                r,
+                transactions=by_receipt.get(r.id, []),
+            )
+            for r in receipts
         ],
         next_cursor=next_cursor,
     )
@@ -132,35 +135,35 @@ async def get_receipt(
     receipt_id: UUID,
     _current_user: CurrentUser,
     receipt_repo: ReceiptRepo,
-    item_repo: ReceiptItemRepo,
-    item_service: ReceiptItemSvc,
+    tx_repo: TransactionRepo,
+    transaction_service: TransactionSvc,
 ) -> ReceiptResponse:
     receipt = await ReceiptService(
         receipt_repo,
-        item_service,
+        transaction_service,
     ).get(_current_user, receipt_id)
-    items = await item_repo.list_by_receipt(receipt.id)
-    return ReceiptResponse.from_model(receipt, items=items)
+    transactions = await tx_repo.list_by_receipt(receipt.id)
+    return ReceiptResponse.from_model(receipt, transactions=transactions)
 
 
 @router.post(
-    "/{receipt_id}/items",
-    response_model=list[ReceiptItemOut],
+    "/{receipt_id}/transactions",
+    response_model=TransactionOut,
     status_code=status.HTTP_201_CREATED,
 )
-async def add_receipt_items(
+async def add_receipt_transaction(
     receipt_id: UUID,
-    data: ReceiptItemsManualCreate,
+    data: TransactionInReceipt,
     _current_user: CurrentUser,
-    item_service: ReceiptItemSvc,
-) -> list[ReceiptItemOut]:
-    """Добавляет позиции в существующий чек (нумерация продолжается)."""
-    items = await item_service.add_manual_items(
+    transaction_service: TransactionSvc,
+) -> TransactionOut:
+    """Добавляет транзакцию в существующий чек (нумерация продолжается)."""
+    tx = await transaction_service.add_to_receipt(
         _current_user,
         receipt_id,
-        data.items,
+        data,
     )
-    return [ReceiptItemOut.from_model(item) for item in items]
+    return TransactionOut.from_model(tx)
 
 
 @router.patch("/{receipt_id}", response_model=ReceiptResponse)
@@ -169,40 +172,15 @@ async def update_receipt(
     data: ReceiptUpdate,
     _current_user: CurrentUser,
     receipt_repo: ReceiptRepo,
-    item_repo: ReceiptItemRepo,
-    item_service: ReceiptItemSvc,
+    tx_repo: TransactionRepo,
+    transaction_service: TransactionSvc,
 ) -> ReceiptResponse:
     receipt = await ReceiptService(
         receipt_repo,
-        item_service,
+        transaction_service,
     ).update(_current_user, receipt_id, data)
-    items = await item_repo.list_by_receipt(receipt.id)
-    return ReceiptResponse.from_model(receipt, items=items)
-
-
-@router.patch("/{receipt_id}/items/{item_id}", response_model=ReceiptItemOut)
-async def update_receipt_item(
-    receipt_id: UUID,
-    item_id: UUID,
-    data: ReceiptItemUpdate,
-    _current_user: CurrentUser,
-    item_service: ReceiptItemSvc,
-) -> ReceiptItemOut:
-    item = await item_service.update(_current_user, receipt_id, item_id, data)
-    return ReceiptItemOut.from_model(item)
-
-
-@router.delete(
-    "/{receipt_id}/items/{item_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_receipt_item(
-    receipt_id: UUID,
-    item_id: UUID,
-    _current_user: CurrentUser,
-    item_service: ReceiptItemSvc,
-) -> None:
-    await item_service.delete(_current_user, receipt_id, item_id)
+    transactions = await tx_repo.list_by_receipt(receipt.id)
+    return ReceiptResponse.from_model(receipt, transactions=transactions)
 
 
 @router.delete("/{receipt_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -210,10 +188,9 @@ async def delete_receipt(
     receipt_id: UUID,
     _current_user: CurrentUser,
     receipt_repo: ReceiptRepo,
-    item_repo: ReceiptItemRepo,
-    item_service: ReceiptItemSvc,
+    transaction_service: TransactionSvc,
 ) -> None:
     await ReceiptService(
         receipt_repo,
-        item_service,
+        transaction_service,
     ).delete(_current_user, receipt_id)
