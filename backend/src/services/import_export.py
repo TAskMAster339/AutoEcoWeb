@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.tag import Tag
 from src.models.transaction import Transaction
 from src.models.user import User
+from src.repositories.alias import AliasRepository
 from src.repositories.tag import TagRepository
 from src.repositories.transaction import TransactionRepository
 from src.schemas.import_export import (
@@ -39,6 +40,7 @@ from src.schemas.import_export import (
     ImportRowIn,
     ImportRowPreview,
 )
+from src.services.aliases import AliasService
 from src.services.receipt_parser import normalize_product_name
 
 __all__ = [
@@ -406,10 +408,12 @@ class ImportExportService:
         session: AsyncSession,
         tx_repo: TransactionRepository,
         tag_repo: TagRepository,
+        alias_repo: AliasRepository | None = None,
     ) -> None:
         self._session = session
         self._tx_repo = tx_repo
         self._tag_repo = tag_repo
+        self._alias_repo = alias_repo
 
     async def import_rows(self, user: User, rows: list[ImportRowIn]) -> ImportResult:
         """Валидированные строки → теги (авто-создание) + bulk-insert транзакций."""
@@ -418,6 +422,16 @@ class ImportExportService:
         }
         tags_created: list[str] = []
         transactions: list[Transaction] = []
+        product_aliases = (
+            await self._alias_repo.list_all(user.id, scope="product")
+            if self._alias_repo is not None
+            else []
+        )
+        seller_aliases = (
+            await self._alias_repo.list_all(user.id, scope="seller")
+            if self._alias_repo is not None
+            else []
+        )
 
         for row in rows:
             tag_id: UUID | None = None
@@ -435,14 +449,32 @@ class ImportExportService:
                 tag_id = tag.id
 
             amount = row.income if row.income > 0 else row.expense
+            product_resolved = AliasService.resolve_with_alias(
+                product_aliases,
+                row.description,
+            )
+            seller_resolved = (
+                AliasService.resolve_with_alias(seller_aliases, row.store)
+                if row.store
+                else None
+            )
             transactions.append(
                 Transaction(
                     user_id=user.id,
                     receipt_id=None,
                     position=None,
                     name=row.description,
-                    normalized_name=normalize_product_name(row.description),
+                    normalized_name=normalize_product_name(product_resolved.value),
+                    name_alias_id=product_resolved.alias.id
+                    if product_resolved.alias is not None
+                    else None,
                     seller_name=row.store,
+                    normalized_seller_name=seller_resolved.value
+                    if seller_resolved is not None
+                    else None,
+                    seller_name_alias_id=seller_resolved.alias.id
+                    if seller_resolved is not None and seller_resolved.alias is not None
+                    else None,
                     quantity=None,
                     unit=None,
                     price=None,

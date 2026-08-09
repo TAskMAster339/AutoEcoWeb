@@ -14,7 +14,8 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from src.models.alias import Alias
 from src.models.base import BaseModel
 
 
@@ -22,6 +23,7 @@ class Receipt(BaseModel):
     __tablename__ = "receipts"
     __table_args__ = (
         Index("ix_receipts_user_created", "user_id", "created_at", "id"),
+        Index("ix_receipts_seller_name_alias_id", "seller_name_alias_id"),
         Index(
             "uq_receipts_user_qr",
             "user_id",
@@ -67,6 +69,17 @@ class Receipt(BaseModel):
     normalized_seller_name: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
+    )
+
+    seller_name_alias_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("aliases.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    seller_name_alias: Mapped[Alias | None] = relationship(
+        "Alias",
+        foreign_keys=[seller_name_alias_id],
+        lazy="joined",
     )
 
     seller_inn: Mapped[str | None] = mapped_column(

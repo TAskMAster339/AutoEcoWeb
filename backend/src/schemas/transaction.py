@@ -28,6 +28,8 @@ class TransactionOut(BaseModel):
     receipt_id: UUID | None = None
     name: str
     normalized_name: str
+    name_alias_id: UUID | None = None
+    name_alias_name: str | None = None
     position: int | None = None
     quantity: Decimal | None = None
     unit: str | None = None
@@ -37,6 +39,9 @@ class TransactionOut(BaseModel):
     datetime: dt
     tag_id: UUID | None = None
     seller_name: str | None = None
+    normalized_seller_name: str | None = None
+    seller_name_alias_id: UUID | None = None
+    seller_name_alias_name: str | None = None
     comment: str | None = None
     balance: Decimal | None = None
     created_at: dt | None = None
@@ -62,6 +67,8 @@ class TransactionOut(BaseModel):
         cls,
         tx: Transaction,
         seller_name: str | None = None,
+        seller_alias_id: UUID | None = None,
+        seller_alias_name: str | None = None,
         balance: Decimal | None = None,
     ) -> "TransactionOut":
         """seller_name: переданный (из чека) используется как fallback,
@@ -72,6 +79,10 @@ class TransactionOut(BaseModel):
             receipt_id=tx.receipt_id,
             name=tx.name,
             normalized_name=tx.normalized_name,
+            name_alias_id=tx.name_alias_id,
+            name_alias_name=tx.name_alias.alias_name
+            if tx.name_alias is not None
+            else None,
             position=tx.position,
             quantity=tx.quantity,
             unit=tx.unit,
@@ -82,15 +93,28 @@ class TransactionOut(BaseModel):
             tag_id=tx.tag_id,
             # Prefer the transaction's own seller over the receipt seller.
             # normalized_seller_name is the alias-resolved display value.
-            seller_name=(
-                tx.normalized_seller_name
-                or tx.seller_name
-                or seller_name
+            seller_name=(tx.normalized_seller_name or tx.seller_name or seller_name),
+            normalized_seller_name=tx.normalized_seller_name or seller_name,
+            seller_name_alias_id=tx.seller_name_alias_id or seller_alias_id,
+            seller_name_alias_name=(
+                tx.seller_name_alias.alias_name
+                if tx.seller_name_alias is not None
+                else seller_alias_name
             ),
             comment=tx.comment,
             balance=balance,
             created_at=tx.created_at,
         )
+
+
+class StoreResponse(BaseModel):
+    """Магазин для фильтра: исходное, normalized и применённый алиас."""
+
+    seller_name: str
+    normalized_seller_name: str | None = None
+    alias_id: UUID | None = None
+    alias_name: str | None = None
+    filter_value: str
 
 
 class TransactionSummary(BaseModel):

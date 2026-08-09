@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/transactions'
-import type { Transaction, TransactionDraft, TransactionUpdatePatch } from '../api/types'
+import type { Transaction, TransactionDraft, TransactionUpdatePatch, Store } from '../api/types'
 
 export function useTransactions() {
   return useQuery<Transaction[]>({
@@ -11,7 +11,7 @@ export function useTransactions() {
 }
 
 export function useStores() {
-  return useQuery({
+  return useQuery<Store[]>({
     queryKey: ['stores'],
     queryFn: api.fetchTransactionStores,
     staleTime: 60_000,

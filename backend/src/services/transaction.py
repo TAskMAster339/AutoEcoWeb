@@ -17,6 +17,7 @@ from src.schemas.analytics import (
     AnalyticsResponse,
 )
 from src.schemas.transaction import (
+    StoreResponse,
     TransactionCreate,
     TransactionInReceipt,
     TransactionManualIn,
@@ -57,36 +58,29 @@ class TransactionService:
 
     # ---------- применение алиасов при создании ----------
 
-    async def _resolve_name(self, user_id: UUID, name: str) -> str:
+    async def _resolve_name(self, user_id: UUID, name: str) -> tuple[str, UUID | None]:
         """Товарный алиас применяется к названию позиции при сохранении."""
         if self._alias_repo is None:
-            return name
-        aliases = await self._alias_repo.list_all(user_id, scope=_SCOPE_PRODUCT)
-        return AliasService.resolve(aliases, name) if aliases else name
-
-    async def _resolve_seller(self, user_id: UUID, seller: str | None) -> str | None:
-        """Алиас продавца применяется к магазину ручной транзакции."""
-        if seller is None or self._alias_repo is None:
-            return seller
-        aliases = await self._alias_repo.list_all(user_id, scope=_SCOPE_SELLER)
-        return AliasService.resolve(aliases, seller) if aliases else seller
-
-    async def _apply_product_aliases(
-        self,
-        user_id: UUID,
-        items: list[ReceiptItemData],
-    ) -> list[ReceiptItemData]:
-        """Применяет товарные алиасы к позициям чека (один запрос алиасов)."""
-        if self._alias_repo is None or not items:
-            return items
+            return name, None
         aliases = await self._alias_repo.list_all(user_id, scope=_SCOPE_PRODUCT)
         if not aliases:
-            return items
-        for item in items:
-            resolved = AliasService.resolve(aliases, item.name)
-            if resolved != item.name:
-                item.name = resolved
-        return items
+            return name, None
+        resolved = AliasService.resolve_with_alias(aliases, name)
+        return resolved.value, resolved.alias.id if resolved.alias is not None else None
+
+    async def _resolve_seller(
+        self,
+        user_id: UUID,
+        seller: str | None,
+    ) -> tuple[str | None, UUID | None]:
+        """Алиас продавца применяется к магазину ручной транзакции."""
+        if seller is None or self._alias_repo is None:
+            return seller, None
+        aliases = await self._alias_repo.list_all(user_id, scope=_SCOPE_SELLER)
+        if not aliases:
+            return seller, None
+        resolved = AliasService.resolve_with_alias(aliases, seller)
+        return resolved.value, resolved.alias.id if resolved.alias is not None else None
 
     # ---------- создание из чеков ----------
 
@@ -118,11 +112,17 @@ class TransactionService:
         items: list[ReceiptItemData],
     ) -> list[Transaction]:
         # товарные алиасы применяются к позициям ДО сохранения
-        items = await self._apply_product_aliases(receipt.user_id, items)
-        return await self._tx_repo.create_many(
-            receipt.id,
-            self._build_for_receipt(receipt, items),
+        aliases = (
+            await self._alias_repo.list_all(receipt.user_id, scope=_SCOPE_PRODUCT)
+            if self._alias_repo is not None
+            else []
         )
+        transactions = self._build_for_receipt(receipt, items)
+        for tx in transactions:
+            resolved = AliasService.resolve_with_alias(aliases, tx.name)
+            tx.normalized_name = normalize_product_name(resolved.value)
+            tx.name_alias_id = resolved.alias.id if resolved.alias is not None else None
+        return await self._tx_repo.create_many(receipt.id, transactions)
 
     async def create_manual_for_receipt(
         self,
@@ -164,13 +164,16 @@ class TransactionService:
             + 1
         )
         original_name = data.name
-        name = await self._resolve_name(user.id, original_name)
+        name, name_alias_id = await self._resolve_name(user.id, original_name)
         tx = Transaction(
             user_id=user.id,
             receipt_id=receipt_id,
             position=position,
             name=original_name,
             normalized_name=normalize_product_name(name),
+            name_alias_id=name_alias_id,
+            seller_name_alias_id=receipt.seller_name_alias_id,
+            normalized_seller_name=receipt.normalized_seller_name,
             quantity=data.quantity,
             unit=data.unit,
             price=data.price,
@@ -196,17 +199,22 @@ class TransactionService:
         # алиасы применяются к отображаемым normalized-полям, исходные
         # значения сохраняются для последующего отката.
         original_name = data.name
-        name = await self._resolve_name(user.id, original_name)
+        name, name_alias_id = await self._resolve_name(user.id, original_name)
         original_seller = data.seller_name
-        seller_name = await self._resolve_seller(user.id, original_seller)
+        seller_name, seller_name_alias_id = await self._resolve_seller(
+            user.id,
+            original_seller,
+        )
         tx = Transaction(
             user_id=user.id,
             receipt_id=None,
             position=None,
             name=original_name,
             normalized_name=normalize_product_name(name),
+            name_alias_id=name_alias_id,
             seller_name=original_seller,
             normalized_seller_name=seller_name,
+            seller_name_alias_id=seller_name_alias_id,
             quantity=data.quantity,
             unit=data.unit,
             price=data.price,
@@ -374,9 +382,19 @@ class TransactionService:
             ],
         )
 
-    async def stores(self, user: User) -> list[str]:
-        """Все магазины пользователя (свои + из чеков) — чипсы фильтра."""  # noqa: RUF002
-        return await self._tx_repo.distinct_sellers(user.id)
+    async def stores(self, user: User) -> list[StoreResponse]:
+        """Магазины пользователя с alias/display/filter значениями."""  # noqa: RUF002
+        rows = await self._tx_repo.distinct_sellers(user.id)
+        return [
+            StoreResponse(
+                seller_name=raw,
+                normalized_seller_name=normalized,
+                alias_id=alias_id,
+                alias_name=alias_name,
+                filter_value=filter_value,
+            )
+            for raw, normalized, alias_id, alias_name, filter_value in rows
+        ]
 
     async def get(self, user: User, tx_id: UUID) -> Transaction:
         tx = await self._tx_repo.get_owned(user.id, tx_id)
@@ -407,18 +425,21 @@ class TransactionService:
             )
         if "name" in fields:
             # normalized_name пересчитывается при смене названия
-            fields["normalized_name"] = normalize_product_name(fields["name"])
+            name, alias_id = await self._resolve_name(user.id, fields["name"])
+            fields["normalized_name"] = normalize_product_name(name)
+            fields["name_alias_id"] = alias_id
         if "seller_name" in fields:
             # Keep the editable source and displayed alias-resolved values in sync.
             seller_name = fields["seller_name"]
             if seller_name is not None:
                 seller_name = seller_name.strip() or None
             fields["seller_name"] = seller_name
-            fields["normalized_seller_name"] = (
-                await self._resolve_seller(user.id, seller_name)
-                if seller_name is not None
-                else None
+            normalized_seller, alias_id = await self._resolve_seller(
+                user.id,
+                seller_name,
             )
+            fields["normalized_seller_name"] = normalized_seller
+            fields["seller_name_alias_id"] = alias_id
         if "comment" in fields and fields["comment"] is not None:
             # пустой комментарий — то же, что «нет комментария»
             fields["comment"] = fields["comment"].strip() or None

@@ -118,7 +118,8 @@ async def test_receipt_create_applies_alias(session):
         ),
         user,
     )
-    assert receipt.seller_name == "Перекрёсток"
+    assert receipt.seller_name == 'АКЦИОНЕРНОЕ ОБЩЕСТВО "ТОРГОВЫЙ ДОМ ПЕРЕКРЕСТОК"'
+    assert receipt.seller_name_alias_id is not None
 
 
 async def test_receipt_list_cursor_paginates(session):

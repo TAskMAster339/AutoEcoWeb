@@ -6,6 +6,7 @@ from fastapi import APIRouter, Query, status
 from src.core.dependencies import CurrentUser, TransactionSvc
 from src.schemas.pagination import CursorPage
 from src.schemas.transaction import (
+    StoreResponse,
     TransactionCreate,
     TransactionOut,
     TransactionSummary,
@@ -89,11 +90,11 @@ async def get_summary(  # noqa: PLR0913
     )
 
 
-@router.get("/stores", response_model=list[str])
+@router.get("/stores", response_model=list[StoreResponse])
 async def list_stores(
     _current_user: CurrentUser,
     transaction_service: TransactionSvc,
-) -> list[str]:
+) -> list[StoreResponse]:
     """Все магазины пользователя (свои + из чеков) — для фильтра."""  # noqa: RUF002
     return await transaction_service.stores(_current_user)
 

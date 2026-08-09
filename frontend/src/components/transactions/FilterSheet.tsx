@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import {
   Box,
@@ -12,7 +12,7 @@ import {
 } from '@mui/material'
 import { BottomSheet } from '../common/BottomSheet'
 import { useUiStore, type PeriodKey } from '../../store/uiStore'
-import type { Tag } from '../../api/types'
+import type { Store, Tag } from '../../api/types'
 
 const PERIODS: Array<{ key: PeriodKey; label: string }> = [
   { key: 'thisMonth', label: 'Месяц' },
@@ -22,7 +22,7 @@ const PERIODS: Array<{ key: PeriodKey; label: string }> = [
 
 interface FilterSheetProps {
   tags: Tag[] | undefined
-  stores: string[]
+  stores: Store[]
 }
 
 export function FilterSheet({ tags, stores }: FilterSheetProps) {
@@ -39,6 +39,17 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
   const [localTagFilterId, setLocalTagFilterId] = useState(tagFilterId)
   const [localStoreFilter, setLocalStoreFilter] = useState(storeFilter)
   const [localPeriodKey, setLocalPeriodKey] = useState(periodKey)
+  const uniqueStores = useMemo(() => {
+    const byDisplayName = new Map<string, Store>()
+    for (const store of stores) {
+      const displayName = store.alias_name || store.normalized_seller_name || store.seller_name
+      const current = byDisplayName.get(displayName)
+      if (!current || (store.alias_name && !current.alias_name)) {
+        byDisplayName.set(displayName, store)
+      }
+    }
+    return [...byDisplayName.values()]
+  }, [stores])
 
   useEffect(() => {
     if (!open) return
@@ -102,16 +113,23 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
             Магазин
           </Typography>
           <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-            {stores.map((s) => (
-              <Chip
-                key={s}
-                label={s}
-                clickable
-                color={localStoreFilter === s ? 'primary' : 'default'}
-                variant={localStoreFilter === s ? 'filled' : 'outlined'}
-                onClick={() => setLocalStoreFilter(localStoreFilter === s ? null : s)}
-              />
-            ))}
+            {uniqueStores.map((store) => {
+              const filterValue = store.filter_value
+              const displayName = store.alias_name || store.normalized_seller_name || store.seller_name
+
+              return (
+                <Chip
+                  key={filterValue}
+                  label={displayName}
+                  clickable
+                  color={localStoreFilter === filterValue ? 'primary' : 'default'}
+                  variant={localStoreFilter === filterValue ? 'filled' : 'outlined'}
+                  onClick={() =>
+                    setLocalStoreFilter(localStoreFilter === filterValue ? null : filterValue)
+                  }
+                />
+              )
+            })}
           </Box>
         </Box>
 

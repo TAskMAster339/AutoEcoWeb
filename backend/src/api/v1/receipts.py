@@ -60,10 +60,12 @@ async def create_manual_receipt(
     receipt_repo: ReceiptRepo,
     tx_repo: TransactionRepo,
     transaction_service: TransactionSvc,
+    alias_repo: AliasRepo,
 ) -> ReceiptResponse:
     receipt = await ReceiptService(
         receipt_repo,
         transaction_service,
+        alias_repo,
     ).create_manual(current_user, data)
     transactions = await tx_repo.list_by_receipt(receipt.id)
     return ReceiptResponse.from_model(receipt, transactions=transactions)

@@ -54,7 +54,10 @@ class ReceiptService:
         data: ReceiptParseRequest,
     ) -> tuple[NormalizedReceipt, str]:
         normalized = await self._load_normalized(user, data)
-        seller_name = await self._resolve_seller(user.id, normalized.seller_name)
+        seller_name, _seller_alias_id = await self._resolve_seller(
+            user.id,
+            normalized.seller_name,
+        )
         await self._resolve_items(user.id, normalized.items)
         return normalized, seller_name
 
@@ -67,7 +70,10 @@ class ReceiptService:
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Этот чек уже добавлен",
                 )
-        seller_name = await self._resolve_seller(user.id, normalized.seller_name)
+        seller_name, seller_alias_id = await self._resolve_seller(
+            user.id,
+            normalized.seller_name,
+        )
         receipt = await self._repo.create(
             user_id=user.id,
             qr=normalized.qr,
@@ -75,6 +81,7 @@ class ReceiptService:
             operation_type=normalized.operation_type,
             seller_name=normalized.seller_name,
             normalized_seller_name=seller_name,
+            seller_name_alias_id=seller_alias_id,
             seller_inn=normalized.seller_inn,
             check_datetime=normalized.check_datetime,
             total_sum=normalized.total_sum,
@@ -96,13 +103,18 @@ class ReceiptService:
         Транзакции маппятся в ReceiptItemData и создаются TransactionService
         (конструирование ORM — только там).
         """
+        seller_name, seller_alias_id = await self._resolve_seller(
+            user.id,
+            data.seller_name,
+        )
         receipt = await self._repo.create(
             user_id=user.id,
             qr=None,
             receipt_number=data.receipt_number,
             operation_type=data.operation_type,
             seller_name=data.seller_name,
-            normalized_seller_name=data.seller_name,
+            normalized_seller_name=seller_name,
+            seller_name_alias_id=seller_alias_id,
             seller_inn=data.seller_inn,
             check_datetime=data.check_datetime,
             total_sum=data.total_sum,
@@ -139,6 +151,19 @@ class ReceiptService:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Поля не могут быть null: {', '.join(null_required)}",
+            )
+        if "seller_name" in fields:
+            seller_name = fields["seller_name"].strip()
+            aliases = (
+                await self._alias_repo.list_all(user.id, scope="seller")
+                if self._alias_repo is not None
+                else []
+            )
+            resolved = AliasService.resolve_with_alias(aliases, seller_name)
+            fields["seller_name"] = seller_name
+            fields["normalized_seller_name"] = resolved.value
+            fields["seller_name_alias_id"] = (
+                resolved.alias.id if resolved.alias is not None else None
             )
         return await self._repo.update(receipt, **fields)
 
@@ -234,24 +259,28 @@ class ReceiptService:
                 detail=str(exc),
             ) from exc
 
-    async def _resolve_seller(self, user_id: UUID, raw_name: str) -> str:
+    async def _resolve_seller(
+        self,
+        user_id: UUID,
+        raw_name: str,
+    ) -> tuple[str, UUID | None]:
         if self._alias_repo is None:
-            return raw_name
+            return raw_name, None
         aliases = await self._alias_repo.list_all(user_id, scope="seller")
-        return AliasService.resolve(aliases, raw_name)
+        if not aliases:
+            return raw_name, None
+        resolved = AliasService.resolve_with_alias(aliases, raw_name)
+        return resolved.value, resolved.alias.id if resolved.alias is not None else None
 
     async def _resolve_items(
         self,
         user_id: UUID,
         items: list,
     ) -> None:
-        """Применяет товарные алиасы к позициям (мутирует items на месте)."""
+        """Apply product aliases to preview values;
+        persisted rows keep source fields."""
         if self._alias_repo is None or not items:
             return
         aliases = await self._alias_repo.list_all(user_id, scope="product")
-        if not aliases:
-            return
         for item in items:
-            resolved = AliasService.resolve(aliases, item.name)
-            if resolved != item.name:
-                item.name = resolved
+            item.name = AliasService.resolve(aliases, item.name)

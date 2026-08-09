@@ -13,7 +13,9 @@ import type {
   TransactionDraft,
   TransactionUpdatePatch,
   TransactionView,
+  Store,
 } from './types'
+import { displayAlias } from '../lib/aliases'
 
 /** ФНС: 1=приход(покупка→расход), 2=расход(возврат→доход), 3=возврат прихода(доход), 4=возврат расхода(расход). */
 export const isIncomeOperation = (operationType: number): boolean =>
@@ -81,8 +83,8 @@ export async function fetchAllTransactions(): Promise<Transaction[]> {
 }
 
 /** GET /api/v1/transactions/stores — все магазины пользователя (свои + из чеков). */
-export function fetchTransactionStores(): Promise<string[]> {
-  return api.get<string[]>('/api/v1/transactions/stores')
+export function fetchTransactionStores(): Promise<Store[]> {
+  return api.get<Store[]>('/api/v1/transactions/stores')
 }
 
 /** POST /api/v1/transactions — ручная транзакция без чека. */
@@ -108,9 +110,9 @@ export function toTransactionView(tx: Transaction): TransactionView {
   return {
     id: tx.id ?? '',
     date: tx.datetime.slice(0, 10),
-    store: tx.seller_name,
+    store: displayAlias(tx.seller_name_alias_name, tx.normalized_seller_name, tx.seller_name),
     tagId: tx.tag_id,
-    name: tx.name,
+    name: displayAlias(tx.name_alias_name, tx.normalized_name, tx.name),
     comment: tx.comment,
     quantity: tx.quantity !== null && tx.quantity !== undefined ? Number(tx.quantity) : null,
     price: tx.price !== null && tx.price !== undefined ? Number(tx.price) : null,

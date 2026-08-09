@@ -8,7 +8,7 @@ from src.repositories.receipt import ReceiptRepository
 from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
 from src.schemas.alias import AliasApplyRequest, AliasCreate, AliasUpdate
-from src.schemas.receipt import ReceiptCreate, ReceiptParseRequest
+from src.schemas.receipt import ReceiptCreate, ReceiptParseRequest, ReceiptResponse
 from src.schemas.transaction import TransactionCreate, TransactionOut
 from src.services.aliases import AliasService
 from src.services.receipts import ReceiptService
@@ -97,6 +97,31 @@ async def test_alias_update_scope_moves_pair(session):
     assert updated.scope == "seller"
 
 
+async def test_alias_scope_move_rebuilds_previous_scope(session):
+    user = await _make_user(UserRepository(session))
+    service = _alias_service(session)
+    tx_service = _tx_service(session)
+    alias = await service.create(
+        user,
+        AliasCreate(
+            original_name="сырок",
+            alias_name="Сырок",
+            scope="product",
+        ),
+    )
+    tx = await tx_service.create_standalone(
+        user,
+        TransactionCreate(name="Сырок 45г", amount=Decimal("10")),
+    )
+    assert tx.name_alias_id == alias.id
+    await service.update(user, alias.id, AliasUpdate(scope="seller"))
+    refreshed = await TransactionRepository(session).get_owned(user.id, tx.id)
+    assert refreshed is not None
+    await session.refresh(refreshed)
+    assert refreshed.name_alias_id is None
+    assert refreshed.normalized_name == "сырок 45г"
+
+
 # ---------- пагинация ----------
 
 
@@ -180,8 +205,63 @@ async def test_product_alias_applies_on_create(session):
     # (свежее чтение — в identity map сессии объект ещё со старым name)
     updated = await TransactionRepository(session).get_owned(user.id, tx.id)
     await session.refresh(updated)
-    assert updated.name == "Глазированный сырок"
+    assert updated.name == "РАЭ Сырок тв.гл.с вар.сг.15%45г"
     assert updated.normalized_name == "глазированный сырок"
+    assert updated.name_alias_id is not None
+
+
+async def test_product_alias_keeps_alias_foreign_key(session):
+    user = await _make_user(UserRepository(session))
+    alias_service = _alias_service(session)
+    alias = await alias_service.create(
+        user,
+        AliasCreate(
+            original_name="сырок",
+            alias_name="Глазированный сырок",
+            scope="product",
+        ),
+    )
+
+    tx_service = TransactionService(
+        TransactionRepository(session),
+        ReceiptRepository(session),
+        None,
+        AliasRepository(session),
+    )
+    tx = await tx_service.create_standalone(
+        user,
+        TransactionCreate(name="Сырок 45г", amount=Decimal("10")),
+    )
+
+    assert tx.name_alias_id == alias.id
+    assert tx.normalized_name == "глазированный сырок"
+
+
+async def test_deleting_alias_clears_foreign_key_without_deleting_transaction(session):
+    user = await _make_user(UserRepository(session))
+    alias_service = _alias_service(session)
+    alias = await alias_service.create(
+        user,
+        AliasCreate(original_name="сырок", alias_name="Глазированный сырок", scope="product"),
+    )
+    tx_service = TransactionService(
+        TransactionRepository(session),
+        ReceiptRepository(session),
+        None,
+        AliasRepository(session),
+    )
+    tx = await tx_service.create_standalone(
+        user,
+        TransactionCreate(name="Сырок 45г", amount=Decimal("10")),
+    )
+
+    await alias_service.delete(user, alias.id)
+    refreshed = await TransactionRepository(session).get_owned(user.id, tx.id)
+    await session.refresh(refreshed)
+
+    assert refreshed is not None
+    assert refreshed.name_alias_id is None
+    assert refreshed.normalized_name == "сырок 45г"
 
 
 async def test_apply_all_product_respects_priority(session):
@@ -211,8 +291,9 @@ async def test_apply_all_product_respects_priority(session):
     assert result.product_updated == 1  # только «диски ватные», бананы не тронуты
 
     rows = await TransactionRepository(session).list_name_columns(user.id)
-    names = {name for _, name in rows}
-    assert names == {"Диски", "Бананы"}  # побеждает больший priority
+    normalized = {(await TransactionRepository(session).get_owned(user.id, tx_id)).normalized_name for tx_id, _ in rows}
+    assert normalized == {"диски", "бананы"}
+    assert result.product_updated == 1
 
 
 async def test_apply_seller_scope_updates_receipts_and_manual(session):
@@ -229,10 +310,14 @@ async def test_apply_seller_scope_updates_receipts_and_manual(session):
     # свежее чтение (identity map сессии хранит старый объект)
     fresh_receipt = await ReceiptRepository(session).get(user.id, receipt.id)
     await session.refresh(fresh_receipt)
-    assert fresh_receipt.seller_name == "Перекрёсток"
+    assert fresh_receipt.seller_name == 'АКЦИОНЕРНОЕ ОБЩЕСТВО "ТОРГОВЫЙ ДОМ ПЕРЕКРЕСТОК"'
+    assert fresh_receipt.normalized_seller_name == "Перекрёсток"
+    assert fresh_receipt.seller_name_alias_id is not None
 
     manual = (await TransactionRepository(session).list_seller_columns(user.id))[0]
-    assert manual[1] == "Перекрёсток"
+    manual_tx = await TransactionRepository(session).get_owned(user.id, manual[0])
+    assert manual[1] == "перекресток"
+    assert manual_tx.seller_name_alias_id is not None
 
 
 async def test_apply_seller_does_not_touch_products(session):
@@ -275,7 +360,39 @@ async def test_receipt_create_applies_product_alias(session):
         ReceiptCreate(qr=QR, raw_json=sample_payload()),
     )
     items = await TransactionRepository(session).list_by_receipt(receipt.id)
-    assert items[0].name == "Ватные диски"
+    assert items[0].name == "Я САМАЯ Диски ватные 120шт"
+    assert items[0].normalized_name == "ватные диски"
+    assert items[0].name_alias_id is not None
+
+
+async def test_receipt_transaction_includes_receipt_seller_alias(session):
+    user = await _make_user(UserRepository(session))
+    service = _alias_service(session)
+    seller_alias = await service.create(
+        user,
+        AliasCreate(original_name="перекресток", alias_name="Перекрёсток"),
+    )
+    tx_service = TransactionService(
+        TransactionRepository(session),
+        ReceiptRepository(session),
+        None,
+        AliasRepository(session),
+    )
+    receipt_service = ReceiptService(
+        ReceiptRepository(session),
+        tx_service,
+        AliasRepository(session),
+    )
+    receipt = await receipt_service.create(
+        user,
+        ReceiptCreate(qr=QR, raw_json=sample_payload()),
+    )
+    response = ReceiptResponse.from_model(
+        receipt,
+        transactions=await TransactionRepository(session).list_by_receipt(receipt.id),
+    )
+    assert response.transactions[0].seller_name == "Перекрёсток"
+    assert response.transactions[0].seller_name_alias_id == seller_alias.id
 
 
 async def test_parse_preview_applies_product_alias(session):
@@ -327,9 +444,12 @@ async def test_manual_transaction_creation_applies_aliases(session):
             amount=Decimal("45"),
         ),
     )
-    assert tx.name == "Сырок"
+    assert tx.name == "РАЭ сырок глазированный"
     assert tx.normalized_name == "сырок"
-    assert tx.seller_name == "Перекрёсток"
+    assert tx.name_alias_id is not None
+    assert tx.seller_name == "перекресток №7"
+    assert tx.normalized_seller_name == "Перекрёсток"
+    assert tx.seller_name_alias_id is not None
 
 
 async def test_delete_alias_restores_original_seller_and_product(session):
@@ -353,6 +473,8 @@ async def test_delete_alias_restores_original_seller_and_product(session):
     )
     assert tx.normalized_seller_name == "Новый магазин"
     assert tx.normalized_name == "новый товар"
+    assert tx.seller_name_alias_id == seller_alias.id
+    assert tx.name_alias_id == product_alias.id
 
     await service.delete(user, seller_alias.id)
     await service.delete(user, product_alias.id)
@@ -360,9 +482,9 @@ async def test_delete_alias_restores_original_seller_and_product(session):
     refreshed = await TransactionRepository(session).get_owned(user.id, tx.id)
     assert refreshed is not None
     assert refreshed.seller_name == "старый магазин №1"
-    assert refreshed.normalized_seller_name == "старый магазин №1"
-    assert refreshed.normalized_name == "старый товар 1шт"
-    assert TransactionOut.from_model(refreshed).seller_name == "старый магазин №1"
+    assert refreshed.normalized_seller_name == "Новый магазин"
+    assert refreshed.normalized_name == "новый товар"
+    assert TransactionOut.from_model(refreshed).seller_name == "Новый магазин"
 
 
 async def test_apply_all_none_scope_returns_counts(session):
@@ -404,7 +526,9 @@ async def test_apply_regex_alias(session):
     names = {
         (await repo.get_owned(user.id, tx_id)).name for tx_id, _ in rows
     }
-    assert names == {"Сырок РАЭ", "Бананы"}
+    assert names == {"РАЭ Сырок 45г", "Бананы"}
+    loaded = [await repo.get_owned(user.id, tx_id) for tx_id, _ in rows]
+    assert any(tx.name_alias_id is not None for tx in loaded)
 
 
 async def test_apply_without_repos_is_noop(session):

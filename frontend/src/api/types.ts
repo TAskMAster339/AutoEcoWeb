@@ -44,6 +44,8 @@ export interface Transaction {
   receipt_id: string | null
   name: string
   normalized_name: string
+  name_alias_id: string | null
+  name_alias_name: string | null
   position: number | null
   quantity: number | null
   unit: string | null
@@ -57,6 +59,9 @@ export interface Transaction {
   tag_id: string | null
   /** Продавец из чека (left join); None для ручных транзакций */
   seller_name: string | null
+  normalized_seller_name: string | null
+  seller_name_alias_id: string | null
+  seller_name_alias_name: string | null
   /** Необязательный комментарий пользователя; по умолчанию пустой */
   comment: string | null
   /** Нарастающий итог после операции (оконная функция по всем транзакциям
@@ -66,6 +71,14 @@ export interface Transaction {
 }
 
 /** POST /api/v1/transactions — ручная транзакция без чека (mirrors TransactionCreate). */
+export interface Store {
+  seller_name: string
+  normalized_seller_name: string | null
+  alias_id: string | null
+  alias_name: string | null
+  filter_value: string
+}
+
 export interface TransactionDraft {
   name: string
   /** Магазин ручной транзакции (у транзакций из чеков берётся из чека) */
@@ -108,6 +121,9 @@ export interface Receipt {
   /** ФНС: 1=приход, 2=расход, 3=возврат прихода, 4=возврат расхода */
   operation_type: number
   seller_name: string
+  normalized_seller_name: string
+  seller_name_alias_id: string | null
+  seller_name_alias_name: string | null
   seller_inn: string | null
   /** ISO datetime (UTC) */
   datetime: string

@@ -96,6 +96,9 @@ class ReceiptPreviewOut(BaseModel):
     receipt_number: str | None
     operation_type: int
     seller_name: str
+    normalized_seller_name: str | None = None
+    seller_name_alias_id: UUID | None = None
+    seller_name_alias_name: str | None = None
     seller_inn: str | None
     datetime: dt
     total_sum: Decimal
@@ -112,6 +115,7 @@ class ReceiptPreviewOut(BaseModel):
             receipt_number=receipt.receipt_number,
             operation_type=receipt.operation_type,
             seller_name=seller_name,
+            normalized_seller_name=seller_name,
             seller_inn=receipt.seller_inn,
             datetime=receipt.check_datetime,
             total_sum=receipt.total_sum,
@@ -149,13 +153,32 @@ class ReceiptResponse(ReceiptPreviewOut):
                 except ReceiptParseError:
                     parsed = []
         else:
-            parsed = [TransactionOut.from_model(tx) for tx in transactions]
+            parsed = [
+                TransactionOut.from_model(
+                    tx,
+                    seller_name=receipt.normalized_seller_name,
+                    seller_alias_id=receipt.seller_name_alias_id,
+                    seller_alias_name=(
+                        receipt.seller_name_alias.alias_name
+                        if receipt.seller_name_alias is not None
+                        else None
+                    ),
+                )
+                for tx in transactions
+            ]
         return cls(
             id=receipt.id,
             qr=receipt.qr,
             receipt_number=receipt.receipt_number,
             operation_type=receipt.operation_type,
-            seller_name=receipt.normalized_seller_name,
+            seller_name=receipt.seller_name,
+            normalized_seller_name=receipt.normalized_seller_name,
+            seller_name_alias_id=receipt.seller_name_alias_id,
+            seller_name_alias_name=(
+                receipt.seller_name_alias.alias_name
+                if receipt.seller_name_alias is not None
+                else None
+            ),
             seller_inn=receipt.seller_inn,
             datetime=receipt.check_datetime,
             total_sum=receipt.total_sum,

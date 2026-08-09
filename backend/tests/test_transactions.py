@@ -782,7 +782,7 @@ async def test_stores_distinct(session):
         TransactionCreate(name="Ещё такси", amount=Decimal("300.00"), seller_name="Яндекс Такси"),
     )
     stores = await service.stores(user)
-    assert set(stores) == {"ПЕРЕКРЕСТОК", "Яндекс Такси"}
+    assert {store.filter_value for store in stores} == {"ПЕРЕКРЕСТОК", "Яндекс Такси"}
 
 
 async def test_update_seller_name(session):

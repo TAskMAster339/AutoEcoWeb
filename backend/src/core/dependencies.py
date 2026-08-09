@@ -81,6 +81,7 @@ async def get_import_export_service(
         session,
         TransactionRepository(session),
         TagRepository(session),
+        AliasRepository(session),
     )
 
 

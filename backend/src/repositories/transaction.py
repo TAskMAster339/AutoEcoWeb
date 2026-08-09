@@ -15,6 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
+from src.models.alias import Alias
 from src.models.receipt import Receipt
 from src.models.tag import Tag
 from src.models.transaction import Transaction
@@ -229,7 +230,7 @@ class TransactionRepository:
             order_expr = nulls_last(order_expr)
 
         stmt = (
-            select(Transaction, Receipt.seller_name, balance_subq.c.balance)
+            select(Transaction, Receipt.normalized_seller_name, balance_subq.c.balance)
             .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
             .outerjoin(balance_subq, balance_subq.c.tx_id == Transaction.id)
             .where(*conditions)
@@ -493,20 +494,39 @@ class TransactionRepository:
             for tag_id_, name, color, v in rows
         ]
 
-    async def distinct_sellers(self, user_id: UUID) -> list[str]:
-        """Все магазины пользователя (свои + из чеков) — чипсы фильтра."""  # noqa: RUF002
-        store = func.coalesce(
+    async def distinct_sellers(
+        self,
+        user_id: UUID,
+    ) -> list[tuple[str, str | None, UUID | None, str | None, str]]:
+        """Уникальные магазины по эффективному display/filter значению."""
+        filter_value = func.coalesce(
             Transaction.normalized_seller_name,
             Receipt.normalized_seller_name,
         )
-        stmt = (
-            select(store)
-            .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
-            .where(Transaction.user_id == user_id, store.is_not(None))
-            .distinct()
-            .order_by(store)
+        raw_value = func.coalesce(Transaction.seller_name, Receipt.seller_name)
+        alias_id = func.coalesce(
+            Transaction.seller_name_alias_id,
+            Receipt.seller_name_alias_id,
         )
-        return [str(s) for s in (await self._session.scalars(stmt)).all()]
+        stmt = (
+            select(raw_value, filter_value, alias_id, Alias.alias_name)
+            .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .outerjoin(Alias, Alias.id == alias_id)
+            .where(Transaction.user_id == user_id, filter_value.is_not(None))
+            .distinct()
+            .order_by(filter_value)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return [
+            (
+                str(raw),
+                str(normalized) if normalized is not None else None,
+                aid,
+                alias_name,
+                str(normalized),
+            )
+            for raw, normalized, aid, alias_name in rows
+        ]
 
     async def update(self, tx: Transaction, **fields: object) -> Transaction:
         for field, value in fields.items():
@@ -544,7 +564,7 @@ class TransactionRepository:
 
     async def bulk_update_names(
         self,
-        changes: list[tuple[UUID, str, str]],
+        changes: list[tuple[UUID, str, str, UUID | None]],
     ) -> None:
         """Bulk-обновление normalized_name, не меняя исходное name.
 
@@ -560,20 +580,21 @@ class TransactionRepository:
             .where(table.c.id == bindparam("tx_id"))
             .values(
                 normalized_name=bindparam("new_normalized"),
+                name_alias_id=bindparam("new_alias_id"),
             )
         )
         await self._session.execute(
             stmt,
             [
-                {"tx_id": tx_id, "new_normalized": normalized}
-                for tx_id, _name, normalized in changes
+                {"tx_id": tx_id, "new_normalized": normalized, "new_alias_id": alias_id}
+                for tx_id, _name, normalized, alias_id in changes
             ],
         )
         await self._session.commit()
 
     async def bulk_update_sellers(
         self,
-        changes: list[tuple[UUID, str]],
+        changes: list[tuple[UUID, str, UUID | None]],
     ) -> None:
         """Bulk-обновление normalized_seller_name."""
         if not changes:
@@ -583,10 +604,16 @@ class TransactionRepository:
         stmt = (
             update(table)
             .where(table.c.id == bindparam("tx_id"))
-            .values(normalized_seller_name=bindparam("new_seller"))
+            .values(
+                normalized_seller_name=bindparam("new_seller"),
+                seller_name_alias_id=bindparam("new_alias_id"),
+            )
         )
         await self._session.execute(
             stmt,
-            [{"tx_id": tx_id, "new_seller": seller} for tx_id, seller in changes],
+            [
+                {"tx_id": tx_id, "new_seller": seller, "new_alias_id": alias_id}
+                for tx_id, seller, alias_id in changes
+            ],
         )
         await self._session.commit()

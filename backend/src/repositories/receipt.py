@@ -20,8 +20,9 @@ class ReceiptRepository:
         receipt_number: str | None,
         operation_type: int,
         seller_name: str,
-        normalized_seller_name: str,
-        seller_inn: str | None,
+        normalized_seller_name: str | None = None,
+        seller_name_alias_id: UUID | None = None,
+        seller_inn: str | None = None,
         check_datetime: datetime,
         total_sum: Decimal,
         cashback: Decimal | None,
@@ -34,7 +35,8 @@ class ReceiptRepository:
             receipt_number=receipt_number,
             operation_type=operation_type,
             seller_name=seller_name,
-            normalized_seller_name=normalized_seller_name,
+            normalized_seller_name=normalized_seller_name or seller_name,
+            seller_name_alias_id=seller_name_alias_id,
             seller_inn=seller_inn,
             check_datetime=check_datetime,
             total_sum=total_sum,
@@ -117,7 +119,7 @@ class ReceiptRepository:
 
     async def bulk_update_sellers(
         self,
-        changes: list[tuple[UUID, str]],
+        changes: list[tuple[UUID, str, UUID | None]],
     ) -> None:
         """Bulk-обновление normalized_seller_name."""
         if not changes:
@@ -127,13 +129,20 @@ class ReceiptRepository:
         stmt = (
             update(table)
             .where(table.c.id == bindparam("receipt_id"))
-            .values(normalized_seller_name=bindparam("new_seller"))
+            .values(
+                normalized_seller_name=bindparam("new_seller"),
+                seller_name_alias_id=bindparam("new_alias_id"),
+            )
         )
         await self._session.execute(
             stmt,
             [
-                {"receipt_id": receipt_id, "new_seller": seller}
-                for receipt_id, seller in changes
+                {
+                    "receipt_id": receipt_id,
+                    "new_seller": seller,
+                    "new_alias_id": alias_id,
+                }
+                for receipt_id, seller, alias_id in changes
             ],
         )
         await self._session.commit()

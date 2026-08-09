@@ -12,7 +12,8 @@ from sqlalchemy import (
     String,
     Uuid,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from src.models.alias import Alias
 from src.models.base import BaseModel
 
 
@@ -21,13 +22,15 @@ class Transaction(BaseModel):
 
     Может принадлежать чеку (receipt_id — «коробка»), а может быть
     самостоятельной (введена пользователем вручную, receipt_id = None).
-    """
+    """  # noqa: RUF002
 
     __tablename__ = "transactions"
     __table_args__ = (
         Index("ix_transactions_receipt", "receipt_id"),
         Index("ix_transactions_tag", "tag_id"),
         Index("ix_transactions_user_created", "user_id", "created_at", "id"),
+        Index("ix_transactions_name_alias_id", "name_alias_id"),
+        Index("ix_transactions_seller_name_alias_id", "seller_name_alias_id"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -53,6 +56,28 @@ class Transaction(BaseModel):
     normalized_seller_name: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
+    )
+
+    name_alias_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("aliases.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    name_alias: Mapped[Alias | None] = relationship(
+        "Alias",
+        foreign_keys=[name_alias_id],
+        lazy="joined",
+    )
+
+    seller_name_alias_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("aliases.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    seller_name_alias: Mapped[Alias | None] = relationship(
+        "Alias",
+        foreign_keys=[seller_name_alias_id],
+        lazy="joined",
     )
 
     name: Mapped[str] = mapped_column(
