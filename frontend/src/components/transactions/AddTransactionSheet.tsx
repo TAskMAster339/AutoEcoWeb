@@ -12,7 +12,8 @@ import {
   Typography,
 } from '@mui/material'
 import { BottomSheet } from '../common/BottomSheet'
-import { NumericField, parseNum } from '../common/NumericField'
+import { NumericField } from '../common/NumericField'
+import { parseNum } from '../../lib/numbers'
 import { useUiStore } from '../../store/uiStore'
 import { useTags } from '../../hooks/useTags'
 import { useCreateTransaction } from '../../hooks/useTransactions'

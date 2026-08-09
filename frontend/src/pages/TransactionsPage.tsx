@@ -89,6 +89,7 @@ export function TransactionsPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const online = useOnline()
   const queryClient = useQueryClient()
+  const { data: txRevision } = useQuery({ queryKey: ['txRevision'], queryFn: () => 0 })
 
   // Параметры фильтров (период/тег/поиск/магазин) — применяет бэкенд.
   const params = useFilterParams()
@@ -147,7 +148,7 @@ export function TransactionsPage() {
     return () => {
       cancelled = true
     }
-  }, [params, queryClient])
+  }, [params, queryClient, txRevision])
 
   const loadMoreMobile = useCallback(async () => {
     setMobileLoadingMore(true)

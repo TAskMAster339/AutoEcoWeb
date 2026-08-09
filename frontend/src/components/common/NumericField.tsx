@@ -5,11 +5,7 @@ import {
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import RemoveIcon from '@mui/icons-material/Remove'
-
-/** Парс числа с запятой/точкой; NaN если пусто/бито. */
-export function parseNum(raw: string): number {
-  return Number.parseFloat(raw.replace(',', '.'))
-}
+import { parseNum } from '../../lib/numbers'
 
 /**
  * Числовое поле с фиолетовыми кнопками «− / +».

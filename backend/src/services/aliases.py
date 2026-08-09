@@ -115,16 +115,28 @@ class AliasService:
 
     async def delete(self, user: User, alias_id: UUID) -> None:
         alias = await self._get_or_404(user.id, alias_id)
-        if alias.scope == _SCOPE_PRODUCT and self._tx_repo is not None:
-            # name — неизменяемое исходное значение; после удаления алиаса
-            rows = await self._tx_repo.list_name_columns(user.id)
-            changes = [
-                (tx_id, name, name)
-                for tx_id, name in rows
-                if AliasService.resolve([alias], name) == alias.alias_name
-            ]
-            await self._tx_repo.bulk_update_names(changes)
         await self._repo.delete(alias)
+        # Rebuild normalized values from immutable source columns after removal.
+        # This also handles the last alias in a scope and preserves any other
+        # aliases that still match the same transaction.
+        remaining = await self._repo.list_all(user.id, scope=alias.scope)
+        if alias.scope == _SCOPE_PRODUCT and self._tx_repo is not None:
+            rows = await self._tx_repo.list_name_columns(user.id)
+            await self._tx_repo.bulk_update_names([
+                (tx_id, name, normalize_product_name(AliasService.resolve(remaining, name)))
+                for tx_id, name in rows
+            ])
+        elif alias.scope == _SCOPE_SELLER and self._tx_repo is not None and self._receipt_repo is not None:
+            receipt_rows = await self._receipt_repo.list_seller_columns(user.id)
+            await self._receipt_repo.bulk_update_sellers([
+                (receipt_id, AliasService.resolve(remaining, seller))
+                for receipt_id, seller in receipt_rows
+            ])
+            tx_rows = await self._tx_repo.list_seller_columns(user.id)
+            await self._tx_repo.bulk_update_sellers([
+                (tx_id, AliasService.resolve(remaining, seller))
+                for tx_id, seller in tx_rows
+            ])
 
     async def _get_or_404(self, user_id: UUID, alias_id: UUID) -> Alias:
         alias = await self._repo.get(user_id, alias_id)

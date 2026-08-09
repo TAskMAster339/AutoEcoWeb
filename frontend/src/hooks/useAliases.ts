@@ -25,6 +25,9 @@ export function useAliases(scope: AliasScope) {
 
 /** Алиасы переименовывают существующие записи — всё, что их показывает, устарело. */
 function invalidateAfterAliasChange(queryClient: ReturnType<typeof useQueryClient>) {
+  // The infinite grid owns a separate block cache; invalidate its queries and
+  // bump the shared revision so the visible block is requested again.
+  queryClient.setQueryData<number>(['txRevision'], (revision = 0) => revision + 1)
   void queryClient.invalidateQueries({ queryKey: ['aliases'] })
   void queryClient.invalidateQueries({ queryKey: ['txPage'] })
   void queryClient.invalidateQueries({ queryKey: ['transactions'] })

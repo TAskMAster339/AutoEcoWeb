@@ -5,7 +5,7 @@ import 'ag-grid-community/styles/ag-theme-quartz.css'
 import type { ColDef, IDatasource, IGetRowsParams } from 'ag-grid-community'
 import { Box, MenuItem, Select, Typography, useTheme } from '@mui/material'
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { TagChip } from '../common/TagChip'
 import { formatCurrency, formatNumber, formatShortDate } from '../../lib/format'
 import { colors } from '../../theme'
@@ -175,6 +175,7 @@ export function TransactionsGrid({
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const queryClient = useQueryClient()
+  const { data: txRevision } = useQuery({ queryKey: ['txRevision'], queryFn: () => 0 })
   const gridRef = useRef<AgGridReact<TransactionView>>(null)
 
   const [pageSize, setPageSize] = useState(50)
@@ -193,7 +194,7 @@ export function TransactionsGrid({
     const api = gridRef.current?.api
     if (!api) return
     api.purgeInfiniteCache()
-  }, [params])
+  }, [params, txRevision])
 
   // Infinite-источник: блоки запрашиваются по мере прокрутки; sortModel
   // приходит от AG Grid при клике по заголовку — пробрасывается на бэкенд.

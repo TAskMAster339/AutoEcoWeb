@@ -408,9 +408,17 @@ class TransactionService:
         if "name" in fields:
             # normalized_name пересчитывается при смене названия
             fields["normalized_name"] = normalize_product_name(fields["name"])
-        if fields.get("seller_name") is not None:
-            # пустая строка магазина — то же, что «не указан»
-            fields["seller_name"] = fields["seller_name"].strip() or None
+        if "seller_name" in fields:
+            # Keep the editable source and displayed alias-resolved values in sync.
+            seller_name = fields["seller_name"]
+            if seller_name is not None:
+                seller_name = seller_name.strip() or None
+            fields["seller_name"] = seller_name
+            fields["normalized_seller_name"] = (
+                await self._resolve_seller(user.id, seller_name)
+                if seller_name is not None
+                else None
+            )
         if "comment" in fields and fields["comment"] is not None:
             # пустой комментарий — то же, что «нет комментария»
             fields["comment"] = fields["comment"].strip() or None

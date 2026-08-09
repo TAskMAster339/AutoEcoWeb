@@ -17,12 +17,13 @@ import {
 } from '@mui/material'
 import { alpha, useTheme } from '@mui/material/styles'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
-import { NumericField, parseNum } from '../common/NumericField'
+import { NumericField } from '../common/NumericField'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { useTags } from '../../hooks/useTags'
 import { useDeleteTransaction, useUpdateTransaction } from '../../hooks/useTransactions'
 import { messageFromError } from '../../api/client'
 import { todayIso } from '../../lib/format'
+import { parseNum } from '../../lib/numbers'
 import { colors } from '../../theme'
 import type { TransactionUpdatePatch, TransactionView } from '../../api/types'
 import { AliasShortcut, CreateAliasDialog } from '../common/CreateAliasDialog'
@@ -165,6 +166,32 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
       <Dialog
         open={open}
         onClose={updateTx.isPending || deleteTx.isPending ? undefined : onClose}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            if (!updateTx.isPending && !deleteTx.isPending) {
+              event.preventDefault()
+              event.stopPropagation()
+              onClose()
+            }
+            return
+          }
+          if (
+            event.key === 'Enter' &&
+            !event.shiftKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey &&
+            !updateTx.isPending &&
+            !deleteTx.isPending &&
+            !confirmOpen &&
+            !aliasScope &&
+            !(event.target instanceof HTMLTextAreaElement)
+          ) {
+            event.preventDefault()
+            event.stopPropagation()
+            void submit()
+          }
+        }}
         fullWidth
         maxWidth="sm"
         aria-labelledby={titleId}

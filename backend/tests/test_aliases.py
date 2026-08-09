@@ -9,7 +9,7 @@ from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
 from src.schemas.alias import AliasApplyRequest, AliasCreate, AliasUpdate
 from src.schemas.receipt import ReceiptCreate, ReceiptParseRequest
-from src.schemas.transaction import TransactionCreate
+from src.schemas.transaction import TransactionCreate, TransactionOut
 from src.services.aliases import AliasService
 from src.services.receipts import ReceiptService
 from src.services.transaction import TransactionService
@@ -330,6 +330,39 @@ async def test_manual_transaction_creation_applies_aliases(session):
     assert tx.name == "Сырок"
     assert tx.normalized_name == "сырок"
     assert tx.seller_name == "Перекрёсток"
+
+
+async def test_delete_alias_restores_original_seller_and_product(session):
+    user = await _make_user(UserRepository(session))
+    service = _alias_service(session)
+    tx_service = _tx_service(session)
+
+    seller_alias = await service.create(
+        user, AliasCreate(original_name="старый магазин", alias_name="Новый магазин")
+    )
+    product_alias = await service.create(
+        user, AliasCreate(original_name="старый товар", alias_name="Новый товар", scope="product")
+    )
+    tx = await tx_service.create_standalone(
+        user,
+        TransactionCreate(
+            name="старый товар 1шт",
+            seller_name="старый магазин №1",
+            amount=Decimal("10"),
+        ),
+    )
+    assert tx.normalized_seller_name == "Новый магазин"
+    assert tx.normalized_name == "новый товар"
+
+    await service.delete(user, seller_alias.id)
+    await service.delete(user, product_alias.id)
+
+    refreshed = await TransactionRepository(session).get_owned(user.id, tx.id)
+    assert refreshed is not None
+    assert refreshed.seller_name == "старый магазин №1"
+    assert refreshed.normalized_seller_name == "старый магазин №1"
+    assert refreshed.normalized_name == "старый товар 1шт"
+    assert TransactionOut.from_model(refreshed).seller_name == "старый магазин №1"
 
 
 async def test_apply_all_none_scope_returns_counts(session):

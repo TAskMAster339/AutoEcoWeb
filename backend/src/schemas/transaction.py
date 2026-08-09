@@ -80,10 +80,12 @@ class TransactionOut(BaseModel):
             operation_type=tx.operation_type,
             datetime=tx.check_datetime,
             tag_id=tx.tag_id,
+            # Prefer the transaction's own seller over the receipt seller.
+            # normalized_seller_name is the alias-resolved display value.
             seller_name=(
                 tx.normalized_seller_name
-                if tx.normalized_seller_name is not None
-                else seller_name
+                or tx.seller_name
+                or seller_name
             ),
             comment=tx.comment,
             balance=balance,

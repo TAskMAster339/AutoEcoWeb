@@ -799,6 +799,9 @@ async def test_update_seller_name(session):
         TransactionUpdate(seller_name="Метрополитен"),
     )
     assert tx.seller_name == "Метрополитен"
+    assert tx.normalized_seller_name == "Метрополитен"
+    assert TransactionOut.from_model(tx).seller_name == "Метрополитен"
     # снять магазин явным null
     tx = await service.update(user, tx.id, TransactionUpdate(seller_name=None))
     assert tx.seller_name is None
+    assert tx.normalized_seller_name is None
