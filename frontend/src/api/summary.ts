@@ -1,118 +1,72 @@
 /**
- * Summary + analytics — derived client-side from the real transactions
- * endpoint. Транзакция — минимальная единица учёта: чеки как «коробки»
- * на сводку не влияют напрямую (см. frontend/TODO.md).
+ * Summary + analytics — реальные эндпоинты бэкенда, считают SQL:
+ *   GET /api/v1/transactions/summary — показатели за период (с дельтами
+ *     к предыдущему окну и нарастающим балансом с учётом opening);
+ *   GET /api/v1/analytics — по дням / магазинам / тегам.
+ * Все фильтры (период, тег, поиск, магазин) передаются на бэкенд.
  */
-import { fetchTags } from './tags'
-import { fetchAllTransactions, isIncomeOperation } from './transactions'
-import type { AnalyticsData, AnalyticsDaily, Summary, Tag } from './types'
+import { api } from './client'
+import type { AnalyticsData, Summary, Tag } from './types'
+import type { TransactionsPageParams } from './transactions'
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100
+function buildQuery(params: TransactionsPageParams): string {
+  const search = new URLSearchParams()
+  if (params.date_from) search.set('date_from', params.date_from)
+  if (params.date_to) search.set('date_to', params.date_to)
+  if (params.tag_id) search.set('tag_id', params.tag_id)
+  if (params.search) search.set('search', params.search)
+  if (params.seller_name) search.set('seller_name', params.seller_name)
+  const qs = search.toString()
+  return qs ? `?${qs}` : ''
 }
 
-/** Локальная ISO-дата (без UTC-сдвига toISOString). */
-function localIso(d: Date): string {
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${m}-${day}`
+function num(v: number | null | undefined): number {
+  return typeof v === 'number' ? v : Number(v ?? 0)
 }
 
-/** Границы текущего и прошлого месяца (для дельт). */
-function monthBounds(): { thisStart: string; lastStart: string; lastEnd: string } {
-  const now = new Date()
+interface RawSummary {
+  balance: number
+  opening_balance: number
+  income: number
+  expenses: number
+  transactions: number
+  income_delta: number | null
+  expenses_delta: number | null
+  balance_trend: number[]
+}
+
+/** GET /api/v1/transactions/summary — показатели за выбранный период. */
+export async function fetchSummary(params: TransactionsPageParams = {}): Promise<Summary> {
+  const raw = await api.get<RawSummary>(`/api/v1/transactions/summary${buildQuery(params)}`)
   return {
-    thisStart: localIso(new Date(now.getFullYear(), now.getMonth(), 1)),
-    lastStart: localIso(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
-    lastEnd: localIso(new Date(now.getFullYear(), now.getMonth(), 0)),
+    balance: num(raw.balance),
+    openingBalance: num(raw.opening_balance),
+    income: num(raw.income),
+    expenses: num(raw.expenses),
+    transactions: raw.transactions,
+    incomeDelta: raw.income_delta === null || raw.income_delta === undefined ? null : num(raw.income_delta),
+    expensesDelta: raw.expenses_delta === null || raw.expenses_delta === undefined ? null : num(raw.expenses_delta),
+    balanceTrend: (raw.balance_trend ?? []).map(num),
   }
 }
 
-export async function fetchSummary(): Promise<Summary> {
-  const txs = await fetchAllTransactions()
-
-  let income = 0
-  let expenses = 0
-  let monthIncome = 0
-  let monthExpenses = 0
-  let lastIncome = 0
-  let lastExpenses = 0
-  const byDay = new Map<string, number>() // день → сальдо
-
-  const { thisStart, lastStart, lastEnd } = monthBounds()
-  for (const tx of txs) {
-    const amount = Number(tx.amount)
-    const day = tx.datetime.slice(0, 10)
-    const isIncome = isIncomeOperation(tx.operation_type)
-    if (isIncome) {
-      income += amount
-      if (day >= thisStart) monthIncome += amount
-      if (day >= lastStart && day <= lastEnd) lastIncome += amount
-    } else {
-      expenses += amount
-      if (day >= thisStart) monthExpenses += amount
-      if (day >= lastStart && day <= lastEnd) lastExpenses += amount
-    }
-    byDay.set(day, (byDay.get(day) ?? 0) + (isIncome ? amount : -amount))
-  }
-
-  // нарастающий баланс по дням (спарклайн)
-  const balanceTrend: number[] = []
-  let balance = 0
-  for (const day of [...byDay.keys()].sort()) {
-    balance = round2(balance + (byDay.get(day) ?? 0))
-    balanceTrend.push(balance)
-  }
-
-  return {
-    balance: round2(income - expenses),
-    income: round2(income),
-    expenses: round2(expenses),
-    transactions: txs.length,
-    incomeDelta: round2(monthIncome - lastIncome),
-    expensesDelta: round2(monthExpenses - lastExpenses),
-    balanceTrend,
-  }
+interface RawAnalytics {
+  daily: Array<{ day: string; expenses: number; income: number }>
+  by_store: Array<{ store: string; value: number }>
+  by_tag: Array<{ tag_id: string; tag_name: string; tag_color: string; value: number }>
 }
 
-export async function fetchAnalytics(): Promise<AnalyticsData> {
-  const [txs, tags] = await Promise.all([fetchAllTransactions(), fetchTags()])
-  const tagById = new Map(tags.map((t) => [t.id, t]))
-
-  const daily = new Map<string, AnalyticsDaily>()
-  const byStore = new Map<string, number>()
-  const byTag = new Map<string, number>()
-
-  for (const tx of txs) {
-    const amount = Number(tx.amount)
-    const day = tx.datetime.slice(0, 10)
-    const isIncome = isIncomeOperation(tx.operation_type)
-    const d = daily.get(day) ?? { day, expenses: 0, income: 0 }
-    if (isIncome) {
-      d.income += amount
-    } else {
-      d.expenses += amount
-      if (tx.seller_name) {
-        byStore.set(tx.seller_name, (byStore.get(tx.seller_name) ?? 0) + amount)
-      }
-    }
-    daily.set(day, d)
-
-    if (tx.tag_id) {
-      byTag.set(tx.tag_id, (byTag.get(tx.tag_id) ?? 0) + amount)
-    }
-  }
-
+/** GET /api/v1/analytics — группировки за период (считает бэкенд). */
+export async function fetchAnalytics(params: TransactionsPageParams = {}): Promise<AnalyticsData> {
+  const raw = await api.get<RawAnalytics>(`/api/v1/analytics${buildQuery(params)}`)
   return {
-    daily: [...daily.values()].sort((a, b) => a.day.localeCompare(b.day)),
-    byStore: [...byStore.entries()]
-      .map(([store, value]) => ({ store, value: round2(value) }))
-      .sort((a, b) => b.value - a.value),
-    byTag: [...byTag.entries()]
-      .flatMap(([tagId, value]): { tag: Tag; value: number }[] => {
-        const tag = tagById.get(tagId)
-        return tag ? [{ tag, value: round2(value) }] : []
-      })
-      .sort((a, b) => b.value - a.value),
+    daily: raw.daily.map((d) => ({ day: d.day, expenses: num(d.expenses), income: num(d.income) })),
+    byStore: raw.by_store.map((s) => ({ store: s.store, value: num(s.value) })),
+    byTag: raw.by_tag.map(
+      (t): { tag: Tag; value: number } => ({
+        tag: { id: t.tag_id, name: t.tag_name, color: t.tag_color, count: 0 },
+        value: num(t.value),
+      }),
+    ),
   }
 }

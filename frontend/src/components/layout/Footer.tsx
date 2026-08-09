@@ -28,8 +28,8 @@ export function Footer() {
       <Link component={RouterLink} to="/settings" variant="caption" underline="hover" color="inherit">
         Настройки
       </Link>
-      <Link component={RouterLink} to="/rules" variant="caption" underline="hover" color="inherit">
-        Правила и алиасы
+      <Link component={RouterLink} to="/about" variant="caption" underline="hover" color="inherit">
+        О приложении
       </Link>
     </Box>
   )

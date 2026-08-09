@@ -57,8 +57,14 @@ class Receipt(BaseModel):
         nullable=False,
     )
 
-    # Нормализованное имя продавца (алиас применён при сохранении)
+    # Исходное имя продавца из чека — не меняется алиасами.
     seller_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    # Отображаемое имя продавца после применения алиасов.
+    normalized_seller_name: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
     )

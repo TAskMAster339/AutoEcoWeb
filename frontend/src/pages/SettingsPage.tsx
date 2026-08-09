@@ -5,6 +5,7 @@ import {
   Card,
   Chip,
   CircularProgress,
+  Link,
   Stack,
   Switch,
   TextField,
@@ -16,12 +17,13 @@ import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined'
 import LogoutIcon from '@mui/icons-material/Logout'
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline'
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import { Link as RouterLink } from 'react-router-dom'
 import { PageHeader } from '../components/common/PageHeader'
 import { useAuthStore } from '../store/authStore'
 import { useUiStore } from '../store/uiStore'
 import { fetchProverkachekaTokenStatus, saveProverkachekaToken } from '../api/auth'
 import { messageFromError } from '../api/client'
-import { USE_MOCK_API } from '../lib/config'
 import { colors, softBg, softFg } from '../theme'
 
 const ROLE_LABELS: Record<string, string> = { user: 'Пользователь', admin: 'Администратор' }
@@ -196,15 +198,43 @@ export function SettingsPage() {
       </Card>
 
       <Card sx={{ p: 2.5 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
-          О приложении
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          AutoEco — учёт чеков и расходов. React 19 · Vite · MUI · Zustand · TanStack Query · AG Grid.
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          Доменные данные: реальный API (receipts, tags, aliases). Флаг мока {USE_MOCK_API ? 'включён' : 'выключен'} (VITE_USE_MOCK_API) больше ни на что не влияет.
-        </Typography>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: softBg(theme),
+                color: softFg(theme),
+                flexShrink: 0,
+              }}
+            >
+              <InfoOutlinedIcon sx={{ fontSize: 19 }} />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                О приложении
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Как устроен учёт: периоды, дельты, баланс
+              </Typography>
+            </Box>
+          </Stack>
+          <Link
+            component={RouterLink}
+            to="/about"
+            variant="body2"
+            underline="hover"
+            color="primary"
+            sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}
+          >
+            Открыть
+          </Link>
+        </Stack>
       </Card>
 
       <Card sx={{ p: 2.5, borderColor: `${colors.red}55` }}>

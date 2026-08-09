@@ -18,6 +18,7 @@ const RulesPage = page(() => import('./pages/RulesPage'), 'RulesPage')
 const DataPage = page(() => import('./pages/DataPage'), 'DataPage')
 const SettingsPage = page(() => import('./pages/SettingsPage'), 'SettingsPage')
 const AdminPage = page(() => import('./pages/AdminPage'), 'AdminPage')
+const AboutPage = page(() => import('./pages/AboutPage'), 'AboutPage')
 
 function suspense(element: React.ReactNode) {
   return <Suspense fallback={<FullPageSplash />}>{element}</Suspense>
@@ -47,6 +48,7 @@ const router = createBrowserRouter([
           { path: '/data', element: suspense(<DataPage />) },
           { path: '/settings', element: suspense(<SettingsPage />) },
           { path: '/admin', element: suspense(<AdminPage />) },
+          { path: '/about', element: suspense(<AboutPage />) },
         ],
       },
     ],

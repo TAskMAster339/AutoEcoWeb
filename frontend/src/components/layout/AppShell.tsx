@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { BottomNav } from './BottomNav'
 import { FloatingAddButton } from './FloatingAddButton'
+import { AddMenu } from '../common/AddMenu'
 import { OfflineBanner } from './OfflineBanner'
 import { Footer } from './Footer'
 import { useOnline } from '../../hooks/useOnline'
@@ -58,6 +59,9 @@ export function AppShell() {
 
       {isMobile && <BottomNav />}
       {isMobile && <FloatingAddButton />}
+
+      {/* Global «Добавить» menu — открывается из пустых состояний страниц */}
+      <AddMenu />
     </Box>
   )
 }

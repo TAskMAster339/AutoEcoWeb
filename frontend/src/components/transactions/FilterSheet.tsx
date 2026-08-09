@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { KeyboardEvent } from 'react'
 import {
   Box,
   Button,
@@ -28,19 +29,33 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
   const open = useUiStore((s) => s.filterSheetOpen)
   const close = useUiStore((s) => s.closeFilterSheet)
   const search = useUiStore((s) => s.search)
-  const setSearch = useUiStore((s) => s.setSearch)
   const tagFilterId = useUiStore((s) => s.tagFilterId)
-  const setTagFilter = useUiStore((s) => s.setTagFilter)
   const storeFilter = useUiStore((s) => s.storeFilter)
-  const setStoreFilter = useUiStore((s) => s.setStoreFilter)
   const periodKey = useUiStore((s) => s.periodKey)
-  const setPeriodKey = useUiStore((s) => s.setPeriodKey)
+  const applyFilters = useUiStore((s) => s.applyFilters)
   const resetFilters = useUiStore((s) => s.resetFilters)
 
   const [localSearch, setLocalSearch] = useState(search)
+  const [localTagFilterId, setLocalTagFilterId] = useState(tagFilterId)
+  const [localStoreFilter, setLocalStoreFilter] = useState(storeFilter)
+  const [localPeriodKey, setLocalPeriodKey] = useState(periodKey)
+
+  useEffect(() => {
+    if (!open) return
+    setLocalSearch(search)
+    setLocalTagFilterId(tagFilterId)
+    setLocalStoreFilter(storeFilter)
+    setLocalPeriodKey(periodKey)
+  }, [open, search, tagFilterId, storeFilter, periodKey])
 
   const apply = () => {
-    setSearch(localSearch)
+    applyFilters({
+      search: localSearch,
+      tagFilterId: localTagFilterId,
+      storeFilter: localStoreFilter,
+      periodKey: localPeriodKey,
+    })
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
     close()
   }
 
@@ -50,9 +65,17 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
     close()
   }
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Enter' && event.key !== 'Escape') return
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.key === 'Enter') apply()
+    else reset()
+  }
+
   return (
     <BottomSheet open={open} onClose={close} title="Фильтры">
-      <Stack spacing={2.25}>
+      <Stack spacing={2.25} onKeyDown={handleKeyDown}>
         <TextField
           label="Поиск"
           value={localSearch}
@@ -65,7 +88,7 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
             Период
           </Typography>
-          <ToggleButtonGroup value={periodKey} exclusive onChange={(_, v) => v && setPeriodKey(v)} size="small" fullWidth>
+          <ToggleButtonGroup value={localPeriodKey} exclusive onChange={(_, v) => v && setLocalPeriodKey(v)} size="small" fullWidth>
             {PERIODS.map((p) => (
               <ToggleButton key={p.key} value={p.key} sx={{ flex: 1 }}>
                 {p.label}
@@ -84,9 +107,9 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
                 key={s}
                 label={s}
                 clickable
-                color={storeFilter === s ? 'primary' : 'default'}
-                variant={storeFilter === s ? 'filled' : 'outlined'}
-                onClick={() => setStoreFilter(storeFilter === s ? null : s)}
+                color={localStoreFilter === s ? 'primary' : 'default'}
+                variant={localStoreFilter === s ? 'filled' : 'outlined'}
+                onClick={() => setLocalStoreFilter(localStoreFilter === s ? null : s)}
               />
             ))}
           </Box>
@@ -102,9 +125,9 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
                 key={t.id}
                 label={t.name}
                 clickable
-                color={tagFilterId === t.id ? 'primary' : 'default'}
-                variant={tagFilterId === t.id ? 'filled' : 'outlined'}
-                onClick={() => setTagFilter(tagFilterId === t.id ? null : t.id)}
+                color={localTagFilterId === t.id ? 'primary' : 'default'}
+                variant={localTagFilterId === t.id ? 'filled' : 'outlined'}
+                onClick={() => setLocalTagFilterId(localTagFilterId === t.id ? null : t.id)}
               />
             ))}
           </Box>

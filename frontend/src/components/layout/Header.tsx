@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Box,
   Button,
@@ -32,7 +32,12 @@ const TITLES: Record<string, string> = {
   '/rules': 'Правила и алиасы',
   '/settings': 'Настройки',
   '/admin': 'Администрирование',
+  '/about': 'О приложении',
 }
+
+/** Пауза ввода, после которой поиск применяется (иначе каждый символ
+ *  дёргает сводку + список + грид — три запроса на нажатие клавиши). */
+const SEARCH_DEBOUNCE_MS = 350
 
 export function Header() {
   const theme = useTheme()
@@ -47,14 +52,32 @@ export function Header() {
   const toggleThemeMode = useUiStore((s) => s.toggleThemeMode)
 
   const [addAnchor, setAddAnchor] = useState<null | HTMLElement>(null)
+  // Локальное значение поля поиска: печатаем мгновенно, в стор пишем
+  // по дебаунсу. Внешние изменения (сброс фильтров) синхронизируются ниже.
+  const [searchInput, setSearchInput] = useState(search)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    setSearchInput(search)
+  }, [search])
+
+  useEffect(() => () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+  }, [])
+
+  const onSearchChange = (value: string) => {
+    setSearchInput(value)
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => setSearch(value), SEARCH_DEBOUNCE_MS)
+  }
 
   const title = TITLES[location.pathname] ?? 'AutoEco'
   const showAdd = location.pathname === '/transactions' || location.pathname === '/dashboard'
 
   const searchField = (
     <TextField
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
+      value={searchInput}
+      onChange={(e) => onSearchChange(e.target.value)}
       placeholder="Поиск по чекам…"
       size="small"
       sx={{

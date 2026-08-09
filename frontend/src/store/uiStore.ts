@@ -5,7 +5,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type PeriodKey = 'thisMonth' | 'lastMonth' | '3m' | 'all' | 'custom'
+export type PeriodKey = 'thisMonth' | 'lastMonth' | '3m' | 'all' | 'custom' | 'month'
 export type ThemeMode = 'light' | 'dark'
 
 function systemTheme(): ThemeMode {
@@ -18,6 +18,8 @@ interface UiState {
   periodKey: PeriodKey
   customFrom: string | null
   customTo: string | null
+  /** Конкретный месяц в формате «YYYY-MM» (период 'month'). */
+  monthYear: string | null
   search: string
   tagFilterId: string | null
   storeFilter: string | null
@@ -33,9 +35,17 @@ interface UiState {
   toggleSidebar: () => void
   setPeriodKey: (key: PeriodKey) => void
   setCustomRange: (from: string, to: string) => void
+  /** Устанавливает период «конкретный месяц»: monthYear в формате «YYYY-MM». */
+  setMonthPeriod: (monthYear: string) => void
   setSearch: (value: string) => void
   setTagFilter: (tagId: string | null) => void
   setStoreFilter: (store: string | null) => void
+  applyFilters: (filters: {
+    search: string
+    tagFilterId: string | null
+    storeFilter: string | null
+    periodKey: PeriodKey
+  }) => void
   openAddMenu: () => void
   closeAddMenu: () => void
   openReceiptSheet: () => void
@@ -51,9 +61,10 @@ export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
       themeMode: systemTheme(),
-      periodKey: 'thisMonth',
+      periodKey: 'all',
       customFrom: null,
       customTo: null,
+      monthYear: null,
       search: '',
       tagFilterId: null,
       storeFilter: null,
@@ -68,9 +79,12 @@ export const useUiStore = create<UiState>()(
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setPeriodKey: (periodKey) => set({ periodKey }),
       setCustomRange: (customFrom, customTo) => set({ customFrom, customTo, periodKey: 'custom' }),
+      setMonthPeriod: (monthYear) => set({ monthYear, periodKey: 'month' }),
       setSearch: (search) => set({ search }),
       setTagFilter: (tagFilterId) => set({ tagFilterId }),
       setStoreFilter: (storeFilter) => set({ storeFilter }),
+      applyFilters: ({ search, tagFilterId, storeFilter, periodKey }) =>
+        set({ search, tagFilterId, storeFilter, periodKey }),
       openAddMenu: () => set({ addMenuOpen: true }),
       closeAddMenu: () => set({ addMenuOpen: false }),
       openReceiptSheet: () => set({ receiptSheetOpen: true }),
@@ -79,7 +93,7 @@ export const useUiStore = create<UiState>()(
       closeTransactionSheet: () => set({ transactionSheetOpen: false }),
       openFilterSheet: () => set({ filterSheetOpen: true }),
       closeFilterSheet: () => set({ filterSheetOpen: false }),
-      resetFilters: () => set({ search: '', tagFilterId: null, storeFilter: null, periodKey: 'thisMonth' }),
+      resetFilters: () => set({ search: '', tagFilterId: null, storeFilter: null, monthYear: null, periodKey: 'all' }),
     }),
     {
       name: 'autoeco-ui',
@@ -88,6 +102,7 @@ export const useUiStore = create<UiState>()(
         periodKey: state.periodKey,
         customFrom: state.customFrom,
         customTo: state.customTo,
+        monthYear: state.monthYear,
         sidebarCollapsed: state.sidebarCollapsed,
       }),
     },

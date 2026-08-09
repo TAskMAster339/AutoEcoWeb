@@ -1,6 +1,6 @@
 """Транзакции — минимальная единица учёта (сервис + репозиторий)."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import uuid4
 
@@ -407,60 +407,30 @@ async def test_delete_other_users_transaction_404(session):
 # ---------- список / пагинация / фильтры ----------
 
 
-async def test_list_all_cursor_paginates(session):
+async def test_list_page_offset_paginates(session):
     user = await _make_user(session)
     service = _tx_service(session)
-    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
     for i in range(5):
-        tx = await service.create_standalone(
+        await service.create_standalone(
             user,
-            TransactionCreate(name=f"Транзакция {i}", amount=Decimal(i)),
+            TransactionCreate(
+                name=f"Транзакция {i}",
+                amount=Decimal(i),
+                datetime=datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(days=i),
+            ),
         )
-        # sqlite хранит created_at строкой — задаём явно, чтобы keyset был детерминирован
-        tx.created_at = base + timedelta_seconds(i)
-        await session.commit()
 
-    rows1, cursor1 = await service.list_all(
-        user,
-        limit=2,
-        cursor=None,
-        date_from=None,
-        date_to=None,
-        tag_id=None,
-        search=None,
-    )
-    rows2, cursor2 = await service.list_all(
-        user,
-        limit=2,
-        cursor=cursor1,
-        date_from=None,
-        date_to=None,
-        tag_id=None,
-        search=None,
-    )
-    rows3, cursor3 = await service.list_all(
-        user,
-        limit=2,
-        cursor=cursor2,
-        date_from=None,
-        date_to=None,
-        tag_id=None,
-        search=None,
-    )
-    assert len(rows1) == 2 and cursor1 is not None  # noqa: PLR2004
-    assert len(rows2) == 2 and cursor2 is not None  # noqa: PLR2004
-    assert len(rows3) == 1 and cursor3 is None
-    ids = {tx.id for tx, _ in rows1} | {tx.id for tx, _ in rows2} | {tx.id for tx, _ in rows3}
+    rows1, total = await service.list_page(user, limit=2, offset=0)
+    rows2, total2 = await service.list_page(user, limit=2, offset=2)
+    rows3, total3 = await service.list_page(user, limit=2, offset=4)
+    assert len(rows1) == 2 and total == 5  # noqa: PLR2004
+    assert len(rows2) == 2 and total2 == 5  # noqa: PLR2004
+    assert len(rows3) == 1 and total3 == 5  # noqa: PLR2004
+    ids = {tx.id for tx, _, _ in rows1} | {tx.id for tx, _, _ in rows2} | {tx.id for tx, _, _ in rows3}
     assert len(ids) == 5  # noqa: PLR2004
 
 
-def timedelta_seconds(i: int):
-    from datetime import timedelta
-
-    return timedelta(seconds=i)
-
-
-async def test_list_all_filters_by_date_tag_search(session):
+async def test_list_page_filters_by_date_tag_search(session):
     user = await _make_user(session)
     tag = await TagService(TagRepository(session)).create(
         user,
@@ -485,36 +455,129 @@ async def test_list_all_filters_by_date_tag_search(session):
         ),
     )
 
-    def _list(**kwargs):
+    async def _list(**kwargs):
         params = {
             "date_from": None,
             "date_to": None,
             "tag_id": None,
             "search": None,
+            "seller_name": None,
+            "sort_by": "date",
+            "sort_dir": "desc",
         }
         params.update(kwargs)
-        return service.list_all(
-            user,
-            limit=50,
-            cursor=None,
-            **params,
-        )
+        rows, _total = await service.list_page(user, limit=50, offset=0, **params)
+        return rows
 
-    rows, _ = await _list(date_from=datetime(2026, 1, 1, tzinfo=timezone.utc))
-    assert {tx.id for tx, _ in rows} == {jan.id, feb.id}
+    rows = await _list(date_from=datetime(2026, 1, 1, tzinfo=timezone.utc))
+    assert {tx.id for tx, _, _ in rows} == {jan.id, feb.id}
 
-    rows, _ = await _list(date_to=datetime(2026, 1, 31, 23, 59, tzinfo=timezone.utc))
-    assert {tx.id for tx, _ in rows} == {jan.id}
+    rows = await _list(date_to=datetime(2026, 1, 31, 23, 59, tzinfo=timezone.utc))
+    assert {tx.id for tx, _, _ in rows} == {jan.id}
 
-    rows, _ = await _list(tag_id=tag.id)
-    assert {tx.id for tx, _ in rows} == {jan.id}
+    rows = await _list(tag_id=tag.id)
+    assert {tx.id for tx, _, _ in rows} == {jan.id}
 
     # sqlite: lower() не знает кириллицу — ищем подстроку в нижнем регистре
-    rows, _ = await _list(search="леб")
-    assert {tx.id for tx, _ in rows} == {feb.id}
+    rows = await _list(search="леб")
+    assert {tx.id for tx, _, _ in rows} == {feb.id}
 
 
-async def test_list_all_joins_seller_name(session):
+async def test_list_page_filters_by_seller_name(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    await service.create_standalone(
+        user,
+        TransactionCreate(name="Такси", amount=Decimal("500.00"), seller_name="Яндекс Такси"),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(name="Метро", amount=Decimal("62.00"), seller_name="Метрополитен"),
+    )
+    # свой магазин
+    rows, total = await service.list_page(user, limit=50, offset=0, seller_name="Метрополитен")
+    assert total == 1 and rows[0][0].name == "Метро"  # noqa: PLR2004
+    # магазин из чека (COALESCE)
+    receipt = await _make_receipt(session, user)
+    await service.create_for_receipt(receipt, [_item("Молоко", "60.00")])
+    rows2, total2 = await service.list_page(user, limit=50, offset=0, seller_name="ПЕРЕКРЕСТОК")
+    assert total2 == 1 and rows2[0][0].name == "Молоко"  # noqa: PLR2004
+
+
+async def test_list_page_search_covers_comment_and_store(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    await service.create_standalone(
+        user,
+        TransactionCreate(name="Кофе", amount=Decimal("300.00"), comment="зерна для капучинатора"),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(name="Хлеб", amount=Decimal("30.00"), seller_name="Булочная"),
+    )
+    rows, total = await service.list_page(user, limit=50, offset=0, search="капучинатор")
+    assert total == 1 and rows[0][0].name == "Кофе"  # noqa: PLR2004
+    rows, total = await service.list_page(user, limit=50, offset=0, search="улочн")
+    assert total == 1 and rows[0][0].name == "Хлеб"  # noqa: PLR2004
+
+
+async def test_list_page_balance_is_running_total(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    # расход 100 → баланс -100; доход 50 → баланс -50 (всевременной итог)
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Покупка",
+            amount=Decimal("100.00"),
+            datetime=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        ),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Возврат",
+            amount=Decimal("50.00"),
+            operation_type=2,
+            datetime=datetime(2026, 1, 2, tzinfo=timezone.utc),
+        ),
+    )
+    rows, _ = await service.list_page(user, limit=10, offset=0, sort_by="date", sort_dir="asc")
+    by_name = {tx.name: Decimal(str(balance)) for tx, _, balance in rows}
+    assert by_name["Покупка"] == Decimal("-100.00")
+    assert by_name["Возврат"] == Decimal("-50.00")
+
+
+async def test_list_page_sorts_by_name_and_price(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Apple",
+            amount=Decimal("10.00"),
+            price=Decimal("10.00"),
+            quantity=Decimal("1"),
+            datetime=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        ),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Banana",
+            amount=Decimal("1000.00"),
+            price=Decimal("1000.00"),
+            quantity=Decimal("1"),
+            datetime=datetime(2026, 1, 2, tzinfo=timezone.utc),
+        ),
+    )
+    rows, _ = await service.list_page(user, limit=10, offset=0, sort_by="name", sort_dir="asc")
+    assert [tx.name for tx, _, _ in rows] == ["Apple", "Banana"]
+    rows, _ = await service.list_page(user, limit=10, offset=0, sort_by="price", sort_dir="desc")
+    assert [tx.name for tx, _, _ in rows] == ["Banana", "Apple"]
+
+
+async def test_list_page_joins_seller_name(session):
     user = await _make_user(session)
     receipt = await _make_receipt(session, user)
     service = _tx_service(session)
@@ -532,24 +595,194 @@ async def test_list_all_joins_seller_name(session):
         ),
     )
 
-    rows, _ = await service.list_all(
-        user,
-        limit=50,
-        cursor=None,
-        date_from=None,
-        date_to=None,
-        tag_id=None,
-        search=None,
-    )
+    rows, _ = await service.list_page(user, limit=50, offset=0)
     # финальный seller_name: свой у транзакции, иначе — из чека (from_model)
     by_name = {
-        tx.name: TransactionOut.from_model(tx, seller_name=seller).seller_name
-        for tx, seller in rows
+        tx.name: TransactionOut.from_model(tx, seller_name=seller, balance=balance).seller_name
+        for tx, seller, balance in rows
     }
     # из чека — продавец чека; ручная без магазина — None; ручная с магазином — свой
     assert by_name["Молоко"] == "ПЕРЕКРЕСТОК"
     assert by_name["Ручная"] is None
     assert by_name["Ручная с магазином"] == "Пятёрочка"
+
+
+# ---------- сводка за период (SQL-агрегация) ----------
+
+
+async def test_summary_period_income_expenses_and_deltas(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    # январь: расход 100, доход 50; февраль: расход 30
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Покупка",
+            amount=Decimal("100.00"),
+            datetime=datetime(2026, 1, 10, tzinfo=timezone.utc),
+        ),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Возврат",
+            amount=Decimal("50.00"),
+            operation_type=2,
+            datetime=datetime(2026, 1, 20, tzinfo=timezone.utc),
+        ),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Покупка фев",
+            amount=Decimal("30.00"),
+            datetime=datetime(2026, 2, 10, tzinfo=timezone.utc),
+        ),
+    )
+
+    s = await service.summary(
+        user,
+        date_from=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        date_to=datetime(2026, 1, 31, 23, 59, 59, tzinfo=timezone.utc),
+        tag_id=None,
+        search=None,
+        seller_name=None,
+    )
+    assert s.income == Decimal("50.00")
+    assert s.expenses == Decimal("100.00")
+    assert s.balance == Decimal("-50.00")
+    assert s.transactions == 2  # noqa: PLR2004
+    # дельты: предыдущее окно той же длины (декабрь) пустое → разница = сами суммы
+    assert s.income_delta == Decimal("50.00")
+    assert s.expenses_delta == Decimal("100.00")
+    # тренд: стартует с opening (0) и идёт по дням
+    assert s.balance_trend == [Decimal("-100.00"), Decimal("-50.00")]
+
+
+async def test_summary_opening_balance(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Старое",
+            amount=Decimal("200.00"),
+            datetime=datetime(2025, 12, 31, tzinfo=timezone.utc),
+        ),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Новое",
+            amount=Decimal("100.00"),
+            datetime=datetime(2026, 1, 5, tzinfo=timezone.utc),
+        ),
+    )
+    s = await service.summary(
+        user,
+        date_from=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        date_to=datetime(2026, 1, 31, tzinfo=timezone.utc),
+        tag_id=None,
+        search=None,
+        seller_name=None,
+    )
+    assert s.opening_balance == Decimal("-200.00")
+    assert s.expenses == Decimal("100.00")
+    assert s.balance == Decimal("-300.00")
+
+
+async def test_summary_all_time_no_deltas(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    await service.create_standalone(
+        user,
+        TransactionCreate(name="Покупка", amount=Decimal("100.00")),
+    )
+    s = await service.summary(
+        user,
+        date_from=None,
+        date_to=None,
+        tag_id=None,
+        search=None,
+        seller_name=None,
+    )
+    assert s.expenses == Decimal("100.00")
+    assert s.opening_balance == Decimal("0")
+    assert s.income_delta is None
+    assert s.expenses_delta is None
+
+
+# ---------- аналитика и магазины ----------
+
+
+async def test_analytics_grouping(session):
+    user = await _make_user(session)
+    tag = await TagService(TagRepository(session)).create(
+        user,
+        TagCreate(name="Продукты", color="#3B82F6"),
+    )
+    service = _tx_service(session)
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Молоко",
+            amount=Decimal("60.00"),
+            tag_id=tag.id,
+            datetime=datetime(2026, 1, 10, tzinfo=timezone.utc),
+        ),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Возврат",
+            amount=Decimal("20.00"),
+            operation_type=2,
+            tag_id=tag.id,
+            datetime=datetime(2026, 1, 10, tzinfo=timezone.utc),
+        ),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Такси",
+            amount=Decimal("500.00"),
+            seller_name="Яндекс Такси",
+            datetime=datetime(2026, 1, 11, tzinfo=timezone.utc),
+        ),
+    )
+
+    a = await service.analytics(
+        user,
+        date_from=None,
+        date_to=None,
+        tag_id=None,
+        search=None,
+        seller_name=None,
+    )
+    daily = {d.day: (d.expenses, d.income) for d in a.daily}
+    assert daily["2026-01-10"] == (Decimal("60.00"), Decimal("20.00"))
+    assert daily["2026-01-11"] == (Decimal("500.00"), Decimal("0"))
+    by_store = {s.store: s.value for s in a.by_store}
+    assert by_store["Яндекс Такси"] == Decimal("500.00")
+    by_tag = {t.tag_name: t.value for t in a.by_tag}
+    assert by_tag["Продукты"] == Decimal("80.00")  # доходы + расходы
+
+
+async def test_stores_distinct(session):
+    user = await _make_user(session)
+    receipt = await _make_receipt(session, user)
+    service = _tx_service(session)
+    await service.create_for_receipt(receipt, [_item("Молоко", "60.00")])
+    await service.create_standalone(
+        user,
+        TransactionCreate(name="Такси", amount=Decimal("500.00"), seller_name="Яндекс Такси"),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(name="Ещё такси", amount=Decimal("300.00"), seller_name="Яндекс Такси"),
+    )
+    stores = await service.stores(user)
+    assert set(stores) == {"ПЕРЕКРЕСТОК", "Яндекс Такси"}
 
 
 async def test_update_seller_name(session):

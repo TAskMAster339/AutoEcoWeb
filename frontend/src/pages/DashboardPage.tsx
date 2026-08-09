@@ -34,11 +34,12 @@ export function DashboardPage() {
   const periodKey = useUiStore((s) => s.periodKey)
   const customFrom = useUiStore((s) => s.customFrom)
   const customTo = useUiStore((s) => s.customTo)
+  const monthYear = useUiStore((s) => s.monthYear)
   const search = useUiStore((s) => s.search)
   const openAddMenu = useUiStore((s) => s.openAddMenu)
 
   const tagsMap = useMemo(() => new Map((tags ?? []).map((t) => [t.id, t])), [tags])
-  const range = useMemo(() => rangeFor(periodKey, customFrom, customTo), [periodKey, customFrom, customTo])
+  const range = useMemo(() => rangeFor(periodKey, customFrom, customTo, monthYear), [periodKey, customFrom, customTo, monthYear])
 
   const receipts = useMemo(() => {
     const all = data?.pages.flatMap((p) => p.items) ?? []

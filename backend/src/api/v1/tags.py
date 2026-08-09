@@ -1,7 +1,8 @@
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 from src.core.dependencies import CurrentUser, TagRepo
+from src.schemas.pagination import CursorPage
 from src.schemas.tag import TagCreate, TagResponse, TagUpdate
 from src.services.tags import TagService
 
@@ -12,6 +13,24 @@ router = APIRouter(prefix="/api/v1/tags", tags=["tags"])
 async def list_tags(_current_user: CurrentUser, repo: TagRepo) -> list[TagResponse]:
     tags = await TagService(repo).list_all(_current_user)
     return [TagResponse.model_validate(t) for t in tags]
+
+
+@router.get("/page", response_model=CursorPage[TagResponse])
+async def list_tags_page(
+    _current_user: CurrentUser,
+    repo: TagRepo,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> CursorPage[TagResponse]:
+    tags, total = await TagService(repo).list_page(
+        _current_user,
+        limit=limit,
+        offset=offset,
+    )
+    return CursorPage[TagResponse](
+        items=[TagResponse.model_validate(t) for t in tags],
+        total=total,
+    )
 
 
 @router.post("", response_model=TagResponse, status_code=status.HTTP_201_CREATED)

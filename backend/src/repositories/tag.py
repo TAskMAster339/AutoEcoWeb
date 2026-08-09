@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.tag import Tag
 
@@ -38,6 +38,24 @@ class TagRepository:
             .order_by(Tag.created_at.asc(), Tag.id.asc())
         )
         return list((await self._session.scalars(stmt)).all())
+
+    async def list_page(
+        self,
+        user_id: UUID,
+        *,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[Tag], int]:
+        base = select(Tag).where(Tag.user_id == user_id)
+        items_stmt = (
+            base.order_by(Tag.created_at.asc(), Tag.id.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+        items = list((await self._session.scalars(items_stmt)).all())
+        count_stmt = select(func.count(Tag.id)).where(Tag.user_id == user_id)
+        total = int((await self._session.execute(count_stmt)).scalar_one())
+        return items, total
 
     async def update(self, tag: Tag, **fields: object) -> Tag:
         for field, value in fields.items():

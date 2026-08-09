@@ -17,12 +17,19 @@ class Alias(BaseModel):
 
     __tablename__ = "aliases"
     __table_args__ = (
-        Index("ix_aliases_user_created", "user_id", "created_at", "id"),
+        Index(
+            "ix_aliases_user_scope_created",
+            "user_id",
+            "scope",
+            "created_at",
+            "id",
+        ),
         UniqueConstraint(
             "user_id",
+            "scope",
             "original_name",
             "alias_name",
-            name="uq_aliases_user_pair",
+            name="uq_aliases_user_scope_pair",
         ),
     )
 
@@ -30,6 +37,14 @@ class Alias(BaseModel):
         Uuid,
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
+        nullable=False,
+    )
+
+    # Область применения: 'seller' — нормализация названий магазинов,
+    # 'product' — нормализация названий товаров (позиций транзакций)
+    scope: Mapped[str] = mapped_column(
+        String(16),
+        default="seller",
         nullable=False,
     )
 

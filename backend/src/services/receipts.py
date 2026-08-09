@@ -15,18 +15,17 @@ from src.schemas.receipt import (
 )
 from src.services.aliases import AliasService
 from src.services.proverkacheka import ProverkachekaClient, ProverkachekaError
-from src.services.transaction import TransactionService
 from src.services.receipt_parser import (
     NormalizedReceipt,
     ReceiptParseError,
     normalize_proverkacheka,
 )
+from src.services.transaction import TransactionService
 
-# NOT NULL колонки receipts: явный null в PATCH → 422, а не IntegrityError 500.
 # Остальные поля (receipt_number, seller_inn, cashback, balance_after) nullable —
 # явный null их очищает (см. pitfall: exclude_unset + null).
 _RECEIPT_NON_NULLABLE = frozenset(
-    {"operation_type", "seller_name", "check_datetime", "total_sum"}
+    {"operation_type", "seller_name", "check_datetime", "total_sum"},
 )
 
 
@@ -56,6 +55,7 @@ class ReceiptService:
     ) -> tuple[NormalizedReceipt, str]:
         normalized = await self._load_normalized(user, data)
         seller_name = await self._resolve_seller(user.id, normalized.seller_name)
+        await self._resolve_items(user.id, normalized.items)
         return normalized, seller_name
 
     async def create(self, user: User, data: ReceiptCreate) -> Receipt:
@@ -73,7 +73,8 @@ class ReceiptService:
             qr=normalized.qr,
             receipt_number=normalized.receipt_number,
             operation_type=normalized.operation_type,
-            seller_name=seller_name,
+            seller_name=normalized.seller_name,
+            normalized_seller_name=seller_name,
             seller_inn=normalized.seller_inn,
             check_datetime=normalized.check_datetime,
             total_sum=normalized.total_sum,
@@ -101,6 +102,7 @@ class ReceiptService:
             receipt_number=data.receipt_number,
             operation_type=data.operation_type,
             seller_name=data.seller_name,
+            normalized_seller_name=data.seller_name,
             seller_inn=data.seller_inn,
             check_datetime=data.check_datetime,
             total_sum=data.total_sum,
@@ -235,5 +237,21 @@ class ReceiptService:
     async def _resolve_seller(self, user_id: UUID, raw_name: str) -> str:
         if self._alias_repo is None:
             return raw_name
-        aliases = await self._alias_repo.list_all(user_id)
+        aliases = await self._alias_repo.list_all(user_id, scope="seller")
         return AliasService.resolve(aliases, raw_name)
+
+    async def _resolve_items(
+        self,
+        user_id: UUID,
+        items: list,
+    ) -> None:
+        """Применяет товарные алиасы к позициям (мутирует items на месте)."""
+        if self._alias_repo is None or not items:
+            return
+        aliases = await self._alias_repo.list_all(user_id, scope="product")
+        if not aliases:
+            return
+        for item in items:
+            resolved = AliasService.resolve(aliases, item.name)
+            if resolved != item.name:
+                item.name = resolved

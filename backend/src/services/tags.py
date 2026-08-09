@@ -14,6 +14,10 @@ class TagService:
     async def list_all(self, user: User) -> list[Tag]:
         return await self._repo.list_all(user.id)
 
+    async def list_page(self, user: User, *, limit: int, offset: int) -> tuple[list[Tag], int]:
+        return await self._repo.list_page(user.id, limit=limit, offset=offset)
+
+
     async def create(self, user: User, data: TagCreate) -> Tag:
         name = data.name.strip()
         duplicate = await self._repo.get_by_name(user.id, name)

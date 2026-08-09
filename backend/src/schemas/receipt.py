@@ -155,7 +155,7 @@ class ReceiptResponse(ReceiptPreviewOut):
             qr=receipt.qr,
             receipt_number=receipt.receipt_number,
             operation_type=receipt.operation_type,
-            seller_name=receipt.seller_name,
+            seller_name=receipt.normalized_seller_name,
             seller_inn=receipt.seller_inn,
             datetime=receipt.check_datetime,
             total_sum=receipt.total_sum,

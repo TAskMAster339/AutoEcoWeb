@@ -1,12 +1,14 @@
 from datetime import date, datetime, time, timezone
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Query, status
-from src.core.dependencies import CurrentUser, TransactionRepo, TransactionSvc
+from src.core.dependencies import CurrentUser, TransactionSvc
 from src.schemas.pagination import CursorPage
 from src.schemas.transaction import (
     TransactionCreate,
     TransactionOut,
+    TransactionSummary,
     TransactionUpdate,
 )
 
@@ -24,28 +26,76 @@ async def list_transactions(  # noqa: PLR0913
     _current_user: CurrentUser,
     transaction_service: TransactionSvc,
     limit: int = Query(50, ge=1, le=100),
-    cursor: str | None = Query(None),
+    offset: int = Query(0, ge=0),
     date_from: date | None = Query(None),  # noqa: B008
     date_to: date | None = Query(None),  # noqa: B008
-    tag_id: UUID | None = Query(None),
+    tag_id: UUID | None = Query(None),  # noqa: B008
     search: str | None = Query(None, max_length=255),
+    seller_name: str | None = Query(None, max_length=255),
+    sort_by: Literal[
+        "date",
+        "name",
+        "store",
+        "quantity",
+        "price",
+        "income",
+        "expense",
+        "balance",
+        "comment",
+    ] = "date",
+    sort_dir: Literal["asc", "desc"] = "asc",
 ) -> CursorPage[TransactionOut]:
-    rows, next_cursor = await transaction_service.list_all(
+    """Страница транзакций: offset-пагинация (для бесконечного скролла),
+    все фильтры считаются в БД, баланс строки — оконная функция."""
+    rows, total = await transaction_service.list_page(
         _current_user,
         limit=limit,
-        cursor=cursor,
+        offset=offset,
         date_from=_day_bounds(date_from, end_of_day=False) if date_from else None,
         date_to=_day_bounds(date_to, end_of_day=True) if date_to else None,
         tag_id=tag_id,
         search=search,
+        seller_name=seller_name,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
     )
     return CursorPage[TransactionOut](
         items=[
-            TransactionOut.from_model(tx, seller_name=seller_name)
-            for tx, seller_name in rows
+            TransactionOut.from_model(tx, seller_name=seller_name_, balance=balance)
+            for tx, seller_name_, balance in rows
         ],
-        next_cursor=next_cursor,
+        total=total,
     )
+
+
+@router.get("/summary", response_model=TransactionSummary)
+async def get_summary(  # noqa: PLR0913
+    _current_user: CurrentUser,
+    transaction_service: TransactionSvc,
+    date_from: date | None = Query(None),  # noqa: B008
+    date_to: date | None = Query(None),  # noqa: B008
+    tag_id: UUID | None = Query(None),  # noqa: B008
+    search: str | None = Query(None, max_length=255),
+    seller_name: str | None = Query(None, max_length=255),
+) -> TransactionSummary:
+    """Показатели за период (или за всё время, если дат нет) — считает SQL."""
+    return await transaction_service.summary(
+        _current_user,
+        date_from=_day_bounds(date_from, end_of_day=False) if date_from else None,
+        date_to=_day_bounds(date_to, end_of_day=True) if date_to else None,
+        tag_id=tag_id,
+        search=search,
+        seller_name=seller_name,
+    )
+
+
+@router.get("/stores", response_model=list[str])
+async def list_stores(
+    _current_user: CurrentUser,
+    transaction_service: TransactionSvc,
+) -> list[str]:
+    """Все магазины пользователя (свои + из чеков) — для фильтра."""  # noqa: RUF002
+    return await transaction_service.stores(_current_user)
 
 
 @router.post("", response_model=TransactionOut, status_code=status.HTTP_201_CREATED)

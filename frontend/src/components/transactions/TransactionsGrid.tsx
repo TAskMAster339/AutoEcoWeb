@@ -2,21 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AgGridReact, type CustomCellRendererProps } from 'ag-grid-react'
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-quartz.css'
-import type { ColDef } from 'ag-grid-community'
-import {
-  Box,
-  IconButton,
-  MenuItem,
-  Select,
-  Typography,
-  useTheme,
-} from '@mui/material'
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
-import ChevronRightIcon from '@mui/icons-material/ChevronRight'
+import type { ColDef, IDatasource, IGetRowsParams } from 'ag-grid-community'
+import { Box, MenuItem, Select, Typography, useTheme } from '@mui/material'
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
+import { useQueryClient } from '@tanstack/react-query'
 import { TagChip } from '../common/TagChip'
 import { formatCurrency, formatNumber, formatShortDate } from '../../lib/format'
 import { colors } from '../../theme'
+import {
+  fetchTransactionsPage,
+  toTransactionView,
+  type TransactionsPageParams,
+} from '../../api/transactions'
 import type { Tag, TransactionView } from '../../api/types'
 
 interface GridContext {
@@ -25,12 +22,6 @@ interface GridContext {
 
 /** Russian locale for the grid internals (empty state, a11y labels). */
 const RU_LOCALE = {
-  page: 'Страница',
-  to: 'из',
-  of: 'из',
-  next: 'Вперёд',
-  previous: 'Назад',
-  pageSizeSelectorLabel: 'Показывать по:',
   noRowsToShow: 'Нет данных',
   loadingOoo: 'Загрузка…',
 }
@@ -69,10 +60,9 @@ const columnDefs: ColDef<TransactionView>[] = [
   {
     field: 'date',
     headerName: 'Дата',
-    width: 72,
-    minWidth: headerMinWidth('Дата'),
+    width: 100,
+    minWidth: 100,
     valueFormatter: (p) => formatShortDate(p.value),
-    comparator: (a: string, b: string) => a.localeCompare(b),
   },
   {
     field: 'store',
@@ -87,6 +77,7 @@ const columnDefs: ColDef<TransactionView>[] = [
     headerName: 'Теги',
     width: 164,
     minWidth: 140,
+    sortable: false, // тег фильтруется на бэке, сортировка по нему не имеет смысла
     cellRenderer: TagsCell,
     valueGetter: (p) => p.data?.tagId ?? null,
   },
@@ -94,29 +85,27 @@ const columnDefs: ColDef<TransactionView>[] = [
     field: 'name',
     headerName: 'Название',
     flex: 1,
-    // Перенос разрешён только здесь: длинный текст заворачивается,
-    // строка растёт по высоте (autoHeight per-column).
-    wrapText: true,
-    autoHeight: true,
-    minWidth: Math.max(140, headerMinWidth('Название')),
+    // Бесконечный скролл (infinite row model) не поддерживает autoHeight —
+    // фиксированная высота строки, длинный текст обрезается с многоточием.
+    minWidth: 220,
   },
   {
-      field: 'quantity',
-      headerName: 'Кол-во',
-      width: 76,
-      minWidth: headerMinWidth('Кол-во'),
-      ...rightAligned,
-      valueFormatter: (p) => formatNumber(p.value),
-    },
-    {
+    field: 'quantity',
+    headerName: 'Кол-во',
+    width: 76,
+    minWidth: headerMinWidth('Кол-во'),
+    ...rightAligned,
+    valueFormatter: (p) => formatNumber(p.value),
+  },
+  {
     field: 'price',
     headerName: 'Цена',
     width: 92,
     minWidth: headerMinWidth('Цена'),
     ...rightAligned,
     valueFormatter: (p) => formatCurrency(p.value),
-},
-{
+  },
+  {
     field: 'income',
     headerName: 'Доход',
     width: 104,
@@ -124,8 +113,8 @@ const columnDefs: ColDef<TransactionView>[] = [
     ...rightAligned,
     cellStyle: { color: 'var(--ag-income-color, #16A34A)', fontWeight: 600 },
     valueFormatter: (p) => formatCurrency(p.value),
-},
-{
+  },
+  {
     field: 'expense',
     headerName: 'Расход',
     width: 104,
@@ -133,59 +122,110 @@ const columnDefs: ColDef<TransactionView>[] = [
     ...rightAligned,
     cellStyle: { color: 'var(--ag-expense-color, #DC2626)', fontWeight: 600 },
     valueFormatter: (p) => formatCurrency(p.value),
-},
-{
+  },
+  {
     field: 'balance',
     headerName: 'Баланс',
     width: 112,
     minWidth: headerMinWidth('Баланс'),
     ...rightAligned,
     valueFormatter: (p) => formatCurrency(p.value),
-},
-{
-  field: 'comment',
-  headerName: 'Комментарий',
-  flex: 1.2,
-  wrapText: true,
-  autoHeight: true,
-  minWidth: Math.max(120, headerMinWidth('Комментарий')),
-  valueFormatter: (p) => p.value || '—',
-  cellStyle: (p) =>
-    p.value ? undefined : { color: 'var(--ag-secondary-foreground-color, #9ca3af)' },
-},
+  },
+  {
+    field: 'comment',
+    headerName: 'Комментарий',
+    flex: 1.2,
+    // Бесконечный скролл не поддерживает autoHeight — фиксированная высота.
+    minWidth: Math.max(120, headerMinWidth('Комментарий')),
+    valueFormatter: (p) => p.value || '—',
+    cellStyle: (p) =>
+      p.value ? undefined : { color: 'var(--ag-secondary-foreground-color, #9ca3af)' },
+  },
 ]
 
 interface TransactionsGridProps {
-  rows: TransactionView[]
+  /** Серверные фильтры (период/тег/поиск/магазин) — смена перезагружает таблицу. */
+  params: TransactionsPageParams
   tagsMap: Map<string, Tag>
+  /** Общее число строк с текущими фильтрами (для пустых состояний страницы). */
+  total: number | null
+  onTotalChange: (total: number) => void
   /** Выбранные строки (по чекбоксам) — живой список, вызывается при изменении. */
   onSelectionChange?: (ids: string[]) => void
   /** Двойной клик по строке — редактирование. */
   onEdit?: (tx: TransactionView) => void
 }
 
-/** Desktop data table (AG Grid). */
-export function TransactionsGrid({ rows, tagsMap, onSelectionChange, onEdit }: TransactionsGridProps) {
+/**
+ * Desktop data table (AG Grid) на Infinite Row Model: блоки строк
+ * подгружаются по мере прокрутки вниз (и возврата назад), фильтры,
+ * сортировка, total и баланс строки считаются на бэкенде.
+ *
+ * Каждая страница — отдельный ключ TanStack Query (['txPage', …]):
+ * мутации инвалидируют префикс и видимые блоки перезапрашиваются.
+ */
+export function TransactionsGrid({
+  params,
+  tagsMap,
+  total,
+  onTotalChange,
+  onSelectionChange,
+  onEdit,
+}: TransactionsGridProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
+  const queryClient = useQueryClient()
   const gridRef = useRef<AgGridReact<TransactionView>>(null)
 
   const [pageSize, setPageSize] = useState(50)
-  const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
 
-  // Sync the custom footer with AG Grid's pagination state.
+  // Свежие значения для замыкания datasource (без пересоздания на каждый рендер)
+  const onTotalChangeRef = useRef(onTotalChange)
+  onTotalChangeRef.current = onTotalChange
+  const paramsRef = useRef(params)
+  paramsRef.current = params
+
+  // Смена фильтров/периода → перезагружаем блоки бесконечной прокрутки.
+  // datasource уже читает свежие params через paramsRef (query-ключ включает
+  // params, кэш не протухнет) — здесь только заставляем AG Grid перезапросить
+  // видимые блоки и сбросить старый кэш.
   useEffect(() => {
     const api = gridRef.current?.api
     if (!api) return
-    const sync = () => {
-      setPage(api.paginationGetCurrentPage() + 1)
-      setTotalPages(Math.max(1, api.paginationGetTotalPages()))
+    api.purgeInfiniteCache()
+  }, [params])
+
+  // Infinite-источник: блоки запрашиваются по мере прокрутки; sortModel
+  // приходит от AG Grid при клике по заголовку — пробрасывается на бэкенд.
+  const datasource = useMemo<IDatasource>(() => {
+    const getRows = (p: IGetRowsParams): void => {
+      const { startRow, endRow, sortModel, successCallback, failCallback } = p
+      const sort = sortModel?.[0]
+      const sortBy = (sort?.colId && sort?.sort ? sort.colId : 'date') as TransactionsPageParams['sort_by']
+      // Без sortModel (или сброшенной сортировки) — по умолчанию по возрастанию даты.
+      const sortDir: 'asc' | 'desc' = sort?.sort ?? 'asc'
+      const limit = endRow - startRow
+      void queryClient
+        .fetchQuery({
+          queryKey: ['txPage', paramsRef.current, sortBy, sortDir, limit, startRow],
+          queryFn: () =>
+            fetchTransactionsPage({
+              limit,
+              offset: startRow,
+              ...paramsRef.current,
+              sort_by: sortBy,
+              sort_dir: sortDir,
+            }),
+          staleTime: 30_000,
+        })
+        .then((page) => {
+          onTotalChangeRef.current(page.total ?? 0)
+          successCallback(page.items.map(toTransactionView), page.total ?? 0)
+        })
+        .catch(() => failCallback())
     }
-    sync()
-    api.addEventListener('paginationChanged', sync)
-    return () => api.removeEventListener('paginationChanged', sync)
-  }, [])
+    return { getRows }
+  }, [queryClient])
 
   // ESC — снять выделение строк (если оно есть)
   useEffect(() => {
@@ -202,15 +242,6 @@ export function TransactionsGrid({ rows, tagsMap, onSelectionChange, onEdit }: T
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onSelectionChange])
-
-  const pageButtons = useMemo(() => {
-    const count = Math.max(1, totalPages)
-    if (count <= 7) return Array.from({ length: count }, (_, i) => i + 1)
-    const windowStart = Math.min(Math.max(1, page - 2), count - 4)
-    return [1, '…', windowStart + 1, windowStart + 2, windowStart + 3, '…', count] as (number | string)[]
-  }, [page, totalPages])
-
-  const gotoPage = (p: number) => gridRef.current?.api?.paginationGoToPage(p - 1)
 
   return (
     <Box
@@ -231,26 +262,22 @@ export function TransactionsGrid({ rows, tagsMap, onSelectionChange, onEdit }: T
         sx={{
           width: '100%',
           minWidth: 0,
-          height: '100%',
+          flex: 1,
+          minHeight: 0,
           borderRadius: '6px',
           overflow: 'hidden',
           border: `1px solid ${theme.palette.divider}`,
-          // Opaque fill matching the grid surface: the border's inner corner
-          // radius (6px - 1px border) is slightly tighter than AG Grid's own
-          // 6px wrapper radius, which would leave a hairline gap showing the
-          // page background through the transparent container in dark mode.
           bgcolor: 'var(--ag-background-color)',
-          // AG Grid inner frame matched via --ag-border-radius /
-          // --ag-wrapper-border-radius / --ag-borders in index.css.
           '--ag-income-color': colors.green,
           '--ag-expense-color': colors.red,
-          // The footer is rendered outside the grid (mockup layout).
-          '& .ag-paging-panel': { display: 'none' },
         }}
       >
         <AgGridReact<TransactionView>
           ref={gridRef}
-          rowData={rows}
+          rowModelType="infinite"
+          datasource={datasource}
+          cacheBlockSize={pageSize}
+          maxBlocksInCache={20}
           columnDefs={columnDefs}
           context={{ tagsMap }}
           defaultColDef={{
@@ -259,13 +286,10 @@ export function TransactionsGrid({ rows, tagsMap, onSelectionChange, onEdit }: T
             suppressHeaderMenuButton: true,
           }}
           localeText={RU_LOCALE}
-          pagination
-          paginationPageSize={pageSize}
-          paginationPageSizeSelector={false}
           rowHeight={48}
           headerHeight={42}
           suppressCellFocus
-          rowSelection={{ mode: 'multiRow', checkboxes: true, headerCheckbox: true, enableClickSelection: false }}
+          rowSelection={{ mode: 'multiRow', checkboxes: true, enableClickSelection: false }}
           selectionColumnDef={{
             width: 44,
             minWidth: 44,
@@ -274,26 +298,27 @@ export function TransactionsGrid({ rows, tagsMap, onSelectionChange, onEdit }: T
             resizable: false,
             suppressHeaderMenuButton: true,
           }}
+          // Без initialState заголовки не показывают стрелку. Datasource
+          // отправляет date/asc при отсутствии sortModel, поэтому порядок
+          // остаётся стабильным: старые транзакции сверху.
           onSelectionChanged={() => {
-            const ids = gridRef.current?.api
-              ?.getSelectedRows()
-              .map((r) => r.id)
-              .filter(Boolean) ?? []
+            const ids =
+              gridRef.current?.api
+                ?.getSelectedRows()
+                .map((r) => r.id)
+                .filter(Boolean) ?? []
             onSelectionChange?.(ids)
           }}
           onRowDoubleClicked={(e) => {
             if (e.data) onEdit?.(e.data)
           }}
-          // Стабильный id строки: выделение переживает refetch/сортировку/пагинацию
-          // (без getRowId AG Grid считает новые rowData «другими» и сбрасывает выбор)
+          // Стабильный id строки: выделение переживает подгрузку блоков и refetch
           getRowId={(p) => p.data.id}
-          animateRows
           domLayout="normal"
         />
       </Box>
 
-      {/* Mockup footer: total on the left, numbered pages in the middle,
-          page-size selector on the right. */}
+      {/* Footer: total слева, размер блока подгрузки справа. */}
       <Box
         sx={{
           display: 'flex',
@@ -309,66 +334,18 @@ export function TransactionsGrid({ rows, tagsMap, onSelectionChange, onEdit }: T
         }}
       >
         <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-          Всего {rows.length} записей
+          {total !== null && total !== undefined ? `Всего ${total} записей` : ''}
         </Typography>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-          <IconButton
-            size="small"
-            aria-label="Предыдущая страница"
-            disabled={page <= 1}
-            onClick={() => gotoPage(page - 1)}
-            sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: '8px', bgcolor: 'background.paper' }}
-          >
-            <ChevronLeftIcon fontSize="small" />
-          </IconButton>
-          {pageButtons.map((p, i) =>
-            typeof p === 'number' ? (
-              <IconButton
-                key={p}
-                size="small"
-                aria-label={`Страница ${p}`}
-                aria-current={p === page ? 'page' : undefined}
-                onClick={() => gotoPage(p)}
-                sx={{
-                  minWidth: 32,
-                  height: 32,
-                  borderRadius: '8px',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: p === page ? 'primary.main' : 'text.primary',
-                  bgcolor: p === page ? 'action.selected' : 'background.paper',
-                  border: `1px solid ${p === page ? 'transparent' : theme.palette.divider}`,
-                  '&:hover': { bgcolor: 'action.hover' },
-                }}
-              >
-                {p}
-              </IconButton>
-            ) : (
-              <Typography key={`e${i}`} variant="body2" color="text.secondary" sx={{ px: 0.25 }}>
-                …
-              </Typography>
-            ),
-          )}
-          <IconButton
-            size="small"
-            aria-label="Следующая страница"
-            disabled={page >= totalPages}
-            onClick={() => gotoPage(page + 1)}
-            sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: '8px', bgcolor: 'background.paper' }}
-          >
-            <ChevronRightIcon fontSize="small" />
-          </IconButton>
-        </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-            Показывать по:
+            Подгружать по:
           </Typography>
           <Select
             size="small"
             value={pageSize}
             onChange={(e) => setPageSize(Number(e.target.value))}
+            aria-label="Размер блока подгрузки"
             sx={{
               minWidth: 64,
               height: 32,

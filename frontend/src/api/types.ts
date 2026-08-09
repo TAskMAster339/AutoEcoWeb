@@ -22,10 +22,12 @@ export interface AdminUser extends User {
   updated_at: string
 }
 
-/** Cursor-based page envelope — mirrors backend src/schemas/pagination.py. */
+/** Offset-based page envelope — mirrors backend src/schemas/pagination.py.
+ *  total заполняет transactions (бесконечный скролл); receipts (keyset) — null. */
 export interface CursorPage<T> {
   items: T[]
   next_cursor: string | null
+  total: number | null
 }
 
 export interface AdminUserFilters {
@@ -57,6 +59,9 @@ export interface Transaction {
   seller_name: string | null
   /** Необязательный комментарий пользователя; по умолчанию пустой */
   comment: string | null
+  /** Нарастающий итог после операции (оконная функция по всем транзакциям
+   *  пользователя на бэке); заполняется списком транзакций, в чеках — null */
+  balance: number | null
   created_at: string | null
 }
 
@@ -155,11 +160,15 @@ export interface Tag {
 
 /* ---------- Aliases (real, mirrors backend src/schemas/alias.py) ---------- */
 
+/** Область применения алиаса: магазины или товары. */
+export type AliasScope = 'seller' | 'product'
+
 export interface Alias {
   id: string
+  scope: AliasScope
   /** шаблон: подстрока или regex (при is_regex) */
   original_name: string
-  /** нормализованное название продавца */
+  /** нормализованное название (магазина или товара) */
   alias_name: string
   is_regex: boolean
   priority: number
@@ -168,8 +177,24 @@ export interface Alias {
 export interface AliasDraft {
   original_name: string
   alias_name: string
+  scope?: AliasScope
   is_regex?: boolean
   priority?: number
+}
+
+export interface AliasUpdatePatch {
+  original_name?: string
+  alias_name?: string
+  scope?: AliasScope
+  is_regex?: boolean
+  priority?: number
+}
+
+/** Ответ POST /api/v1/aliases/apply — сколько записей обновлено. */
+export interface AliasApplyResult {
+  seller_updated_receipts: number
+  seller_updated_transactions: number
+  product_updated: number
 }
 
 /* ---------- Domain (derived client-side from transactions) ---------- */
@@ -199,14 +224,20 @@ export interface TransactionView {
   balance: number
 }
 
+/** Сводка за период (GET /api/v1/transactions/summary, считает бэкенд).
+ *  balance — сальдо на КОНЕЦ периода (с учётом openingBalance);
+ *  incomeDelta/expensesDelta — разница с предыдущим окном той же длины,
+ *  null когда периода нет («Всё время»). */
 export interface Summary {
   balance: number
+  /** нетто до начала периода (для колонки «Баланс» в таблице) */
+  openingBalance: number
   income: number
   expenses: number
   /** количество транзакций за период */
   transactions: number
-  incomeDelta: number
-  expensesDelta: number
+  incomeDelta: number | null
+  expensesDelta: number | null
   /** sparkline points for Баланс */
   balanceTrend: number[]
 }

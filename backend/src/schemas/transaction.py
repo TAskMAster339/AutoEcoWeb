@@ -20,6 +20,8 @@ class TransactionOut(BaseModel):
 
     seller_name: собственное поле ручной транзакции; для транзакций
     из чеков поле пустое и продавец подтягивается из чека (left join).
+    balance: нарастающий итог (оконная функция по всем транзакциям
+    пользователя); заполняется списком транзакций, в чеках — None.
     """
 
     id: UUID | None = None
@@ -36,6 +38,7 @@ class TransactionOut(BaseModel):
     tag_id: UUID | None = None
     seller_name: str | None = None
     comment: str | None = None
+    balance: Decimal | None = None
     created_at: dt | None = None
 
     @classmethod
@@ -59,9 +62,11 @@ class TransactionOut(BaseModel):
         cls,
         tx: Transaction,
         seller_name: str | None = None,
+        balance: Decimal | None = None,
     ) -> "TransactionOut":
         """seller_name: переданный (из чека) используется как fallback,
-        если у самой транзакции своего магазина нет."""
+        если у самой транзакции своего магазина нет. balance — нарастающий
+        итог из оконной функции (только в списке транзакций)."""  # noqa: RUF002
         return cls(
             id=tx.id,
             receipt_id=tx.receipt_id,
@@ -75,10 +80,33 @@ class TransactionOut(BaseModel):
             operation_type=tx.operation_type,
             datetime=tx.check_datetime,
             tag_id=tx.tag_id,
-            seller_name=tx.seller_name if tx.seller_name is not None else seller_name,
+            seller_name=(
+                tx.normalized_seller_name
+                if tx.normalized_seller_name is not None
+                else seller_name
+            ),
             comment=tx.comment,
+            balance=balance,
             created_at=tx.created_at,
         )
+
+
+class TransactionSummary(BaseModel):
+    """Показатели за период (GET /api/v1/transactions/summary).
+
+    balance: доходы − расходы за период; opening_balance: нетто ДО периода
+    (для колонки «Баланс»); *_delta: разница с предыдущим окном той же
+    длины (None, когда периода нет — «Всё время»).
+    """  # noqa: RUF002
+
+    balance: Decimal
+    opening_balance: Decimal
+    income: Decimal
+    expenses: Decimal
+    transactions: int
+    income_delta: Decimal | None = None
+    expenses_delta: Decimal | None = None
+    balance_trend: list[Decimal] = Field(default_factory=list)
 
 
 class TransactionCreate(BaseModel):
@@ -178,7 +206,8 @@ class TransactionInReceipt(BaseModel):
 
 
 class TransactionManualIn(BaseModel):
-    """Позиция ручного чека (POST /receipts/manual): amount = price * quantity, если не задан."""
+    """Позиция ручного чека (POST /receipts/manual):
+    amount = price * quantity, если не задан."""
 
     name: str = Field(min_length=1, max_length=255)
     quantity: Decimal | None = Field(

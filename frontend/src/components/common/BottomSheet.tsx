@@ -17,6 +17,9 @@ export function BottomSheet({ open, onClose, title, children, maxWidth = 640 }: 
       anchor="bottom"
       open={open}
       onClose={onClose}
+      // Не возвращаем фокус на кнопку-триггер после закрытия: иначе MUI
+      // оставляет на ней focus-visible подсветку после Enter/клика.
+      disableRestoreFocus
       slotProps={{
         paper: {
           sx: {

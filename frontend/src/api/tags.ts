@@ -4,7 +4,7 @@
  * вычисляется на клиенте из чеков (TagsPage через useTransactions).
  */
 import { api } from './client'
-import type { Tag } from './types'
+import type { CursorPage, Tag } from './types'
 
 /** Mirrors backend TagResponse (schemas/tag.py). */
 interface TagResponse {
@@ -24,13 +24,37 @@ export async function fetchTags(): Promise<Tag[]> {
   return tags.map(toTag)
 }
 
+export async function fetchTagsPage(limit: number, offset: number): Promise<CursorPage<Tag>> {
+  const page = await api.get<{ items: TagResponse[]; total: number | null }>(
+    `/api/v1/tags/page?limit=${limit}&offset=${offset}`,
+  )
+  return {
+    items: page.items.map(toTag),
+    total: page.total,
+    next_cursor:
+      page.total != null && offset + page.items.length < page.total
+        ? String(offset + page.items.length)
+        : null,
+  }
+}
+
 export interface TagDraft {
   name: string
   color: string
 }
 
+export interface TagUpdatePatch {
+  name?: string
+  color?: string
+}
+
 export async function createTag(draft: TagDraft): Promise<Tag> {
   const tag = await api.post<TagResponse>('/api/v1/tags', draft)
+  return toTag(tag)
+}
+
+export async function updateTag(id: string, patch: TagUpdatePatch): Promise<Tag> {
+  const tag = await api.patch<TagResponse>(`/api/v1/tags/${id}`, patch)
   return toTag(tag)
 }
 

@@ -1,8 +1,9 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import cast
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import Table, and_, bindparam, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.receipt import Receipt
 
@@ -19,6 +20,7 @@ class ReceiptRepository:
         receipt_number: str | None,
         operation_type: int,
         seller_name: str,
+        normalized_seller_name: str,
         seller_inn: str | None,
         check_datetime: datetime,
         total_sum: Decimal,
@@ -32,6 +34,7 @@ class ReceiptRepository:
             receipt_number=receipt_number,
             operation_type=operation_type,
             seller_name=seller_name,
+            normalized_seller_name=normalized_seller_name,
             seller_inn=seller_inn,
             check_datetime=check_datetime,
             total_sum=total_sum,
@@ -101,4 +104,36 @@ class ReceiptRepository:
 
     async def delete(self, receipt: Receipt) -> None:
         await self._session.delete(receipt)
+        await self._session.commit()
+
+    # ---------- применение алиасов продавцов ----------
+
+    async def list_seller_columns(self, user_id: UUID) -> list[tuple[UUID, str]]:
+        """(id, исходное seller_name) всех чеков пользователя."""
+        stmt = select(Receipt.id, Receipt.seller_name).where(
+            Receipt.user_id == user_id,
+        )
+        return [(row[0], row[1]) for row in (await self._session.execute(stmt)).all()]
+
+    async def bulk_update_sellers(
+        self,
+        changes: list[tuple[UUID, str]],
+    ) -> None:
+        """Bulk-обновление normalized_seller_name."""
+        if not changes:
+            return
+        # Core-таблица: executemany без ORM-синхронизации сессии
+        table = cast(Table, Receipt.__table__)
+        stmt = (
+            update(table)
+            .where(table.c.id == bindparam("receipt_id"))
+            .values(normalized_seller_name=bindparam("new_seller"))
+        )
+        await self._session.execute(
+            stmt,
+            [
+                {"receipt_id": receipt_id, "new_seller": seller}
+                for receipt_id, seller in changes
+            ],
+        )
         await self._session.commit()

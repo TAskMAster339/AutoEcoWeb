@@ -20,6 +20,7 @@ import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
 import MenuOpenIcon from '@mui/icons-material/MenuOpen'
 import { Logo } from '../common/Logo'
@@ -35,6 +36,7 @@ const NAV_ITEMS = [
   { to: '/rules', label: 'Правила и алиасы', icon: LinkOutlinedIcon },
   { to: '/data', label: 'Данные', icon: StorageOutlinedIcon },
   { to: '/settings', label: 'Настройки', icon: SettingsOutlinedIcon },
+  { to: '/about', label: 'О приложении', icon: InfoOutlinedIcon },
 ] as const
 
 const ROLE_LABELS: Record<string, string> = { user: 'Базовый план', admin: 'Администратор' }

@@ -43,8 +43,14 @@ class Transaction(BaseModel):
         nullable=True,
     )
 
-    # Магазин ручной транзакции; у транзакций из чеков берётся из чека (None)
+    # Исходный магазин ручной транзакции; не меняется алиасами.
     seller_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    # Отображаемый магазин после применения алиасов.
+    normalized_seller_name: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )

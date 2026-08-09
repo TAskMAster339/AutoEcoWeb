@@ -1,26 +1,21 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Badge,
   Box,
   Button,
   Grid2 as Grid,
-  IconButton,
   Skeleton,
   Stack,
-  Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material'
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined'
-import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined'
-import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
-import { useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { StatisticCard } from '../components/common/StatisticCard'
 import { PeriodSelector } from '../components/common/PeriodSelector'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
-import { rangeFor } from '../lib/period'
 import { TransactionsGrid } from '../components/transactions/TransactionsGrid'
 import { TransactionCard } from '../components/transactions/TransactionCard'
 import { AddTransactionSheet } from '../components/transactions/AddTransactionSheet'
@@ -29,32 +24,22 @@ import { FilterSheet } from '../components/transactions/FilterSheet'
 import { EditTransactionDialog } from '../components/transactions/EditTransactionDialog'
 import { LoadingState, EmptyState, ErrorState, OfflineState } from '../components/common/States'
 import { useSummary } from '../hooks/useSummary'
-import { useTransactionViews, useDeleteTransaction } from '../hooks/useTransactions'
+import { useStores, useDeleteTransaction } from '../hooks/useTransactions'
 import { useTags } from '../hooks/useTags'
 import { useOnline } from '../hooks/useOnline'
 import { useUiStore } from '../store/uiStore'
+import { useFilterParams } from '../lib/filters'
+import { fetchTransactionsPage, toTransactionView } from '../api/transactions'
 import { formatCurrency, pluralRu } from '../lib/format'
 import { colors } from '../theme'
 import type { TransactionView } from '../api/types'
 
-function exportCsv(rows: TransactionView[]) {
-  const header = ['Дата', 'Магазин', 'Теги', 'Название', 'Кол-во', 'Цена', 'Доход', 'Расход', 'Баланс', 'Комментарий']
-  const lines = rows.map((t) =>
-    [t.date, t.store, t.tagId ?? '', t.name, t.quantity ?? '', t.price ?? '', t.income ?? '', t.expense ?? '', t.balance, t.comment ?? '']
-      .map((v) => `"${String(v).replaceAll('"', '""')}"`)
-      .join(';'),
-  )
-  const csv = '\uFEFF' + [header.join(';'), ...lines].join('\r\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'autoeco-transactions.csv'
-  a.click()
-  URL.revokeObjectURL(url)
-}
+/** Размер страницы мобильного списка (карточки, кнопка «Показать ещё»). */
+const MOBILE_PAGE = 50
 
 function SummaryCards() {
+  const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const { data, isLoading } = useSummary()
 
   if (isLoading) {
@@ -71,10 +56,19 @@ function SummaryCards() {
 
   if (!data) return null
 
+  // Разность доходов и расходов: зелёная, если доходы больше расходов, иначе красная.
+  const net = data.income - data.expenses
+
   return (
     <Grid container spacing={1.5}>
       <Grid size={{ xs: 6, md: 3 }}>
-        <StatisticCard label="Баланс" value={formatCurrency(data.balance)} sparkline={data.balanceTrend} />
+        <StatisticCard
+          label="Баланс"
+          value={formatCurrency(data.balance)}
+          delta={net}
+          // Спарклайн только на десктопе: на мобильном не помещается рядом с дельтой.
+          sparkline={isMobile ? undefined : data.balanceTrend}
+        />
       </Grid>
       <Grid size={{ xs: 6, md: 3 }}>
         <StatisticCard label="Доходы" value={formatCurrency(data.income)} delta={data.incomeDelta} />
@@ -93,12 +87,82 @@ function SummaryCards() {
 export function TransactionsPage() {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
-  const navigate = useNavigate()
   const online = useOnline()
+  const queryClient = useQueryClient()
 
-  const { data, isLoading, isError, error, refetch } = useTransactionViews()
+  // Параметры фильтров (период/тег/поиск/магазин) — применяет бэкенд.
+  const params = useFilterParams()
+
   const { data: tags } = useTags()
+  const { data: stores = [] } = useStores()
   const deleteTx = useDeleteTransaction()
+
+  // Сколько транзакций у пользователя ВООБЩЕ (без фильтров) — для различения
+  // «Пока нет операций» (пустая учётка) и «Ничего не найдено» (пустой период).
+  // Заодно это «гейт» загрузки страницы: пока нет ответа — спиннер.
+  const {
+    data: allTimeTotal,
+    isLoading: totalLoading,
+    isError: totalError,
+    refetch,
+  } = useQuery({
+    queryKey: ['txTotal'],
+    queryFn: async () => {
+      const page = await fetchTransactionsPage({ limit: 1 })
+      return page.total ?? 0
+    },
+    staleTime: 30_000,
+  })
+
+  // Общее число строк с фильтрами — приходит из datasource таблицы
+  // или из мобильного списка (для пустых состояний).
+  const [total, setTotal] = useState<number | null>(null)
+
+  // Мобильный список: догрузка страницами по кнопке «Показать ещё».
+  const [mobileRows, setMobileRows] = useState<TransactionView[]>([])
+  const [mobileLoading, setMobileLoading] = useState(true)
+  const [mobileLoadingMore, setMobileLoadingMore] = useState(false)
+
+  // Смена фильтров/периода → сброс списка и первая страница.
+  useEffect(() => {
+    let cancelled = false
+    setMobileLoading(true)
+    void queryClient
+      .fetchQuery({
+        queryKey: ['txPage', params, 'date', 'asc', MOBILE_PAGE, 0],
+        // Мобильный список всегда по возрастанию даты: старые сверху
+        // (бэкенд по умолчанию сортирует desc — сортировку шлём явно).
+        queryFn: () => fetchTransactionsPage({ limit: MOBILE_PAGE, offset: 0, ...params, sort_by: 'date', sort_dir: 'asc' }),
+        staleTime: 30_000,
+      })
+      .then((page) => {
+        if (cancelled) return
+        setMobileRows(page.items.map(toTransactionView))
+        setTotal(page.total ?? 0)
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setMobileLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [params, queryClient])
+
+  const loadMoreMobile = useCallback(async () => {
+    setMobileLoadingMore(true)
+    try {
+      const page = await queryClient.fetchQuery({
+        queryKey: ['txPage', params, 'date', 'asc', MOBILE_PAGE, mobileRows.length],
+        queryFn: () => fetchTransactionsPage({ limit: MOBILE_PAGE, offset: mobileRows.length, ...params, sort_by: 'date', sort_dir: 'asc' }),
+        staleTime: 30_000,
+      })
+      setMobileRows((prev) => [...prev, ...page.items.map(toTransactionView)])
+      setTotal(page.total ?? 0)
+    } finally {
+      setMobileLoadingMore(false)
+    }
+  }, [params, queryClient, mobileRows.length])
 
   // Выбранные в таблице строки (чекбоксы) → панель «Удалить (N)».
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -118,37 +182,67 @@ export function TransactionsPage() {
     }
   }
 
-  const periodKey = useUiStore((s) => s.periodKey)
-  const customFrom = useUiStore((s) => s.customFrom)
-  const customTo = useUiStore((s) => s.customTo)
+  const openFilterSheet = useUiStore((s) => s.openFilterSheet)
+  const openAddMenu = useUiStore((s) => s.openAddMenu)
   const search = useUiStore((s) => s.search)
   const tagFilterId = useUiStore((s) => s.tagFilterId)
   const storeFilter = useUiStore((s) => s.storeFilter)
-  const openFilterSheet = useUiStore((s) => s.openFilterSheet)
-  const openAddMenu = useUiStore((s) => s.openAddMenu)
+  const periodKey = useUiStore((s) => s.periodKey)
+  const customFrom = useUiStore((s) => s.customFrom)
+  const customTo = useUiStore((s) => s.customTo)
+  const monthYear = useUiStore((s) => s.monthYear)
+  const resetFilters = useUiStore((s) => s.resetFilters)
+
+  // Применённые фильтры можно сохранить/открыть ссылкой.
+  const urlInitialized = useRef(false)
+  useEffect(() => {
+    if (urlInitialized.current) return
+    const query = new URLSearchParams(window.location.search)
+    const state = useUiStore.getState()
+    const urlSearch = query.get('search')
+    const urlTag = query.get('tag')
+    const urlStore = query.get('store')
+    const urlPeriod = query.get('period')
+    const urlFrom = query.get('from')
+    const urlTo = query.get('to')
+    const urlMonth = query.get('month')
+    if (urlSearch !== null) state.setSearch(urlSearch)
+    if (urlTag !== null) state.setTagFilter(urlTag || null)
+    if (urlStore !== null) state.setStoreFilter(urlStore || null)
+    if (urlFrom && urlTo) state.setCustomRange(urlFrom, urlTo)
+    else if (urlMonth) state.setMonthPeriod(urlMonth)
+    else if (urlPeriod) state.setPeriodKey(urlPeriod as Parameters<typeof state.setPeriodKey>[0])
+    urlInitialized.current = true
+  }, [])
+
+  useEffect(() => {
+    if (!urlInitialized.current) return
+    const query = new URLSearchParams()
+    if (search) query.set('search', search)
+    if (tagFilterId) query.set('tag', tagFilterId)
+    if (storeFilter) query.set('store', storeFilter)
+    if (periodKey !== 'all') query.set('period', periodKey)
+    if (periodKey === 'custom' && customFrom && customTo) {
+      query.set('from', customFrom)
+      query.set('to', customTo)
+    }
+    if (periodKey === 'month' && monthYear) query.set('month', monthYear)
+    const next = query.toString()
+    const nextUrl = `${window.location.pathname}${next ? `?${next}` : ''}${window.location.hash}`
+    if (nextUrl !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+      window.history.replaceState(null, '', nextUrl)
+    }
+  }, [search, tagFilterId, storeFilter, periodKey, customFrom, customTo, monthYear])
 
   const tagsMap = useMemo(() => new Map((tags ?? []).map((t) => [t.id, t])), [tags])
-  const stores = useMemo(() => [...new Set((data ?? []).map((t) => t.store).filter(Boolean))].sort() as string[], [data])
+  const hasFilters = Boolean(search || tagFilterId || storeFilter || periodKey !== 'all')
 
-  const range = useMemo(() => rangeFor(periodKey, customFrom, customTo), [periodKey, customFrom, customTo])
+  const showNoTransactions = total === 0 && (allTimeTotal ?? 0) === 0 && !hasFilters
+  const showNotFound = total === 0 && !showNoTransactions
 
-  const filtered = useMemo(() => {
-    if (!data) return []
-    const q = search.trim().toLowerCase()
-    return data.filter((t) => {
-      if (t.date < range.from || t.date > range.to) return false
-      if (tagFilterId && t.tagId !== tagFilterId) return false
-      if (storeFilter && t.store !== storeFilter) return false
-      if (q && !`${t.store ?? ''} ${t.name} ${t.comment ?? ''}`.toLowerCase().includes(q)) return false
-      return true
-    })
-  }, [data, range, search, tagFilterId, storeFilter])
-
-  const hasFilters = Boolean(search || tagFilterId || storeFilter || periodKey !== 'thisMonth')
-
-  if (isLoading) return <LoadingState label="Загружаем операции…" />
+  if (totalLoading) return <LoadingState label="Загружаем операции…" />
   if (!online) return <OfflineState onRetry={() => void refetch()} />
-  if (isError) return <ErrorState message={error instanceof Error ? error.message : 'Неизвестная ошибка'} onRetry={() => void refetch()} />
+  if (totalError) return <ErrorState message="Не удалось загрузить операции" onRetry={() => void refetch()} />
 
   return (
     <Stack spacing={2.25} sx={{ height: '100%' }}>
@@ -156,7 +250,19 @@ export function TransactionsPage() {
 
       {/* Toolbar: filters / export / period */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-        <Badge color="primary" variant="dot" invisible={!hasFilters}>
+        {hasFilters ? (
+          <Badge color="primary" variant="dot">
+            <Button
+              variant="outlined"
+              color="inherit"
+              startIcon={<FilterAltOutlinedIcon />}
+              onClick={openFilterSheet}
+              sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper' }}
+            >
+              Фильтры
+            </Button>
+          </Badge>
+        ) : (
           <Button
             variant="outlined"
             color="inherit"
@@ -166,52 +272,64 @@ export function TransactionsPage() {
           >
             Фильтры
           </Button>
-        </Badge>
-        <Tooltip title="Скачать CSV">
-          <Button
-            variant="outlined"
-            color="inherit"
-            startIcon={<FileDownloadOutlinedIcon />}
-            onClick={() => exportCsv(filtered)}
-            disabled={filtered.length === 0}
-            sx={{ color: 'text.primary', borderColor: 'divider', bgcolor: 'background.paper' }}
-          >
-            Экспорт
-          </Button>
-        </Tooltip>
-        <Tooltip title="Настройки">
-          <IconButton onClick={() => navigate('/settings')} aria-label="Настройки" sx={{ border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', borderRadius: '8px' }}>
-            <SettingsOutlinedIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+        )}
+        <Button
+          variant="text"
+          color="inherit"
+          onClick={resetFilters}
+          disabled={!hasFilters}
+          sx={{ color: 'text.secondary', textTransform: 'none' }}
+        >
+          Сбросить фильтры
+        </Button>
         <Box sx={{ flex: 1 }} />
         <PeriodSelector />
       </Box>
 
-      {data && data.length === 0 ? (
+      {showNoTransactions ? (
         <EmptyState
           title="Пока нет операций"
           subtitle="Добавьте чек или транзакцию, чтобы начать учёт"
           actionLabel="Добавить"
           onAction={openAddMenu}
         />
-      ) : filtered.length === 0 ? (
+      ) : showNotFound ? (
         <EmptyState
           title="Ничего не найдено"
-          subtitle="Попробуйте изменить период или сбросить фильтры"
-          actionLabel="Сбросить фильтры"
+          subtitle={
+            hasFilters
+              ? 'Попробуйте изменить период или сбросить фильтры'
+              : 'В этом периоде нет операций'
+          }
+          actionLabel={hasFilters ? 'Сбросить фильтры' : 'Показать всё время'}
           onAction={() => {
-            useUiStore.getState().resetFilters()
+            if (hasFilters) {
+              useUiStore.getState().resetFilters()
+            } else {
+              // Активных фильтров нет — период пуст; показываем все операции.
+              useUiStore.getState().setPeriodKey('all')
+            }
           }}
         />
       ) : isMobile ? (
         <Stack spacing={1.25}>
-          {filtered.map((t) => (
-            <TransactionCard key={t.id} tx={t} tagsMap={tagsMap} onDelete={(id) => void deleteTx.mutate(id)} onEdit={setEditingTx} />
-          ))}
-          <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
-            Показано {filtered.length} из {data?.length ?? 0} · свайп влево — удалить
-          </Typography>
+          {mobileLoading ? (
+            <LoadingState label="Загружаем операции…" />
+          ) : (
+            <>
+              {mobileRows.map((t) => (
+                <TransactionCard key={t.id} tx={t} tagsMap={tagsMap} onDelete={(id) => void deleteTx.mutate(id)} onEdit={setEditingTx} />
+              ))}
+              <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
+                Показано {mobileRows.length} из {total ?? 0} · свайп влево — удалить
+              </Typography>
+              {total !== null && mobileRows.length < total && (
+                <Button variant="outlined" color="inherit" onClick={() => void loadMoreMobile()} disabled={mobileLoadingMore} sx={{ color: 'text.primary', borderColor: 'divider' }}>
+                  {mobileLoadingMore ? 'Загружаем…' : 'Показать ещё'}
+                </Button>
+              )}
+            </>
+          )}
         </Stack>
       ) : (
         <Box
@@ -236,6 +354,7 @@ export function TransactionsPage() {
                 zIndex: 10,
                 display: 'flex',
                 alignItems: 'center',
+                marginBottom: '10px',
                 gap: 1.5,
                 px: 1.75,
                 py: 1,
@@ -270,8 +389,10 @@ export function TransactionsPage() {
             </Box>
           )}
           <TransactionsGrid
-            rows={filtered}
+            params={params}
             tagsMap={tagsMap}
+            total={total}
+            onTotalChange={setTotal}
             onSelectionChange={setSelectedIds}
             onEdit={setEditingTx}
           />

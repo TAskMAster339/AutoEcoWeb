@@ -16,6 +16,7 @@ from src.repositories.refresh_token import RefreshTokenRepository
 from src.repositories.tag import TagRepository
 from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
+from src.services.aliases import AliasService
 from src.services.import_export import ImportExportService
 from src.services.proverkacheka import ProverkachekaClient
 from src.services.transaction import TransactionService
@@ -59,6 +60,7 @@ async def get_transaction_service(
         TransactionRepository(session),
         receipt_repo,
         TagRepository(session),
+        AliasRepository(session),
     )
 
 
@@ -90,6 +92,18 @@ async def get_alias_repo(session: DBSession) -> AliasRepository:
 
 
 AliasRepo = Annotated[AliasRepository, Depends(get_alias_repo)]
+
+
+async def get_alias_service(session: DBSession) -> AliasService:
+    """Алиасы + применение к существующим записям (чеки и транзакции)."""
+    return AliasService(
+        AliasRepository(session),
+        TransactionRepository(session),
+        ReceiptRepository(session),
+    )
+
+
+AliasSvc = Annotated[AliasService, Depends(get_alias_service)]
 
 
 def get_proverkacheka_client() -> ProverkachekaClient:

@@ -25,6 +25,7 @@ import { messageFromError } from '../../api/client'
 import { todayIso } from '../../lib/format'
 import { colors } from '../../theme'
 import type { TransactionUpdatePatch, TransactionView } from '../../api/types'
+import { AliasShortcut, CreateAliasDialog } from '../common/CreateAliasDialog'
 
 interface EditTransactionDialogProps {
   /** Транзакция для редактирования; null — диалог закрыт. */
@@ -56,6 +57,7 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [aliasScope, setAliasScope] = useState<'seller' | 'product' | null>(null)
 
   const open = tx !== null
 
@@ -212,6 +214,17 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
               required
               autoFocus
               placeholder="Например: Кофе, проезд, зарплата"
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <AliasShortcut
+                      scope="product"
+                      originalName={name}
+                      onClick={() => setAliasScope('product')}
+                    />
+                  ),
+                },
+              }}
             />
 
             <TextField
@@ -220,6 +233,17 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
               onChange={(e) => setStore(e.target.value)}
               fullWidth
               placeholder="Например: Пятёрочка, Дикси, Метро"
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <AliasShortcut
+                      scope="seller"
+                      originalName={store}
+                      onClick={() => setAliasScope('seller')}
+                    />
+                  ),
+                },
+              }}
             />
 
             <TextField
@@ -331,6 +355,14 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
         onConfirm={() => void handleDelete()}
         onClose={() => setConfirmOpen(false)}
       />
+      {aliasScope && (
+        <CreateAliasDialog
+          open
+          scope={aliasScope}
+          originalName={aliasScope === 'seller' ? store : name}
+          onClose={() => setAliasScope(null)}
+        />
+      )}
     </>
   )
 }
