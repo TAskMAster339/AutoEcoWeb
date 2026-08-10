@@ -11,10 +11,13 @@ from src.repositories.receipt import ReceiptRepository
 from src.repositories.tag import TagRepository
 from src.repositories.transaction import TransactionRepository
 from src.schemas.analytics import (
+    AnalyticsByCategory,
     AnalyticsByStore,
-    AnalyticsByTag,
     AnalyticsDaily,
+    AnalyticsIndicators,
     AnalyticsResponse,
+    AnalyticsWeekday,
+    PriceChartResponse,
 )
 from src.schemas.transaction import (
     StoreResponse,
