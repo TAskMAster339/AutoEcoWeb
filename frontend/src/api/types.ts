@@ -274,6 +274,9 @@ export interface AnalyticsDaily {
   day: string
   expenses: number
   income: number
+  count: number
+  /** значение линейного тренда для дня; null, когда точек < 2 */
+  trend: number | null
 }
 
 export interface AnalyticsByStore {
@@ -281,8 +284,48 @@ export interface AnalyticsByStore {
   value: number
 }
 
+export interface AnalyticsByCategory {
+  tag: Tag
+  value: number
+  count: number
+}
+
+export interface AnalyticsWeekday {
+  /** 1..7, ISO (1 = Пн) */
+  weekday: number
+  value: number
+  count: number
+}
+
+export interface AnalyticsIndicators {
+  topStore: AnalyticsByStore | null
+  topCategory: AnalyticsByCategory | null
+  topWeekday: AnalyticsWeekday | null
+  topIncomeSource: AnalyticsByStore | null
+}
+
 export interface AnalyticsData {
   daily: AnalyticsDaily[]
   byStore: AnalyticsByStore[]
-  byTag: { tag: Tag; value: number }[]
+  byStoreIncome: AnalyticsByStore[]
+  byCategory: AnalyticsByCategory[]
+  byWeekday: AnalyticsWeekday[]
+  indicators: AnalyticsIndicators
+}
+
+/** GET /api/v1/analytics/price-chart — график цен товара (считает бэкенд). */
+export interface PricePoint {
+  day: string
+  price: number
+  count: number
+  store: string | null
+}
+
+export interface PriceChartData {
+  points: PricePoint[]
+  stores: Array<string | null>
+  avgPrice: number
+  medianPrice: number
+  stddev: number
+  count: number
 }
