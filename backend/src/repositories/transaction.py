@@ -1,8 +1,10 @@
-from datetime import datetime
+import re
+from datetime import date, datetime
 from decimal import Decimal
 from typing import cast
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy import Table, bindparam, case, func, nulls_last, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -386,8 +388,8 @@ class TransactionRepository:
         tag_ids: list[UUID] | None = None,
         search: str | None = None,
         seller_names: list[str] | None = None,
-    ) -> list[tuple[str, Decimal, Decimal]]:
-        """День -> для графика «Расходы по дням»."""
+    ) -> list[tuple[str, Decimal, Decimal, int]]:
+        """День -> (расходы, доходы, число операций) для графика «Расходы по дням»."""
         day = func.date(Transaction.check_datetime)
         stmt = (
             select(
@@ -404,6 +406,7 @@ class TransactionRepository:
                     ),
                     0,
                 ),
+                func.count(Transaction.id),
             )
             .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
             .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
@@ -422,7 +425,10 @@ class TransactionRepository:
             .order_by(day)
         )
         rows = (await self._session.execute(stmt)).all()
-        return [(str(day_), Decimal(e or 0), Decimal(i or 0)) for day_, e, i in rows]
+        return [
+            (str(day_), Decimal(e or 0), Decimal(i or 0), int(c))
+            for day_, e, i, c in rows
+        ]
 
     async def by_store(  # noqa: PLR0913
         self,
@@ -461,6 +467,11 @@ class TransactionRepository:
                 ),
             )
             .group_by(store)
+            .having(
+                func.sum(Transaction.amount)
+                .filter(Transaction.operation_type.in_(_EXPENSE_TYPES))
+                > 0,
+            )
             .order_by(
                 func.sum(Transaction.amount)
                 .filter(Transaction.operation_type.in_(_EXPENSE_TYPES))
@@ -470,7 +481,7 @@ class TransactionRepository:
         rows = (await self._session.execute(stmt)).all()
         return [(str(s), Decimal(v or 0)) for s, v in rows]
 
-    async def by_tag(  # noqa: PLR0913
+    async def by_store_income(  # noqa: PLR0913
         self,
         *,
         user_id: UUID,
@@ -479,17 +490,77 @@ class TransactionRepository:
         tag_ids: list[UUID] | None = None,
         search: str | None = None,
         seller_names: list[str] | None = None,
-    ) -> list[tuple[UUID, str, str, Decimal]]:
-        """Тег -> сумма, по убыванию.
+    ) -> list[tuple[str, Decimal]]:
+        """Магазин -> доходы, по убыванию."""
+        store = _store_expr()
+        stmt = (
+            select(
+                store,
+                func.coalesce(
+                    func.sum(Transaction.amount).filter(
+                        Transaction.operation_type.in_(_INCOME_TYPES),
+                    ),
+                    0,
+                ),
+            )
+            .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+            .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
+            .where(
+                Transaction.user_id == user_id,
+                store.is_not(None),
+                *_filters(
+                    date_from=date_from,
+                    date_to=date_to,
+                    tag_ids=tag_ids,
+                    search=search,
+                    seller_names=seller_names,
+                ),
+            )
+            .group_by(store)
+            .having(
+                func.sum(Transaction.amount)
+                .filter(Transaction.operation_type.in_(_INCOME_TYPES))
+                > 0,
+            )
+            .order_by(
+                func.sum(Transaction.amount)
+                .filter(Transaction.operation_type.in_(_INCOME_TYPES))
+                .desc(),
+            )
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return [(str(s), Decimal(v or 0)) for s, v in rows]
 
-        Возвращает (tag_id, tag_name, tag_color, value).
-        """  # noqa: RUF002
+    async def by_category(  # noqa: PLR0913
+        self,
+        *,
+        user_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        tag_ids: list[UUID] | None = None,
+        search: str | None = None,
+        seller_names: list[str] | None = None,
+    ) -> list[tuple[UUID, str, str, Decimal, int]]:
+        """Тег -> (расходы, число операций), по убыванию суммы.
+
+        Только расходы (_EXPENSE_TYPES). Возвращает
+        (tag_id, tag_name, tag_color, value, count).
+        """
         stmt = (
             select(
                 Transaction.tag_id,
                 Tag.name,
                 Tag.color,
-                func.coalesce(func.sum(Transaction.amount), 0),
+                func.coalesce(
+                    func.sum(Transaction.amount).filter(
+                        Transaction.operation_type.in_(_EXPENSE_TYPES),
+                    ),
+                    0,
+                ),
+                func.count(Transaction.id).filter(
+                    Transaction.operation_type.in_(_EXPENSE_TYPES),
+                ),
             )
             .join(Tag, Tag.id == Transaction.tag_id)
             .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
@@ -507,12 +578,142 @@ class TransactionRepository:
                 ),
             )
             .group_by(Transaction.tag_id, Tag.name, Tag.color)
-            .order_by(func.sum(Transaction.amount).desc())
+            .order_by(
+                func.sum(Transaction.amount)
+                .filter(Transaction.operation_type.in_(_EXPENSE_TYPES))
+                .desc(),
+            )
         )
         rows = (await self._session.execute(stmt)).all()
         return [
-            (UUID(str(tag_id_)), name, color, Decimal(v or 0))
-            for tag_id_, name, color, v in rows
+            (UUID(str(tag_id_)), name, color, Decimal(v or 0), int(c))
+            for tag_id_, name, color, v, c in rows
+        ]
+
+    async def by_weekday(  # noqa: PLR0913
+        self,
+        *,
+        user_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        tag_ids: list[UUID] | None = None,
+        search: str | None = None,
+        seller_names: list[str] | None = None,
+    ) -> list[tuple[int, Decimal, int]]:
+        """День недели (ISO, 1=Пн..7=Вс) -> (расходы, число операций).
+
+        Всегда ровно 7 строк: отсутствующие дни заполняются нулями.
+        """
+        day = func.date(Transaction.check_datetime)
+        stmt = (
+            select(
+                day,
+                func.coalesce(
+                    func.sum(Transaction.amount).filter(
+                        Transaction.operation_type.in_(_EXPENSE_TYPES),
+                    ),
+                    0,
+                ),
+                func.count(Transaction.id).filter(
+                    Transaction.operation_type.in_(_EXPENSE_TYPES),
+                ),
+            )
+            .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+            .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
+            .where(
+                Transaction.user_id == user_id,
+                *_filters(
+                    date_from=date_from,
+                    date_to=date_to,
+                    tag_ids=tag_ids,
+                    search=search,
+                    seller_names=seller_names,
+                ),
+            )
+            .group_by(day)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        acc: dict[int, list[Decimal | int]] = {}
+        for day_, value, count_ in rows:
+            wd = date.fromisoformat(str(day_)).isoweekday()
+            cur = acc.setdefault(wd, [Decimal("0"), 0])
+            cur[0] += Decimal(value or 0)  # type: ignore[operator]
+            cur[1] += int(count_)
+        return [
+            (
+                wd,
+                Decimal(acc.get(wd, [Decimal("0"), 0])[0]),  # type: ignore[arg-type]
+                int(acc.get(wd, [0, 0])[1]),
+            )
+            for wd in range(1, 8)
+        ]
+
+    async def price_points(  # noqa: PLR0913
+        self,
+        *,
+        user_id: UUID,
+        name: str,
+        is_regex: bool,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[tuple[date, Decimal, str | None, str]]:
+        """Покупки товара: (день, цена, магазин, name) — для ценового графика.
+
+        Подстрока ищется в name/normalized_name (ILIKE); при is_regex —
+        re.search(IGNORECASE) по тем же полям. Невалидный regex -> 422.
+        Только расходы, price > 0.
+        """
+        conditions: list[ColumnElement[bool]] = [
+            Transaction.user_id == user_id,  # type: ignore[arg-type]
+            Transaction.operation_type.in_(_EXPENSE_TYPES),
+            Transaction.price.is_not(None),
+            Transaction.price > 0,
+        ]
+        if date_from is not None:
+            conditions.append(Transaction.check_datetime >= date_from)  # type: ignore[arg-type]
+        if date_to is not None:
+            conditions.append(Transaction.check_datetime <= date_to)  # type: ignore[arg-type]
+        if not is_regex:
+            q = f"%{name}%"
+            conditions.append(
+                or_(
+                    Transaction.name.ilike(q),
+                    Transaction.normalized_name.ilike(q),
+                ),
+            )
+        store = _store_expr()
+        stmt = (
+            select(
+                func.date(Transaction.check_datetime),
+                Transaction.price,
+                store,
+                Transaction.name,
+            )
+            .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+            .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
+            .where(*conditions)
+            .order_by(func.date(Transaction.check_datetime), store, Transaction.name)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        if is_regex:
+            try:
+                pattern = re.compile(name, re.IGNORECASE)
+            except re.error as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=f"Невалидное регулярное выражение: {exc}",
+                ) from exc
+            rows = [
+                row
+                for row in rows
+                if pattern.search(str(row[3])) is not None
+                or pattern.search(str(row[2] or "")) is not None
+            ]
+        return [
+            (day_, Decimal(price_), (str(s) if s is not None else None), str(n))
+            for day_, price_, s, n in rows
         ]
 
     async def count_by_seller_ids(self, user_id: UUID, seller_ids: list[UUID]) -> int:

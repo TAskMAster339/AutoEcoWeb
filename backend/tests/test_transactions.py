@@ -834,13 +834,120 @@ async def test_analytics_grouping(session):
         search=None,
         seller_names=None,
     )
-    daily = {d.day: (d.expenses, d.income) for d in a.daily}
-    assert daily["2026-01-10"] == (Decimal("60.00"), Decimal("20.00"))
-    assert daily["2026-01-11"] == (Decimal("500.00"), Decimal("0"))
+    daily = {d.day: (d.expenses, d.income, d.count) for d in a.daily}
+    assert daily["2026-01-10"] == (Decimal("60.00"), Decimal("20.00"), 2)
+    assert daily["2026-01-11"] == (Decimal("500.00"), Decimal("0"), 1)
     by_store = {s.store: s.value for s in a.by_store}
     assert by_store["Яндекс Такси"] == Decimal("500.00")
-    by_tag = {t.tag_name: t.value for t in a.by_tag}
-    assert by_tag["Продукты"] == Decimal("80.00")  # доходы + расходы
+    by_category = {t.tag_name: (t.value, t.count) for t in a.by_category}
+    assert by_category["Продукты"] == (Decimal("60.00"), 1)  # только расходы
+    assert len(a.by_weekday) == 7
+    by_weekday = {w.weekday: (w.value, w.count) for w in a.by_weekday}
+    # 2026-01-10 — суббота, 2026-01-11 — воскресенье
+    assert by_weekday[6] == (Decimal("60.00"), 1)
+    assert by_weekday[7] == (Decimal("500.00"), 1)
+    assert by_weekday[1] == (Decimal("0"), 0)  # понедельник пуст
+    ind = a.indicators
+    assert ind.top_store is not None and ind.top_store.store == "Яндекс Такси"
+    assert ind.top_store.value == Decimal("500.00")
+    assert ind.top_category is not None and ind.top_category.tag_name == "Продукты"
+    assert ind.top_category.count == 1
+    assert ind.top_weekday is not None and ind.top_weekday.weekday == 7
+    assert ind.top_income_source is None  # доходов с магазином нет
+
+
+async def test_price_chart_substring(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Хлеб Бородинский",
+            amount=Decimal("45.00"),
+            price=Decimal("45.00"),
+            quantity=Decimal("1"),
+            seller_name="Пятёрочка",
+            datetime=datetime(2026, 1, 10, tzinfo=timezone.utc),
+        ),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Батон",
+            amount=Decimal("50.00"),
+            price=Decimal("50.00"),
+            seller_name="Магнит",
+            datetime=datetime(2026, 1, 12, tzinfo=timezone.utc),
+        ),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(  # не матчится: другой товар
+            name="Молоко",
+            amount=Decimal("80.00"),
+            price=Decimal("80.00"),
+            datetime=datetime(2026, 1, 13, tzinfo=timezone.utc),
+        ),
+    )
+    r = await service.price_chart(
+        user,
+        name="хлеб",
+        is_regex=False,
+        date_from=None,
+        date_to=None,
+    )
+    assert r.count == 1
+    assert r.points[0].day == "2026-01-10"
+    assert r.points[0].store == "Пятёрочка"
+    assert r.points[0].price == Decimal("45.00")
+    assert r.avg_price == Decimal("45.00")
+    assert r.median_price == Decimal("45.00")
+    assert r.stddev == Decimal("0.00")
+
+
+async def test_price_chart_regex(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    for name, price in [
+        ("Молоко 3,2%", "70.00"),
+        ("Молоко 2,5%", "60.00"),
+        ("Кефир", "55.00"),
+    ]:
+        await service.create_standalone(
+            user,
+            TransactionCreate(
+                name=name,
+                amount=Decimal(price),
+                price=Decimal(price),
+                quantity=Decimal("1"),
+                datetime=datetime(2026, 1, 10, tzinfo=timezone.utc),
+            ),
+        )
+    r = await service.price_chart(
+        user,
+        name=r"^Молоко",
+        is_regex=True,
+        date_from=None,
+        date_to=None,
+    )
+    assert r.count == 2
+    assert r.avg_price == Decimal("65.00")
+    assert r.median_price == Decimal("65.00")
+    assert r.stddev == Decimal("5.00")
+
+
+async def test_price_chart_invalid_regex(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    with pytest.raises(HTTPException) as exc:
+        await service.price_chart(
+            user,
+            name="[",
+            is_regex=True,
+            date_from=None,
+            date_to=None,
+        )
+    assert exc.value.status_code == 422  # HTTPStatus.UNPROCESSABLE_CONTENT
 
 
 async def test_stores_distinct(session):

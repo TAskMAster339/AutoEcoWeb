@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 from src.core.dependencies import CurrentUser, TransactionSvc
-from src.schemas.analytics import AnalyticsResponse
+from src.schemas.analytics import AnalyticsResponse, PriceChartResponse
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 
@@ -32,4 +32,23 @@ async def get_analytics(  # noqa: PLR0913
         tag_ids=tag_ids,
         search=search,
         seller_names=seller_names,
+    )
+
+
+@router.get("/price-chart", response_model=PriceChartResponse)
+async def get_price_chart(  # noqa: PLR0913
+    _current_user: CurrentUser,
+    transaction_service: TransactionSvc,
+    name: str = Query(min_length=1, max_length=255),  # noqa: B008
+    is_regex: bool = Query(False),  # noqa: B008
+    date_from: date | None = Query(None),  # noqa: B008
+    date_to: date | None = Query(None),  # noqa: B008
+) -> PriceChartResponse:
+    """График цен товара (подстрока или regex) — считает бэкенд."""
+    return await transaction_service.price_chart(
+        _current_user,
+        name=name,
+        is_regex=is_regex,
+        date_from=_day_bounds(date_from, end_of_day=False) if date_from else None,
+        date_to=_day_bounds(date_to, end_of_day=True) if date_to else None,
     )

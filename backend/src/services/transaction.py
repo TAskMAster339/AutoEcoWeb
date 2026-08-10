@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
+from statistics import mean, median, pstdev
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -18,6 +19,7 @@ from src.schemas.analytics import (
     AnalyticsResponse,
     AnalyticsWeekday,
     PriceChartResponse,
+    PricePoint,
 )
 from src.schemas.transaction import (
     StoreResponse,
@@ -38,6 +40,59 @@ _TRANSACTION_NON_NULLABLE = frozenset(
 )
 
 _SCOPE_PRODUCT = "product"
+
+
+def _least_squares_trend(values: list[Decimal]) -> list[Decimal | None]:
+    """Линейный тренд (МНК) по индексам; None, если точек < 2."""
+    n = len(values)
+    if n < 2:
+        return [None] * n
+    xs = list(range(n))
+    x_mean = (n - 1) / 2
+    y_mean = float(sum(values)) / n
+    num = sum((x - x_mean) * (float(v) - y_mean) for x, v in zip(xs, values))
+    den = sum((x - x_mean) ** 2 for x in xs)
+    slope = num / den if den else 0.0
+    intercept = y_mean - slope * x_mean
+    return [Decimal(round(slope * x + intercept, 2)) for x in xs]
+
+
+def _build_indicators(  # noqa: PLR0913
+    stores: list[tuple[str, Decimal]],
+    categories: list[tuple[UUID, str, str, Decimal, int]],
+    weekdays: list[tuple[int, Decimal, int]],
+    stores_income: list[tuple[str, Decimal]],
+) -> AnalyticsIndicators:
+    """Индикаторы: максимумы по сумме (магазины/доходы) и по count (категории/дни)."""
+    top_store = (
+        AnalyticsByStore(store=stores[0][0], value=stores[0][1]) if stores else None
+    )
+    top_category = None
+    if categories:
+        tag_id_, name, color, value, count_ = max(
+            categories, key=lambda c: (c[4], c[3])
+        )
+        top_category = AnalyticsByCategory(
+            tag_id=tag_id_, tag_name=name, tag_color=color,
+            value=value, count=count_,
+        )
+    top_weekday = None
+    if weekdays:
+        wd, value, count_ = max(weekdays, key=lambda w: (w[2], w[1]))
+        # Пустой период (все дни по 0) — индикатор не показываем
+        if count_ > 0:
+            top_weekday = AnalyticsWeekday(weekday=wd, value=value, count=count_)
+    top_income = (
+        AnalyticsByStore(store=stores_income[0][0], value=stores_income[0][1])
+        if stores_income
+        else None
+    )
+    return AnalyticsIndicators(
+        top_store=top_store,
+        top_category=top_category,
+        top_weekday=top_weekday,
+        top_income_source=top_income,
+    )
 
 
 class TransactionService:
@@ -325,7 +380,8 @@ class TransactionService:
         search: str | None,
         seller_names: list[str] | None,
     ) -> AnalyticsResponse:
-        """Аналитика за период: по дням, по магазинам, по тегам (SQL GROUP BY)."""
+        """Аналитика за период: по дням, магазинам (расходы/доходы),
+        категориям, дням недели + индикаторы (SQL GROUP BY + Python)."""
         daily = await self._tx_repo.daily_breakdown(
             user_id=user.id,
             date_from=date_from,
@@ -342,7 +398,7 @@ class TransactionService:
             search=search,
             seller_names=seller_names,
         )
-        tags = await self._tx_repo.by_tag(
+        stores_income = await self._tx_repo.by_store_income(
             user_id=user.id,
             date_from=date_from,
             date_to=date_to,
@@ -350,23 +406,124 @@ class TransactionService:
             search=search,
             seller_names=seller_names,
         )
+        categories = await self._tx_repo.by_category(
+            user_id=user.id,
+            date_from=date_from,
+            date_to=date_to,
+            tag_ids=tag_ids,
+            search=search,
+            seller_names=seller_names,
+        )
+        weekdays = await self._tx_repo.by_weekday(
+            user_id=user.id,
+            date_from=date_from,
+            date_to=date_to,
+            tag_ids=tag_ids,
+            search=search,
+            seller_names=seller_names,
+        )
+
+        trend = _least_squares_trend([e for _, e, _, _ in daily])
+        daily_rows = [
+            AnalyticsDaily(
+                day=day_,
+                expenses=expenses,
+                income=income,
+                count=count_,
+                trend=t,
+            )
+            for (day_, expenses, income, count_), t in zip(daily, trend)
+        ]
+
         return AnalyticsResponse(
-            daily=[
-                AnalyticsDaily(day=day, expenses=expenses, income=income)
-                for day, expenses, income in daily
-            ],
+            daily=daily_rows,
             by_store=[
-                AnalyticsByStore(store=store, value=value) for store, value in stores
+                AnalyticsByStore(store=store, value=value)
+                for store, value in stores
             ],
-            by_tag=[
-                AnalyticsByTag(
+            by_store_income=[
+                AnalyticsByStore(store=store, value=value)
+                for store, value in stores_income
+            ],
+            by_category=[
+                AnalyticsByCategory(
                     tag_id=tag_id_,
                     tag_name=name,
                     tag_color=color,
                     value=value,
+                    count=count_,
                 )
-                for tag_id_, name, color, value in tags
+                for tag_id_, name, color, value, count_ in categories
             ],
+            by_weekday=[
+                AnalyticsWeekday(weekday=wd, value=value, count=count_)
+                for wd, value, count_ in weekdays
+            ],
+            indicators=_build_indicators(stores, categories, weekdays, stores_income),
+        )
+
+    async def price_chart(
+        self,
+        user: User,
+        *,
+        name: str,
+        is_regex: bool,
+        date_from: datetime | None,
+        date_to: datetime | None,
+    ) -> PriceChartResponse:
+        """График цен товара: точки (день×магазин, средняя цена) и статистика.
+
+        Статистика (avg/median/stddev) считается по ВСЕМ индивидуальным
+        ценам покупок, попавших в матч; stddev — популяционное (pstdev).
+        """
+        if not name.strip():
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Укажите название товара",
+            )
+        rows = await self._tx_repo.price_points(
+            user_id=user.id,
+            name=name.strip(),
+            is_regex=is_regex,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        prices = [price for _, price, _, _ in rows]
+        if not prices:
+            return PriceChartResponse(
+                points=[],
+                stores=[],
+                avg_price=Decimal("0"),
+                median_price=Decimal("0"),
+                stddev=Decimal("0"),
+                count=0,
+            )
+
+        per_day: dict[tuple[str, str | None], list[Decimal]] = {}
+        store_order: list[str | None] = []
+        for day_, price, store, _name in rows:
+            key = (str(day_), store)
+            per_day.setdefault(key, []).append(price)
+            if store not in store_order:
+                store_order.append(store)
+
+        points = [
+            PricePoint(
+                day=day_,
+                price=Decimal(round(float(sum(v)) / len(v), 2)),
+                count=len(v),
+                store=store,
+            )
+            for (day_, store), v in sorted(per_day.items())
+        ]
+        f_prices = [float(p) for p in prices]
+        return PriceChartResponse(
+            points=points,
+            stores=store_order,
+            avg_price=Decimal(round(mean(f_prices), 2)),
+            median_price=Decimal(round(median(f_prices), 2)),
+            stddev=Decimal(round(pstdev(f_prices), 2)),
+            count=len(prices),
         )
 
     async def stores(self, user: User) -> list[StoreResponse]:
