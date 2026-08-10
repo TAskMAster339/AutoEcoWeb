@@ -19,6 +19,7 @@ from src.repositories.user import UserRepository
 from src.services.aliases import AliasService
 from src.services.import_export import ImportExportService
 from src.services.proverkacheka import ProverkachekaClient
+from src.services.sellers import SellerService
 from src.services.transaction import TransactionService
 
 DBSession = Annotated[AsyncSession, Depends(get_db)]
@@ -52,15 +53,26 @@ async def get_transaction_repo(session: DBSession) -> TransactionRepository:
 TransactionRepo = Annotated[TransactionRepository, Depends(get_transaction_repo)]
 
 
+async def get_seller_service(session: DBSession) -> SellerService:
+    from src.repositories.seller import SellerRepository
+
+    return SellerService(SellerRepository(session), AliasRepository(session))
+
+
+SellerSvc = Annotated[SellerService, Depends(get_seller_service)]
+
+
 async def get_transaction_service(
     session: DBSession,
     receipt_repo: ReceiptRepo,
+    seller_service: SellerSvc,
 ) -> TransactionService:
     return TransactionService(
         TransactionRepository(session),
         receipt_repo,
         TagRepository(session),
         AliasRepository(session),
+        seller_service,
     )
 
 
@@ -76,12 +88,14 @@ TagRepo = Annotated[TagRepository, Depends(get_tag_repo)]
 
 async def get_import_export_service(
     session: DBSession,
+    seller_service: SellerSvc,
 ) -> ImportExportService:
     return ImportExportService(
         session,
         TransactionRepository(session),
         TagRepository(session),
         AliasRepository(session),
+        seller_service,
     )
 
 
@@ -95,10 +109,14 @@ async def get_alias_repo(session: DBSession) -> AliasRepository:
 AliasRepo = Annotated[AliasRepository, Depends(get_alias_repo)]
 
 
-async def get_alias_service(session: DBSession) -> AliasService:
+async def get_alias_service(
+    session: DBSession,
+    seller_service: SellerSvc,
+) -> AliasService:
     """Алиасы + применение к существующим записям (чеки и транзакции)."""
     return AliasService(
         AliasRepository(session),
+        seller_service,
         TransactionRepository(session),
         ReceiptRepository(session),
     )

@@ -5,6 +5,7 @@ import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined'
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
 import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined'
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined'
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz'
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined'
@@ -62,6 +63,7 @@ export function BottomNav() {
 
   const moreItems = [
     { to: '/rules', label: 'Правила и алиасы', icon: LinkOutlinedIcon },
+    { to: '/sellers', label: 'Магазины', icon: StorefrontOutlinedIcon },
     { to: '/data', label: 'Данные', icon: StorageOutlinedIcon },
     { to: '/settings', label: 'Настройки', icon: SettingsOutlinedIcon },
     { to: '/about', label: 'О приложении', icon: InfoOutlinedIcon },

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from http import HTTPStatus
 
 import pytest
 from fastapi import HTTPException
@@ -83,7 +84,7 @@ async def test_decode_cursor_invalid():
     try:
         decode_cursor("!!!not-base64!!!")
     except HTTPException as exc:
-        assert exc.status_code == 422  # noqa: PLR2004, PT017
+        assert exc.status_code == HTTPStatus.UNPROCESSABLE_ENTITY  # noqa: F821, PT017
     else:
         raise AssertionError("ожидался 422")
 
@@ -133,7 +134,7 @@ async def test_update_proverkacheka_token_blank_rejected(repo):
     service = UserService(repo)
     with pytest.raises(HTTPException) as exc_info:
         await service.update_proverkacheka_token(user, "   ")
-    assert exc_info.value.status_code == 422  # noqa: PLR2004
+    assert exc_info.value.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     assert user.proverkacheka_token is None
 
 

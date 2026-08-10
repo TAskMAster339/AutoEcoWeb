@@ -7,9 +7,9 @@ from decimal import Decimal
 
 import openpyxl
 import pytest
-from src.models.tag import Tag
-from src.models.transaction import Transaction
 from src.models.user import User
+from src.repositories.alias import AliasRepository
+from src.repositories.seller import SellerRepository
 from src.repositories.tag import TagRepository
 from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
@@ -21,6 +21,7 @@ from src.services.import_export import (
     build_export_workbook,
     parse_import_file,
 )
+from src.services.sellers import SellerService
 
 HEADER = ["Дата", "Категория", "Магазин", "Описание", "Доход", "Расход"]
 
@@ -38,7 +39,9 @@ def _make_xlsx(rows: list[Sequence[object]], sheet: str = "Данные") -> byt
 
 
 def _make_csv(rows: list[list[object]], encoding: str = "utf-8") -> bytes:
-    lines = [";".join("" if cell is None else str(cell) for cell in row) for row in rows]
+    lines = [
+        ";".join("" if cell is None else str(cell) for cell in row) for row in rows
+    ]
     return "\n".join(lines).encode(encoding)
 
 
@@ -54,6 +57,8 @@ def _service(session) -> ImportExportService:
         session,
         TransactionRepository(session),
         TagRepository(session),
+        AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
     )
 
 
@@ -64,7 +69,14 @@ def test_parse_xlsx_basic():
     content = _make_xlsx(
         [
             HEADER,
-            [datetime.datetime(2025, 9, 21, 12, 0), "Еда", "Пятёрочка", "Молоко", None, 89.9],
+            [
+                datetime.datetime(2025, 9, 21, 12, 0),
+                "Еда",
+                "Пятёрочка",
+                "Молоко",
+                None,
+                89.9,
+            ],
             ["22.09.2025", "ЗП", "", "Аванс", "40000", None],
             ["23.09.2025", None, None, "Шаурма", None, "250,50"],
         ]
@@ -123,7 +135,13 @@ def test_parse_xlsx_row_errors():
 
 
 def test_parse_xlsx_blank_rows_skipped():
-    content = _make_xlsx([HEADER, [None, None, None, None, None, None], ["01.10.2025", "", "", "Кофе", None, 150]])
+    content = _make_xlsx(
+        [
+            HEADER,
+            [None, None, None, None, None, None],
+            ["01.10.2025", "", "", "Кофе", None, 150],
+        ]
+    )
     preview = parse_import_file("x.xlsx", content)
     assert preview.total == 1
 
@@ -189,8 +207,12 @@ def test_build_export_workbook_roundtrip():
 
 def test_build_export_workbook_sheets_by_month():
     rows = [
-        ExportRow(datetime.date(2025, 9, 5), None, None, "A", Decimal("0"), Decimal("1")),
-        ExportRow(datetime.date(2025, 10, 5), None, None, "B", Decimal("0"), Decimal("2")),
+        ExportRow(
+            datetime.date(2025, 9, 5), None, None, "A", Decimal("0"), Decimal("1")
+        ),
+        ExportRow(
+            datetime.date(2025, 10, 5), None, None, "B", Decimal("0"), Decimal("2")
+        ),
     ]
     content = build_export_workbook(rows)
     wb = openpyxl.load_workbook(io.BytesIO(content))
@@ -249,7 +271,7 @@ async def test_import_rows_creates_tags_and_maps_fields(session):
     assert tx.receipt_id is None
     assert tx.name == "Молоко"
     assert tx.normalized_name == "молоко"
-    assert tx.seller_name == "Пятёрочка"
+    assert tx.seller.name == "Пятёрочка"
     assert tx.amount == Decimal("89.90")
     assert tx.operation_type == 1  # расход
     assert tx.check_datetime.date() == datetime.date(2025, 9, 21)

@@ -2,12 +2,14 @@
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from http import HTTPStatus
 from uuid import uuid4
 
 from fastapi import HTTPException
 from src.models.transaction import Transaction
 from src.repositories.alias import AliasRepository
 from src.repositories.receipt import ReceiptRepository
+from src.repositories.seller import SellerRepository
 from src.repositories.tag import TagRepository
 from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
@@ -22,6 +24,7 @@ from src.schemas.tag import TagCreate, TagUpdate
 from src.schemas.transaction import TransactionManualIn
 from src.services.aliases import AliasService
 from src.services.receipts import ReceiptService
+from src.services.sellers import SellerService
 from src.services.tags import TagService
 from src.services.transaction import TransactionService
 from test_receipt_parser import QR, sample_payload
@@ -38,13 +41,20 @@ async def _make_user_with_token(repo: UserRepository, token: str = "user-token")
 
 def _service(session, *, proverkacheka=None):
     """ReceiptService: транзакции создаются через TransactionService."""
+    alias_repo = AliasRepository(session)
+    seller_service = SellerService(SellerRepository(session), alias_repo)
     tx_service = TransactionService(
         TransactionRepository(session),
         ReceiptRepository(session),
+        TagRepository(session),
+        alias_repo,
+        seller_service,
     )
     return ReceiptService(
         ReceiptRepository(session),
         tx_service,
+        alias_repo,
+        seller_service,
         proverkacheka=proverkacheka,
     )
 
@@ -62,7 +72,7 @@ async def test_receipt_create_normalizes(session):
 
     assert receipt.user_id == user.id
     assert receipt.qr == QR
-    assert receipt.seller_name == 'АКЦИОНЕРНОЕ ОБЩЕСТВО "ТОРГОВЫЙ ДОМ ПЕРЕКРЕСТОК"'
+    assert receipt.seller.name == 'АКЦИОНЕРНОЕ ОБЩЕСТВО "ТОРГОВЫЙ ДОМ ПЕРЕКРЕСТОК"'
     assert receipt.seller_inn == "7728029110"
     assert receipt.total_sum == Decimal("1522.95")
     assert receipt.receipt_number == "48"
@@ -103,7 +113,9 @@ async def test_receipt_create_dedupe_by_qr(session):
 async def test_receipt_create_applies_alias(session):
     user = await _make_user(UserRepository(session))
     alias_repo = AliasRepository(session)
-    await AliasService(alias_repo).create(
+    await AliasService(
+        alias_repo, SellerService(SellerRepository(session), alias_repo)
+    ).create(
         user,
         AliasCreate(original_name="перекресток", alias_name="Перекрёсток"),
     )
@@ -113,13 +125,17 @@ async def test_receipt_create_applies_alias(session):
             TransactionService(
                 TransactionRepository(session),
                 ReceiptRepository(session),
+                TagRepository(session),
+                alias_repo,
+                SellerService(SellerRepository(session), alias_repo),
             ),
             alias_repo,
+            SellerService(SellerRepository(session), alias_repo),
         ),
         user,
     )
-    assert receipt.seller_name == 'АКЦИОНЕРНОЕ ОБЩЕСТВО "ТОРГОВЫЙ ДОМ ПЕРЕКРЕСТОК"'
-    assert receipt.seller_name_alias_id is not None
+    assert receipt.seller.name == 'АКЦИОНЕРНОЕ ОБЩЕСТВО "ТОРГОВЫЙ ДОМ ПЕРЕКРЕСТОК"'
+    assert receipt.seller.seller_alias_id is not None
 
 
 async def test_receipt_list_cursor_paginates(session):
@@ -165,8 +181,7 @@ async def test_receipt_get_and_delete(session):
     service = _service(session)
     receipt = await _create_receipt(service, user)
     tx_ids = [
-        tx.id
-        for tx in await TransactionRepository(session).list_by_receipt(receipt.id)
+        tx.id for tx in await TransactionRepository(session).list_by_receipt(receipt.id)
     ]
 
     found = await service.get(user, receipt.id)
@@ -214,7 +229,12 @@ async def test_receipt_create_fetches_by_qr(session):
         TransactionService(
             TransactionRepository(session),
             ReceiptRepository(session),
+            TagRepository(session),
+            AliasRepository(session),
+            SellerService(SellerRepository(session), AliasRepository(session)),
         ),
+        AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
         proverkacheka=FakeClient(),  # type: ignore[arg-type]
     )
     receipt = await service.create(user, ReceiptCreate(qr=QR))
@@ -239,7 +259,12 @@ async def test_receipt_create_qr_without_user_token(session):
         TransactionService(
             TransactionRepository(session),
             ReceiptRepository(session),
+            TagRepository(session),
+            AliasRepository(session),
+            SellerService(SellerRepository(session), AliasRepository(session)),
         ),
+        AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
         proverkacheka=FakeClient(),  # type: ignore[arg-type]
     )
     try:
@@ -304,13 +329,16 @@ async def test_tag_crud_and_duplicate(session):
 
 async def test_alias_regex_validation(session):
     user = await _make_user(UserRepository(session))
-    service = AliasService(AliasRepository(session))
+    service = AliasService(
+        AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
+    )
     try:
         await service.create(
             user, AliasCreate(original_name="(unclosed", alias_name="X", is_regex=True)
         )
     except HTTPException as exc:
-        assert exc.status_code == 422  # noqa: PLR2004
+        assert exc.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     else:
         raise AssertionError("ожидался 422 на битую регулярку")
 
@@ -343,7 +371,10 @@ def test_alias_resolve_substring_and_priority():
 
 async def test_alias_duplicate_pair(session):
     user = await _make_user(UserRepository(session))
-    service = AliasService(AliasRepository(session))
+    service = AliasService(
+        AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
+    )
     await service.create(
         user, AliasCreate(original_name="перекресток", alias_name="Перекрёсток")
     )
@@ -370,7 +401,7 @@ async def test_receipt_update_patches_only_sent_fields(session):
         receipt.id,
         ReceiptUpdate(seller_name="ПЯТЁРОЧКА", total_sum=Decimal("10.00")),
     )
-    assert updated.seller_name == "ПЯТЁРОЧКА"
+    assert updated.seller.name == "ПЯТЁРОЧКА"
     assert updated.total_sum == Decimal("10.00")
     # не присланные поля не тронуты
     assert updated.qr == QR
@@ -380,7 +411,7 @@ async def test_receipt_update_patches_only_sent_fields(session):
 
     # пустой PATCH — no-op, чек не меняется
     again = await service.update(user, receipt.id, ReceiptUpdate())
-    assert again.seller_name == "ПЯТЁРОЧКА"
+    assert again.seller.name == "ПЯТЁРОЧКА"
     assert again.total_sum == Decimal("10.00")
 
 
@@ -461,7 +492,7 @@ async def test_receipt_manual_create_with_items(session):
     )
     assert receipt.qr is None
     assert receipt.raw_json == {}
-    assert receipt.seller_name == "Магазин у дома"
+    assert receipt.seller.name == "Магазин у дома"
     assert receipt.total_sum == Decimal("150.00")
     assert receipt.operation_type == 1  # noqa: PLR2004  (SALE по умолчанию)
 
@@ -483,6 +514,4 @@ async def test_receipt_manual_create_without_items(session):
         ReceiptManualCreate(seller_name="Киоск", total_sum=Decimal("10.00")),
     )
     assert receipt.qr is None
-    assert (
-        await TransactionRepository(session).list_by_receipt(receipt.id) == []
-    )
+    assert await TransactionRepository(session).list_by_receipt(receipt.id) == []

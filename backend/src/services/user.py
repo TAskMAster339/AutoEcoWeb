@@ -43,7 +43,7 @@ class UserService:
         token = token.strip()
         if not token:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Токен не может быть пустым",
             )
         return await self._repo.update(user, proverkacheka_token=token)

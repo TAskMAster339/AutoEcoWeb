@@ -6,6 +6,7 @@ from src.api.v1.analytics import router as analytics_router
 from src.api.v1.auth import router as auth_router
 from src.api.v1.import_export import router as import_export_router
 from src.api.v1.receipts import router as receipts_router
+from src.api.v1.sellers import router as sellers_router
 from src.api.v1.tags import router as tags_router
 from src.api.v1.transactions import router as transactions_router
 from src.core.config import settings
@@ -24,6 +25,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(receipts_router)
+app.include_router(sellers_router)
 app.include_router(transactions_router)
 app.include_router(analytics_router)
 app.include_router(tags_router)

@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react'
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -13,20 +14,23 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Typography,
+  IconButton,
+  Tooltip,
   useMediaQuery,
 } from '@mui/material'
 import { alpha, useTheme } from '@mui/material/styles'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import AddLinkOutlinedIcon from '@mui/icons-material/AddLinkOutlined'
 import { NumericField } from '../common/NumericField'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { useTags } from '../../hooks/useTags'
-import { useDeleteTransaction, useUpdateTransaction } from '../../hooks/useTransactions'
+import { useDeleteTransaction, useStores, useUpdateTransaction } from '../../hooks/useTransactions'
 import { messageFromError } from '../../api/client'
 import { todayIso } from '../../lib/format'
 import { parseNum } from '../../lib/numbers'
 import { colors } from '../../theme'
-import type { TransactionUpdatePatch, TransactionView } from '../../api/types'
-import { AliasShortcut, CreateAliasDialog } from '../common/CreateAliasDialog'
+import type { Store, TransactionUpdatePatch, TransactionView } from '../../api/types'
+import { CreateAliasDialog } from '../common/CreateAliasDialog'
 
 interface EditTransactionDialogProps {
   /** Транзакция для редактирования; null — диалог закрыт. */
@@ -45,6 +49,7 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
   const titleId = useId()
 
   const { data: tags } = useTags()
+  const { data: stores } = useStores()
   const updateTx = useUpdateTransaction()
   const deleteTx = useDeleteTransaction()
 
@@ -52,10 +57,13 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
   const [date, setDate] = useState(todayIso())
   const [name, setName] = useState('')
   const [store, setStore] = useState('')
+  const [selectedStore, setSelectedStore] = useState<Store | null>(null)
+  const [storeEdited, setStoreEdited] = useState(false)
   const [comment, setComment] = useState('')
   const [price, setPrice] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
+  const [tagSearch, setTagSearch] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [aliasScope, setAliasScope] = useState<'seller' | 'product' | null>(null)
@@ -69,14 +77,21 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
     setType(tx.income !== null && tx.income !== undefined ? 'income' : 'expense')
     setDate(tx.date || todayIso())
     setName(tx.name)
-    setStore(tx.store ?? '')
+    const matchingStore = (stores ?? []).find((candidate) => {
+      const label = candidate.alias_name || candidate.normalized_seller_name || candidate.seller_name
+      return candidate.seller_id === tx.sellerId || (tx.sellerId === null && label === tx.store)
+    }) ?? null
+    setSelectedStore(matchingStore)
+    setStore(matchingStore ? (matchingStore.alias_name || matchingStore.normalized_seller_name || matchingStore.seller_name) : tx.store ?? '')
+    setStoreEdited(false)
     setComment(tx.comment ?? '')
     setPrice(tx.price !== null && tx.price !== undefined ? String(tx.price) : amount !== null ? String(amount) : '')
     setQuantity(tx.quantity !== null && tx.quantity !== undefined ? String(tx.quantity) : '1')
     setSelectedTag(tx.tagId)
+    setTagSearch('')
     setFormError(null)
     setConfirmOpen(false)
-  }, [tx])
+  }, [stores, tx])
 
   // Блокируем скролл приложения (скроллится только <main>)
   useEffect(() => {
@@ -118,10 +133,11 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
 
     const patch: TransactionUpdatePatch = {}
     const newName = name.trim()
-    const newStore = store.trim() || null
+    const newStore = selectedStore ? selectedStore.seller_name : store.trim() || null
     const newType = type === 'income' ? 2 : 1
     if (newName !== tx.name) patch.name = newName
-    if (newStore !== tx.store) patch.seller_name = newStore
+    const currentStore = tx.sellerNameSource ?? null
+    if (storeEdited && newStore !== currentStore) patch.seller_name = newStore
     if (newType !== (tx.income !== null && tx.income !== undefined ? 2 : 1)) patch.operation_type = newType
     const newDate = `${date}T12:00:00Z`
     const oldDate = `${tx.date}T12:00:00Z`
@@ -233,45 +249,112 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
               </ToggleButton>
             </ToggleButtonGroup>
 
-            <TextField
-              label="Название"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              fullWidth
-              required
-              autoFocus
-              placeholder="Например: Кофе, проезд, зарплата"
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <AliasShortcut
-                      scope="product"
-                      originalName={name}
-                      onClick={() => setAliasScope('product')}
-                    />
-                  ),
-                },
-              }}
-            />
+            <Stack direction="row" spacing={1} alignItems="flex-start">
+              <TextField
+                label="Название"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                fullWidth
+                required
+                autoFocus
+                placeholder="Например: Кофе, проезд, зарплата"
+                helperText={tx.nameAliasName ? `Алиас: оригинал «${tx.nameSource}»` : ' '}
+              />
+              <Tooltip title="Создать алиас названия">
+                <span>
+                  <IconButton
+                    aria-label="Создать алиас названия"
+                    color="primary"
+                    onClick={() => setAliasScope('product')}
+                    disabled={!name.trim()}
+                    sx={{ width: 56, height: 56, mt: 0, borderRadius: '6px', border: `1px solid ${theme.palette.divider}`, flexShrink: 0 }}
+                  >
+                    <AddLinkOutlinedIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Stack>
 
-            <TextField
-              label="Магазин (необязательно)"
-              value={store}
-              onChange={(e) => setStore(e.target.value)}
-              fullWidth
-              placeholder="Например: Пятёрочка, Дикси, Метро"
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <AliasShortcut
-                      scope="seller"
-                      originalName={store}
-                      onClick={() => setAliasScope('seller')}
-                    />
-                  ),
-                },
-              }}
-            />
+            <Stack direction="row" spacing={1} alignItems="flex-start">
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Autocomplete
+                freeSolo
+                options={stores ?? []}
+                value={selectedStore}
+                inputValue={store}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    // Let Autocomplete select the highlighted option; the
+                    // dialog must not treat this as a form submission.
+                    event.stopPropagation()
+                  }
+                }}
+                onChange={(_, value) => {
+                  if (typeof value === 'string') {
+                    setSelectedStore(null)
+                    setStore(value)
+                    setStoreEdited(true)
+                  } else {
+                    setSelectedStore(value)
+                    setStore(value ? value.alias_name || value.normalized_seller_name || value.seller_name : '')
+                    setStoreEdited(true)
+                  }
+                }}
+                onInputChange={(_, value, reason) => {
+                  if (reason === 'input') {
+                    setSelectedStore(null)
+                    setStore(value)
+                    setStoreEdited(true)
+                  }
+                }}
+                getOptionLabel={(option) => typeof option === 'string' ? option : option.alias_name || option.normalized_seller_name || option.seller_name}
+                isOptionEqualToValue={(option, value) => option.seller_id === value.seller_id}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.seller_id}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <span>{option.alias_name || option.normalized_seller_name || option.seller_name}</span>
+                      {option.alias_name && <Chip label="алиас" size="small" color="primary" />}
+                    </Stack>
+                  </li>
+                )}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Магазин (необязательно)"
+                    placeholder="Выберите или введите новый"
+                    helperText={selectedStore?.alias_name ? `Алиас: оригинал «${selectedStore.seller_name}»` : 'Можно выбрать существующий или ввести новый'}
+                    slotProps={{
+                      input: {
+                        ...params.InputProps,
+                        endAdornment: (
+                          <>
+                            {selectedStore?.alias_name && <Chip label="алиас" size="small" color="primary" sx={{ mr: 0.5 }} />}
+                            {params.InputProps.endAdornment}
+                          </>
+                        ),
+                      },
+                    }}
+                  />
+                )}
+              />
+              <Typography variant="caption" color="text.secondary">
+                «Без магазина» — очистите поле. Новое имя создаст отдельный магазин.
+              </Typography>
+              </Box>
+              <Tooltip title="Создать алиас магазина">
+                <span>
+                  <IconButton
+                    aria-label="Создать алиас магазина"
+                    color="primary"
+                    onClick={() => setAliasScope('seller')}
+                    disabled={!store.trim()}
+                    sx={{ width: 56, height: 56, mt: 0, borderRadius: '6px', border: `1px solid ${theme.palette.divider}`, flexShrink: 0 }}
+                  >
+                    <AddLinkOutlinedIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Stack>
 
             <TextField
               label="Комментарий (необязательно)"
@@ -324,17 +407,43 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
                 Тег
               </Typography>
-              <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-                {(tags ?? []).map((t) => (
-                  <Chip
-                    key={t.id}
-                    label={t.name}
-                    clickable
-                    color={selectedTag === t.id ? 'primary' : 'default'}
-                    variant={selectedTag === t.id ? 'filled' : 'outlined'}
-                    onClick={() => setSelectedTag((prev) => (prev === t.id ? null : t.id))}
-                  />
-                ))}
+              <TextField
+                value={tagSearch}
+                onChange={(event) => setTagSearch(event.target.value)}
+                placeholder="Найти тег по названию"
+                size="small"
+                fullWidth
+                sx={{ mb: 1 }}
+                inputProps={{ 'aria-label': 'Поиск тега по названию' }}
+              />
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                {tagSearch.trim() ? 'Результаты поиска' : 'Недавние теги'}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', minHeight: 34 }}>
+                {(tags ?? [])
+                  .filter((tag) => !tagSearch.trim() || tag.name.toLocaleLowerCase().includes(tagSearch.trim().toLocaleLowerCase()))
+                  .slice(0, tagSearch.trim() ? undefined : 8)
+                  .map((tag) => (
+                    <Chip
+                      key={tag.id}
+                      label={tag.name}
+                      clickable
+                      onClick={() => setSelectedTag((prev) => (prev === tag.id ? null : tag.id))}
+                      sx={{
+                        bgcolor: `${tag.color}1A`,
+                        color: theme.palette.text.primary,
+                        border: `1px solid ${tag.color}66`,
+                        borderRadius: '6px',
+                        '&:hover': { bgcolor: `${tag.color}33` },
+                        ...(selectedTag === tag.id && {
+                          bgcolor: `${tag.color}40`,
+                          borderColor: tag.color,
+                          boxShadow: `0 0 0 1px ${tag.color}`,
+                        }),
+                        '& .MuiChip-label': { px: 1.25 },
+                      }}
+                    />
+                  ))}
               </Box>
             </Box>
           </Stack>

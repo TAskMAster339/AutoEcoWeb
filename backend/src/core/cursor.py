@@ -32,6 +32,6 @@ def decode_cursor(cursor: str) -> tuple[datetime, UUID]:
         return created_at, UUID(user_id_str)
     except (binascii.Error, ValueError, UnicodeDecodeError):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Некорректный cursor",
         ) from None

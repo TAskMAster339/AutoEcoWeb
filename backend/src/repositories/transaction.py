@@ -3,20 +3,12 @@ from decimal import Decimal
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import (
-    Table,
-    bindparam,
-    case,
-    func,
-    nulls_last,
-    or_,
-    select,
-    update,
-)
+from sqlalchemy import Table, bindparam, case, func, nulls_last, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
-from src.models.alias import Alias
 from src.models.receipt import Receipt
+from src.models.seller import Seller
 from src.models.tag import Tag
 from src.models.transaction import Transaction
 
@@ -27,12 +19,23 @@ _EXPENSE_TYPES = (1, 4)
 
 # sort_by (colId из AG Grid) → SQL-выражение. Только whitelist: пользовательский
 # ввод в ORDER BY не попадает никогда.
+OwnSeller = aliased(Seller, name="own_seller")
+ReceiptSeller = aliased(Seller, name="receipt_seller")
+
+
+def _store_expr(own_seller=OwnSeller, receipt_seller=ReceiptSeller):
+    """Effective store display value for the transaction.
+
+    Keep the aliases injectable: aggregate queries and tests may use different
+    seller aliases, and the filter expression must reference the same joins as
+    the statement containing it.
+    """
+    return func.coalesce(own_seller.normalized_name, receipt_seller.normalized_name)
+
+
 _SORTABLE = {
     "date": Transaction.check_datetime,
-    "store": func.coalesce(
-        Transaction.normalized_seller_name,
-        Receipt.normalized_seller_name,
-    ),
+    "store": _store_expr(),
     "name": Transaction.name,
     "quantity": Transaction.quantity,
     "price": Transaction.price,
@@ -53,13 +56,15 @@ _NULLS_LAST = frozenset(
 )
 
 
-def _filters(
+def _filters(  # noqa: PLR0913
     *,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     tag_ids: list[UUID] | None = None,
     search: str | None = None,
     seller_names: list[str] | None = None,
+    own_seller=OwnSeller,
+    receipt_seller=ReceiptSeller,
 ) -> list[ColumnElement[bool]]:
     """Общие WHERE-условия списка и агрегатов (требуют left join receipts).
 
@@ -77,10 +82,7 @@ def _filters(
         conditions.append(Transaction.tag_id.in_(tag_ids))  # type: ignore[arg-type]
     if seller_names:
         conditions.append(
-            func.coalesce(
-                Transaction.normalized_seller_name,
-                Receipt.normalized_seller_name,
-            ).in_(seller_names),
+            _store_expr(own_seller, receipt_seller).in_(seller_names),
         )  # type: ignore[arg-type]
     if search:
         q = f"%{search}%"
@@ -88,10 +90,7 @@ def _filters(
             or_(
                 Transaction.name.ilike(q),
                 Transaction.comment.ilike(q),
-                func.coalesce(
-                    Transaction.normalized_seller_name,
-                    Receipt.normalized_seller_name,
-                ).ilike(q),
+                _store_expr(own_seller, receipt_seller).ilike(q),
             ),  # type: ignore[arg-type]
         )
     return conditions
@@ -145,8 +144,13 @@ class TransactionRepository:
     ) -> list[tuple[Transaction, str | None]]:
         """Все транзакции пользователя + seller_name из чека (для экспорта)."""  # noqa: RUF002
         stmt = (
-            select(Transaction, Receipt.normalized_seller_name)
+            select(
+                Transaction,
+                func.coalesce(OwnSeller.normalized_name, ReceiptSeller.normalized_name),
+            )
             .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+            .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
             .where(Transaction.user_id == user_id)
             .order_by(Transaction.check_datetime.asc(), Transaction.id.asc())
         )
@@ -187,7 +191,7 @@ class TransactionRepository:
         sort_by: str = "date",
         sort_dir: str = "desc",
     ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int]:
-        """Страница транзакций (offset) + seller_name из чека + нарастающий баланс.
+        """Страница транзакций (offset) + эффективный продавец + баланс.
 
         Баланс — оконная функция по ВСЕМ транзакциям пользователя; фильтры,
         сортировка и пагинация применяются снаружи. offset-пагинация нужна
@@ -231,8 +235,14 @@ class TransactionRepository:
             order_expr = nulls_last(order_expr)
 
         stmt = (
-            select(Transaction, Receipt.normalized_seller_name, balance_subq.c.balance)
+            select(
+                Transaction,
+                func.coalesce(OwnSeller.normalized_name, ReceiptSeller.normalized_name),
+                balance_subq.c.balance,
+            )
             .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+            .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
             .outerjoin(balance_subq, balance_subq.c.tx_id == Transaction.id)
             .where(*conditions)
             .order_by(order_expr, Transaction.id.desc())
@@ -244,6 +254,8 @@ class TransactionRepository:
         count_stmt = (
             select(func.count(Transaction.id))
             .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+            .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
             .where(*conditions)
         )
         total = int((await self._session.execute(count_stmt)).scalar_one())
@@ -280,6 +292,8 @@ class TransactionRepository:
                 func.count(Transaction.id),
             )
             .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+            .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
             .where(
                 Transaction.user_id == user_id,
                 *_filters(
@@ -345,6 +359,8 @@ class TransactionRepository:
                 ),
             )
             .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+            .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
             .where(
                 Transaction.user_id == user_id,
                 *_filters(
@@ -390,6 +406,8 @@ class TransactionRepository:
                 ),
             )
             .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+            .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
             .where(
                 Transaction.user_id == user_id,
                 *_filters(
@@ -417,10 +435,7 @@ class TransactionRepository:
         seller_names: list[str] | None = None,
     ) -> list[tuple[str, Decimal]]:
         """Магазин -> расходы, по убыванию."""
-        store = func.coalesce(
-            Transaction.normalized_seller_name,
-            Receipt.normalized_seller_name,
-        )
+        store = _store_expr()
         stmt = (
             select(
                 store,
@@ -432,6 +447,8 @@ class TransactionRepository:
                 ),
             )
             .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+            .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
             .where(
                 Transaction.user_id == user_id,
                 store.is_not(None),
@@ -475,6 +492,9 @@ class TransactionRepository:
                 func.coalesce(func.sum(Transaction.amount), 0),
             )
             .join(Tag, Tag.id == Transaction.tag_id)
+            .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+            .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
             .where(
                 Transaction.user_id == user_id,
                 Transaction.tag_id.is_not(None),
@@ -495,39 +515,14 @@ class TransactionRepository:
             for tag_id_, name, color, v in rows
         ]
 
-    async def distinct_sellers(
-        self,
-        user_id: UUID,
-    ) -> list[tuple[str, str | None, UUID | None, str | None, str]]:
-        """Уникальные магазины по эффективному display/filter значению."""
-        filter_value = func.coalesce(
-            Transaction.normalized_seller_name,
-            Receipt.normalized_seller_name,
+    async def count_by_seller_ids(self, user_id: UUID, seller_ids: list[UUID]) -> int:
+        if not seller_ids:
+            return 0
+        stmt = select(func.count(Transaction.id)).where(
+            Transaction.user_id == user_id,
+            Transaction.seller_id.in_(seller_ids),
         )
-        raw_value = func.coalesce(Transaction.seller_name, Receipt.seller_name)
-        alias_id = func.coalesce(
-            Transaction.seller_name_alias_id,
-            Receipt.seller_name_alias_id,
-        )
-        stmt = (
-            select(raw_value, filter_value, alias_id, Alias.alias_name)
-            .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
-            .outerjoin(Alias, Alias.id == alias_id)
-            .where(Transaction.user_id == user_id, filter_value.is_not(None))
-            .distinct()
-            .order_by(filter_value)
-        )
-        rows = (await self._session.execute(stmt)).all()
-        return [
-            (
-                str(raw),
-                str(normalized) if normalized is not None else None,
-                aid,
-                alias_name,
-                str(normalized),
-            )
-            for raw, normalized, aid, alias_name in rows
-        ]
+        return int((await self._session.execute(stmt)).scalar_one())
 
     async def update(self, tx: Transaction, **fields: object) -> Transaction:
         for field, value in fields.items():
@@ -549,19 +544,6 @@ class TransactionRepository:
             Transaction.user_id == user_id,
         )
         return [(row[0], row[1]) for row in (await self._session.execute(stmt)).all()]
-
-    async def list_seller_columns(self, user_id: UUID) -> list[tuple[UUID, str]]:
-        """(id, исходное seller_name) ручных транзакций с магазином — для применения
-        алиасов продавцов (у транзакций из чеков магазин живёт на чеке)."""  # noqa: RUF002
-        stmt = select(Transaction.id, Transaction.seller_name).where(
-            Transaction.user_id == user_id,
-            Transaction.seller_name.is_not(None),
-        )
-        return [
-            (row[0], row[1])
-            for row in (await self._session.execute(stmt)).all()
-            if row[1] is not None
-        ]
 
     async def bulk_update_names(
         self,
@@ -589,32 +571,6 @@ class TransactionRepository:
             [
                 {"tx_id": tx_id, "new_normalized": normalized, "new_alias_id": alias_id}
                 for tx_id, _name, normalized, alias_id in changes
-            ],
-        )
-        await self._session.commit()
-
-    async def bulk_update_sellers(
-        self,
-        changes: list[tuple[UUID, str, UUID | None]],
-    ) -> None:
-        """Bulk-обновление normalized_seller_name."""
-        if not changes:
-            return
-        # Core-таблица: executemany без ORM-синхронизации сессии
-        table = cast(Table, Transaction.__table__)
-        stmt = (
-            update(table)
-            .where(table.c.id == bindparam("tx_id"))
-            .values(
-                normalized_seller_name=bindparam("new_seller"),
-                seller_name_alias_id=bindparam("new_alias_id"),
-            )
-        )
-        await self._session.execute(
-            stmt,
-            [
-                {"tx_id": tx_id, "new_seller": seller, "new_alias_id": alias_id}
-                for tx_id, seller, alias_id in changes
             ],
         )
         await self._session.commit()

@@ -1,5 +1,11 @@
+from __future__ import annotations
+
 import re
+from typing import TYPE_CHECKING
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from src.services.sellers import SellerService
 
 from fastapi import HTTPException, status
 from src.models.alias import Alias
@@ -27,12 +33,14 @@ class AliasService:
     def __init__(
         self,
         repo: AliasRepository,
+        seller_service: SellerService,
         tx_repo: TransactionRepository | None = None,
         receipt_repo: ReceiptRepository | None = None,
     ) -> None:
         self._repo = repo
         self._tx_repo = tx_repo
         self._receipt_repo = receipt_repo
+        self._seller_service = seller_service
 
     async def list_all(self, user: User) -> list[Alias]:
         return await self._repo.list_all(user.id)
@@ -61,7 +69,7 @@ class AliasService:
                 re.compile(original)
             except re.error as exc:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Некорректное регулярное выражение",
                 ) from exc
         duplicate = await self._repo.get_duplicate(
@@ -102,7 +110,7 @@ class AliasService:
                 re.compile(changes.get("original_name", alias.original_name))
             except re.error as exc:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Некорректное регулярное выражение",
                 ) from exc
         duplicate = await self._repo.get_duplicate(
@@ -145,35 +153,8 @@ class AliasService:
                     for resolved in [AliasService.resolve_with_alias(remaining, name)]
                 ],
             )
-        elif (
-            alias.scope == _SCOPE_SELLER
-            and self._tx_repo is not None
-            and self._receipt_repo is not None
-        ):
-            receipt_rows = await self._receipt_repo.list_seller_columns(user.id)
-            await self._receipt_repo.bulk_update_sellers(
-                [
-                    (
-                        receipt_id,
-                        resolved.value,
-                        resolved.alias.id if resolved.alias else None,
-                    )
-                    for receipt_id, seller in receipt_rows
-                    for resolved in [AliasService.resolve_with_alias(remaining, seller)]
-                ],
-            )
-            tx_rows = await self._tx_repo.list_seller_columns(user.id)
-            await self._tx_repo.bulk_update_sellers(
-                [
-                    (
-                        tx_id,
-                        resolved.value,
-                        resolved.alias.id if resolved.alias else None,
-                    )
-                    for tx_id, seller in tx_rows
-                    for resolved in [AliasService.resolve_with_alias(remaining, seller)]
-                ],
-            )
+        elif alias.scope == _SCOPE_SELLER and self._seller_service is not None:
+            await self._seller_service.reapply(user.id, rebuild_empty=True)
 
     async def _get_or_404(self, user_id: UUID, alias_id: UUID) -> Alias:
         alias = await self._repo.get(user_id, alias_id)
@@ -236,29 +217,15 @@ class AliasService:
         if self._tx_repo is None or self._receipt_repo is None:
             return AliasApplyResult()
 
-        if not aliases and rebuild_empty:
-            if scope == _SCOPE_PRODUCT:
-                rows = await self._tx_repo.list_name_columns(user_id)
-                await self._tx_repo.bulk_update_names(
-                    [
-                        (tx_id, name, normalize_product_name(name), None)
-                        for tx_id, name in rows
-                    ],
-                )
-                return AliasApplyResult(product_updated=len(rows))
-            receipt_rows = await self._receipt_repo.list_seller_columns(user_id)
-            await self._receipt_repo.bulk_update_sellers(
-                [(receipt_id, seller, None) for receipt_id, seller in receipt_rows],
+        if not aliases and rebuild_empty and scope == _SCOPE_PRODUCT:
+            rows = await self._tx_repo.list_name_columns(user_id)
+            await self._tx_repo.bulk_update_names(
+                [
+                    (tx_id, name, normalize_product_name(name), None)
+                    for tx_id, name in rows
+                ],
             )
-            tx_rows = await self._tx_repo.list_seller_columns(user_id)
-            await self._tx_repo.bulk_update_sellers(
-                [(tx_id, seller, None) for tx_id, seller in tx_rows],
-            )
-            return AliasApplyResult(
-                seller_updated_receipts=len(receipt_rows),
-                seller_updated_transactions=len(tx_rows),
-            )
-
+            return AliasApplyResult(product_updated=len(rows))
         if scope == _SCOPE_PRODUCT:
             rows = await self._tx_repo.list_name_columns(user_id)
             changes = [
@@ -276,25 +243,23 @@ class AliasService:
             return AliasApplyResult(product_updated=len(changes))
 
         result = AliasApplyResult()
-        receipt_rows = await self._receipt_repo.list_seller_columns(user_id)
-        receipt_changes = [
-            (receipt_id, resolved.value, resolved.alias.id if resolved.alias else None)
-            for receipt_id, seller in receipt_rows
-            for resolved in [AliasService.resolve_with_alias(aliases, seller)]
-            if resolved.value != seller or resolved.alias is not None
-        ]
-        await self._receipt_repo.bulk_update_sellers(receipt_changes)
-        result.seller_updated_receipts = len(receipt_changes)
-
-        tx_rows = await self._tx_repo.list_seller_columns(user_id)
-        tx_changes = [
-            (tx_id, resolved.value, resolved.alias.id if resolved.alias else None)
-            for tx_id, seller in tx_rows
-            for resolved in [AliasService.resolve_with_alias(aliases, seller)]
-            if resolved.value != seller or resolved.alias is not None
-        ]
-        await self._tx_repo.bulk_update_sellers(tx_changes)
-        result.seller_updated_transactions = len(tx_changes)
+        if scope == _SCOPE_SELLER and self._seller_service is not None:
+            changed_ids = await self._seller_service.reapply(
+                user_id,
+                rebuild_empty=rebuild_empty,
+            )
+            if changed_ids:
+                result.seller_updated_receipts = (
+                    await self._receipt_repo.count_by_seller_ids(user_id, changed_ids)
+                    if self._receipt_repo is not None
+                    else 0
+                )
+                result.seller_updated_transactions = (
+                    await self._tx_repo.count_by_seller_ids(user_id, changed_ids)
+                    if self._tx_repo is not None
+                    else 0
+                )
+            return result
         return result
 
     async def apply_all(self, user_id: UUID, scope: str | None) -> AliasApplyResult:

@@ -18,8 +18,8 @@ def _now_utc() -> dt:
 class TransactionOut(BaseModel):
     """Транзакция: сохранённая (из БД) или превью (id/tag_id = None).
 
-    seller_name: собственное поле ручной транзакции; для транзакций
-    из чеков поле пустое и продавец подтягивается из чека (left join).
+    seller_name: effective API value; standalone transactions use their own
+    Seller relation, while receipt transactions inherit the receipt seller.
     balance: нарастающий итог (оконная функция по всем транзакциям
     пользователя); заполняется списком транзакций, в чеках — None.
     """
@@ -38,6 +38,7 @@ class TransactionOut(BaseModel):
     operation_type: int = 1
     datetime: dt
     tag_id: UUID | None = None
+    seller_id: UUID | None = None
     seller_name: str | None = None
     normalized_seller_name: str | None = None
     seller_name_alias_id: UUID | None = None
@@ -74,6 +75,14 @@ class TransactionOut(BaseModel):
         """seller_name: переданный (из чека) используется как fallback,
         если у самой транзакции своего магазина нет. balance — нарастающий
         итог из оконной функции (только в списке транзакций)."""  # noqa: RUF002
+        own = tx.seller
+        display = own.normalized_name if own is not None else seller_name
+        own_alias_id = own.seller_alias_id if own is not None else seller_alias_id
+        own_alias_name = (
+            own.seller_alias.alias_name
+            if own is not None and own.seller_alias is not None
+            else seller_alias_name
+        )
         return cls(
             id=tx.id,
             receipt_id=tx.receipt_id,
@@ -91,16 +100,11 @@ class TransactionOut(BaseModel):
             operation_type=tx.operation_type,
             datetime=tx.check_datetime,
             tag_id=tx.tag_id,
-            # Prefer the transaction's own seller over the receipt seller.
-            # normalized_seller_name is the alias-resolved display value.
-            seller_name=(tx.normalized_seller_name or tx.seller_name or seller_name),
-            normalized_seller_name=tx.normalized_seller_name or seller_name,
-            seller_name_alias_id=tx.seller_name_alias_id or seller_alias_id,
-            seller_name_alias_name=(
-                tx.seller_name_alias.alias_name
-                if tx.seller_name_alias is not None
-                else seller_alias_name
-            ),
+            seller_id=own.id if own is not None else None,
+            seller_name=display,
+            normalized_seller_name=display,
+            seller_name_alias_id=own_alias_id,
+            seller_name_alias_name=own_alias_name,
             comment=tx.comment,
             balance=balance,
             created_at=tx.created_at,

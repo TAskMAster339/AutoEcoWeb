@@ -57,7 +57,8 @@ export interface Transaction {
   /** ISO datetime (UTC) */
   datetime: string
   tag_id: string | null
-  /** Продавец из чека (left join); None для ручных транзакций */
+  seller_id: string | null
+  /** Effective seller value; standalone uses its own seller, receipt rows inherit the receipt seller. */
   seller_name: string | null
   normalized_seller_name: string | null
   seller_name_alias_id: string | null
@@ -72,11 +73,17 @@ export interface Transaction {
 
 /** POST /api/v1/transactions — ручная транзакция без чека (mirrors TransactionCreate). */
 export interface Store {
+  seller_id: string
   seller_name: string
   normalized_seller_name: string | null
   alias_id: string | null
   alias_name: string | null
   filter_value: string
+}
+
+export interface ManagedStore extends Store {
+  transaction_count: number
+  receipt_count: number
 }
 
 export interface TransactionDraft {
@@ -220,12 +227,17 @@ export interface TransactionView {
   id: string
   /** ISO date (YYYY-MM-DD) */
   date: string
-  /** Магазин (из чека) */
+  /** Effective display name of the seller. */
   store: string | null
+  sellerId: string | null
+  sellerNameSource: string | null
+  sellerAliasName: string | null
   /** tag id */
   tagId: string | null
   /** Название */
   name: string
+  nameSource: string
+  nameAliasName: string | null
   /** Необязательный комментарий пользователя */
   comment: string | null
   /** Кол-во */

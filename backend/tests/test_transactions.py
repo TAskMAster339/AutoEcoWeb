@@ -2,15 +2,17 @@
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from uuid import uuid4
+from http import HTTPStatus
+
 
 import pytest
 from fastapi import HTTPException
 from src.models.receipt import Receipt
-from src.models.tag import Tag
-from src.models.transaction import Transaction
+
 from src.models.user import User
 from src.repositories.receipt import ReceiptRepository
+from src.repositories.alias import AliasRepository
+from src.repositories.seller import SellerRepository
 from src.repositories.tag import TagRepository
 from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
@@ -25,6 +27,7 @@ from src.schemas.transaction import (
 from src.services.receipt_parser import ReceiptItemData
 from src.services.tags import TagService
 from src.services.transaction import TransactionService
+from src.services.sellers import SellerService
 
 
 async def _make_user(session) -> User:
@@ -35,12 +38,15 @@ async def _make_user(session) -> User:
 
 
 async def _make_receipt(session, user: User) -> Receipt:
+    seller = await SellerService(
+        SellerRepository(session), AliasRepository(session)
+    ).get_or_create(user.id, "ПЕРЕКРЕСТОК")
     return await ReceiptRepository(session).create(
         user_id=user.id,
         qr="t=20260215T1902&s=100.00&fn=9288000100123456&i=20448&fp=1234567890&n=1",
         receipt_number="48",
         operation_type=1,
-        seller_name="ПЕРЕКРЕСТОК",
+        seller_id=seller.id,
         seller_inn="7728029110",
         check_datetime=datetime(2026, 2, 15, 19, 2, tzinfo=timezone.utc),
         total_sum=Decimal("100.00"),
@@ -51,10 +57,13 @@ async def _make_receipt(session, user: User) -> Receipt:
 
 
 def _tx_service(session) -> TransactionService:
+    alias_repo = AliasRepository(session)
     return TransactionService(
         TransactionRepository(session),
         ReceiptRepository(session),
         TagRepository(session),
+        alias_repo,
+        SellerService(SellerRepository(session), alias_repo),
     )
 
 
@@ -116,7 +125,9 @@ async def test_create_manual_for_receipt(session):
     txs = await service.create_manual_for_receipt(
         receipt,
         [
-            TransactionManualIn(name="Молоко", price=Decimal("60"), quantity=Decimal("2")),
+            TransactionManualIn(
+                name="Молоко", price=Decimal("60"), quantity=Decimal("2")
+            ),
             TransactionManualIn(
                 name="Хлеб",
                 price=Decimal("30"),
@@ -226,7 +237,9 @@ async def test_create_standalone_comment_defaults_empty(session):
 
     empty_comment = await service.create_standalone(
         user,
-        TransactionCreate(name="Пустой комментарий", amount=Decimal("10.00"), comment="   "),
+        TransactionCreate(
+            name="Пустой комментарий", amount=Decimal("10.00"), comment="   "
+        ),
     )
     assert empty_comment.comment is None
 
@@ -349,7 +362,7 @@ async def test_update_null_on_not_null_returns_422(session):
     ):
         with pytest.raises(HTTPException) as exc_info:
             await service.update(user, tx.id, bad)
-        assert exc_info.value.status_code == 422  # noqa: PLR2004
+        assert exc_info.value.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
     # пустой PATCH — no-op
     again = await service.update(user, tx.id, TransactionUpdate())
@@ -426,7 +439,11 @@ async def test_list_page_offset_paginates(session):
     assert len(rows1) == 2 and total == 5  # noqa: PLR2004
     assert len(rows2) == 2 and total2 == 5  # noqa: PLR2004
     assert len(rows3) == 1 and total3 == 5  # noqa: PLR2004
-    ids = {tx.id for tx, _, _ in rows1} | {tx.id for tx, _, _ in rows2} | {tx.id for tx, _, _ in rows3}
+    ids = (
+        {tx.id for tx, _, _ in rows1}
+        | {tx.id for tx, _, _ in rows2}
+        | {tx.id for tx, _, _ in rows3}
+    )
     assert len(ids) == 5  # noqa: PLR2004
 
 
@@ -488,19 +505,27 @@ async def test_list_page_filters_by_seller_name(session):
     service = _tx_service(session)
     await service.create_standalone(
         user,
-        TransactionCreate(name="Такси", amount=Decimal("500.00"), seller_name="Яндекс Такси"),
+        TransactionCreate(
+            name="Такси", amount=Decimal("500.00"), seller_name="Яндекс Такси"
+        ),
     )
     await service.create_standalone(
         user,
-        TransactionCreate(name="Метро", amount=Decimal("62.00"), seller_name="Метрополитен"),
+        TransactionCreate(
+            name="Метро", amount=Decimal("62.00"), seller_name="Метрополитен"
+        ),
     )
     # свой магазин
-    rows, total = await service.list_page(user, limit=50, offset=0, seller_names=["Метрополитен"])
+    rows, total = await service.list_page(
+        user, limit=50, offset=0, seller_names=["Метрополитен"]
+    )
     assert total == 1 and rows[0][0].name == "Метро"  # noqa: PLR2004
     # магазин из чека (COALESCE)
     receipt = await _make_receipt(session, user)
     await service.create_for_receipt(receipt, [_item("Молоко", "60.00")])
-    rows2, total2 = await service.list_page(user, limit=50, offset=0, seller_names=["ПЕРЕКРЕСТОК"])
+    rows2, total2 = await service.list_page(
+        user, limit=50, offset=0, seller_names=["ПЕРЕКРЕСТОК"]
+    )
     assert total2 == 1 and rows2[0][0].name == "Молоко"  # noqa: PLR2004
     # мультивыбор магазинов: IN по списку (свой + из чека)
     rows3, total3 = await service.list_page(
@@ -535,7 +560,9 @@ async def test_list_page_filters_by_multiple_tags(session):
     rows, total = await service.list_page(user, limit=50, offset=0, tag_ids=[food.id])
     assert total == 1 and rows[0][0].id == tx_food.id  # noqa: PLR2004
     # мультивыбор тегов: IN по списку
-    rows, total = await service.list_page(user, limit=50, offset=0, tag_ids=[food.id, fun.id])
+    rows, total = await service.list_page(
+        user, limit=50, offset=0, tag_ids=[food.id, fun.id]
+    )
     assert total == 2  # noqa: PLR2004
     assert {row[0].id for row in rows} == {tx_food.id, tx_fun.id}
 
@@ -545,13 +572,17 @@ async def test_list_page_search_covers_comment_and_store(session):
     service = _tx_service(session)
     await service.create_standalone(
         user,
-        TransactionCreate(name="Кофе", amount=Decimal("300.00"), comment="зерна для капучинатора"),
+        TransactionCreate(
+            name="Кофе", amount=Decimal("300.00"), comment="зерна для капучинатора"
+        ),
     )
     await service.create_standalone(
         user,
         TransactionCreate(name="Хлеб", amount=Decimal("30.00"), seller_name="Булочная"),
     )
-    rows, total = await service.list_page(user, limit=50, offset=0, search="капучинатор")
+    rows, total = await service.list_page(
+        user, limit=50, offset=0, search="капучинатор"
+    )
     assert total == 1 and rows[0][0].name == "Кофе"  # noqa: PLR2004
     rows, total = await service.list_page(user, limit=50, offset=0, search="улочн")
     assert total == 1 and rows[0][0].name == "Хлеб"  # noqa: PLR2004
@@ -578,7 +609,9 @@ async def test_list_page_balance_is_running_total(session):
             datetime=datetime(2026, 1, 2, tzinfo=timezone.utc),
         ),
     )
-    rows, _ = await service.list_page(user, limit=10, offset=0, sort_by="date", sort_dir="asc")
+    rows, _ = await service.list_page(
+        user, limit=10, offset=0, sort_by="date", sort_dir="asc"
+    )
     by_name = {tx.name: Decimal(str(balance)) for tx, _, balance in rows}
     assert by_name["Покупка"] == Decimal("-100.00")
     assert by_name["Возврат"] == Decimal("-50.00")
@@ -607,9 +640,13 @@ async def test_list_page_sorts_by_name_and_price(session):
             datetime=datetime(2026, 1, 2, tzinfo=timezone.utc),
         ),
     )
-    rows, _ = await service.list_page(user, limit=10, offset=0, sort_by="name", sort_dir="asc")
+    rows, _ = await service.list_page(
+        user, limit=10, offset=0, sort_by="name", sort_dir="asc"
+    )
     assert [tx.name for tx, _, _ in rows] == ["Apple", "Banana"]
-    rows, _ = await service.list_page(user, limit=10, offset=0, sort_by="price", sort_dir="desc")
+    rows, _ = await service.list_page(
+        user, limit=10, offset=0, sort_by="price", sort_dir="desc"
+    )
     assert [tx.name for tx, _, _ in rows] == ["Banana", "Apple"]
 
 
@@ -634,7 +671,9 @@ async def test_list_page_joins_seller_name(session):
     rows, _ = await service.list_page(user, limit=50, offset=0)
     # финальный seller_name: свой у транзакции, иначе — из чека (from_model)
     by_name = {
-        tx.name: TransactionOut.from_model(tx, seller_name=seller, balance=balance).seller_name
+        tx.name: TransactionOut.from_model(
+            tx, seller_name=seller, balance=balance
+        ).seller_name
         for tx, seller, balance in rows
     }
     # из чека — продавец чека; ручная без магазина — None; ручная с магазином — свой
@@ -811,11 +850,15 @@ async def test_stores_distinct(session):
     await service.create_for_receipt(receipt, [_item("Молоко", "60.00")])
     await service.create_standalone(
         user,
-        TransactionCreate(name="Такси", amount=Decimal("500.00"), seller_name="Яндекс Такси"),
+        TransactionCreate(
+            name="Такси", amount=Decimal("500.00"), seller_name="Яндекс Такси"
+        ),
     )
     await service.create_standalone(
         user,
-        TransactionCreate(name="Ещё такси", amount=Decimal("300.00"), seller_name="Яндекс Такси"),
+        TransactionCreate(
+            name="Ещё такси", amount=Decimal("300.00"), seller_name="Яндекс Такси"
+        ),
     )
     stores = await service.stores(user)
     assert {store.filter_value for store in stores} == {"ПЕРЕКРЕСТОК", "Яндекс Такси"}
@@ -834,10 +877,9 @@ async def test_update_seller_name(session):
         tx.id,
         TransactionUpdate(seller_name="Метрополитен"),
     )
-    assert tx.seller_name == "Метрополитен"
-    assert tx.normalized_seller_name == "Метрополитен"
+    assert tx.seller.name == "Метрополитен"
+    assert tx.seller.normalized_name == "Метрополитен"
     assert TransactionOut.from_model(tx).seller_name == "Метрополитен"
     # снять магазин явным null
     tx = await service.update(user, tx.id, TransactionUpdate(seller_name=None))
-    assert tx.seller_name is None
-    assert tx.normalized_seller_name is None
+    assert tx.seller is None

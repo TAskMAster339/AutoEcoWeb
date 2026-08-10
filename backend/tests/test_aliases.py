@@ -5,6 +5,8 @@ from decimal import Decimal
 from fastapi import HTTPException
 from src.repositories.alias import AliasRepository
 from src.repositories.receipt import ReceiptRepository
+from src.repositories.seller import SellerRepository
+from src.repositories.tag import TagRepository
 from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
 from src.schemas.alias import AliasApplyRequest, AliasCreate, AliasUpdate
@@ -12,25 +14,31 @@ from src.schemas.receipt import ReceiptCreate, ReceiptParseRequest, ReceiptRespo
 from src.schemas.transaction import TransactionCreate, TransactionOut
 from src.services.aliases import AliasService
 from src.services.receipts import ReceiptService
+from src.services.sellers import SellerService
 from src.services.transaction import TransactionService
-from test_receipts import _create_receipt, _make_user, _service
 from test_receipt_parser import QR, sample_payload
+from test_receipts import _create_receipt, _make_user, _service
 
 
 def _alias_service(session) -> AliasService:
+    alias_repo = AliasRepository(session)
+    seller_service = SellerService(SellerRepository(session), alias_repo)
     return AliasService(
-        AliasRepository(session),
+        alias_repo,
+        seller_service,
         TransactionRepository(session),
         ReceiptRepository(session),
     )
 
 
 def _tx_service(session) -> TransactionService:
+    alias_repo = AliasRepository(session)
     return TransactionService(
         TransactionRepository(session),
         ReceiptRepository(session),
-        None,
-        AliasRepository(session),
+        TagRepository(session),
+        alias_repo,
+        SellerService(SellerRepository(session), alias_repo),
     )
 
 
@@ -173,6 +181,9 @@ async def _manual_tx(session, user, *, name: str, seller: str | None = None):
     return await TransactionService(
         TransactionRepository(session),
         ReceiptRepository(session),
+        TagRepository(session),
+        AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
     ).create_standalone(
         user,
         TransactionCreate(
@@ -225,8 +236,9 @@ async def test_product_alias_keeps_alias_foreign_key(session):
     tx_service = TransactionService(
         TransactionRepository(session),
         ReceiptRepository(session),
-        None,
+        TagRepository(session),
         AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
     )
     tx = await tx_service.create_standalone(
         user,
@@ -242,13 +254,16 @@ async def test_deleting_alias_clears_foreign_key_without_deleting_transaction(se
     alias_service = _alias_service(session)
     alias = await alias_service.create(
         user,
-        AliasCreate(original_name="сырок", alias_name="Глазированный сырок", scope="product"),
+        AliasCreate(
+            original_name="сырок", alias_name="Глазированный сырок", scope="product"
+        ),
     )
     tx_service = TransactionService(
         TransactionRepository(session),
         ReceiptRepository(session),
-        None,
+        TagRepository(session),
         AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
     )
     tx = await tx_service.create_standalone(
         user,
@@ -291,7 +306,10 @@ async def test_apply_all_product_respects_priority(session):
     assert result.product_updated == 1  # только «диски ватные», бананы не тронуты
 
     rows = await TransactionRepository(session).list_name_columns(user.id)
-    normalized = {(await TransactionRepository(session).get_owned(user.id, tx_id)).normalized_name for tx_id, _ in rows}
+    normalized = {
+        (await TransactionRepository(session).get_owned(user.id, tx_id)).normalized_name
+        for tx_id, _ in rows
+    }
     assert normalized == {"диски", "бананы"}
     assert result.product_updated == 1
 
@@ -310,14 +328,19 @@ async def test_apply_seller_scope_updates_receipts_and_manual(session):
     # свежее чтение (identity map сессии хранит старый объект)
     fresh_receipt = await ReceiptRepository(session).get(user.id, receipt.id)
     await session.refresh(fresh_receipt)
-    assert fresh_receipt.seller_name == 'АКЦИОНЕРНОЕ ОБЩЕСТВО "ТОРГОВЫЙ ДОМ ПЕРЕКРЕСТОК"'
-    assert fresh_receipt.normalized_seller_name == "Перекрёсток"
-    assert fresh_receipt.seller_name_alias_id is not None
+    assert (
+        fresh_receipt.seller.name == 'АКЦИОНЕРНОЕ ОБЩЕСТВО "ТОРГОВЫЙ ДОМ ПЕРЕКРЕСТОК"'
+    )
+    assert fresh_receipt.seller.normalized_name == "Перекрёсток"
+    assert fresh_receipt.seller.seller_alias_id is not None
 
-    manual = (await TransactionRepository(session).list_seller_columns(user.id))[0]
-    manual_tx = await TransactionRepository(session).get_owned(user.id, manual[0])
-    assert manual[1] == "перекресток"
-    assert manual_tx.seller_name_alias_id is not None
+    manual_tx, seller_name = next(
+        (tx, name)
+        for tx, name in await TransactionRepository(session).list_all(user.id)
+        if tx.receipt_id is None
+    )
+    assert seller_name == "Перекрёсток"
+    assert manual_tx.seller.seller_alias_id is not None
 
 
 async def test_apply_seller_does_not_touch_products(session):
@@ -347,13 +370,15 @@ async def test_receipt_create_applies_product_alias(session):
     tx_service = TransactionService(
         TransactionRepository(session),
         ReceiptRepository(session),
-        None,
+        TagRepository(session),
         AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
     )
     receipt_service = ReceiptService(
         ReceiptRepository(session),
         tx_service,
         AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
     )
     receipt = await receipt_service.create(
         user,
@@ -375,13 +400,15 @@ async def test_receipt_transaction_includes_receipt_seller_alias(session):
     tx_service = TransactionService(
         TransactionRepository(session),
         ReceiptRepository(session),
-        None,
+        TagRepository(session),
         AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
     )
     receipt_service = ReceiptService(
         ReceiptRepository(session),
         tx_service,
         AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
     )
     receipt = await receipt_service.create(
         user,
@@ -410,13 +437,15 @@ async def test_parse_preview_applies_product_alias(session):
     tx_service = TransactionService(
         TransactionRepository(session),
         ReceiptRepository(session),
-        None,
+        TagRepository(session),
         AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
     )
     receipt_service = ReceiptService(
         ReceiptRepository(session),
         tx_service,
         AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
     )
     normalized, seller = await receipt_service.parse(
         user,
@@ -447,9 +476,9 @@ async def test_manual_transaction_creation_applies_aliases(session):
     assert tx.name == "РАЭ сырок глазированный"
     assert tx.normalized_name == "сырок"
     assert tx.name_alias_id is not None
-    assert tx.seller_name == "перекресток №7"
-    assert tx.normalized_seller_name == "Перекрёсток"
-    assert tx.seller_name_alias_id is not None
+    assert tx.seller.name == "перекресток №7"
+    assert tx.seller.normalized_name == "Перекрёсток"
+    assert tx.seller.seller_alias_id is not None
 
 
 async def test_delete_alias_restores_original_seller_and_product(session):
@@ -461,7 +490,10 @@ async def test_delete_alias_restores_original_seller_and_product(session):
         user, AliasCreate(original_name="старый магазин", alias_name="Новый магазин")
     )
     product_alias = await service.create(
-        user, AliasCreate(original_name="старый товар", alias_name="Новый товар", scope="product")
+        user,
+        AliasCreate(
+            original_name="старый товар", alias_name="Новый товар", scope="product"
+        ),
     )
     tx = await tx_service.create_standalone(
         user,
@@ -471,9 +503,9 @@ async def test_delete_alias_restores_original_seller_and_product(session):
             amount=Decimal("10"),
         ),
     )
-    assert tx.normalized_seller_name == "Новый магазин"
+    assert tx.seller.normalized_name == "Новый магазин"
     assert tx.normalized_name == "новый товар"
-    assert tx.seller_name_alias_id == seller_alias.id
+    assert tx.seller.seller_alias_id == seller_alias.id
     assert tx.name_alias_id == product_alias.id
 
     await service.delete(user, seller_alias.id)
@@ -481,8 +513,8 @@ async def test_delete_alias_restores_original_seller_and_product(session):
 
     refreshed = await TransactionRepository(session).get_owned(user.id, tx.id)
     assert refreshed is not None
-    assert refreshed.seller_name == "старый магазин №1"
-    assert refreshed.normalized_seller_name == "Новый магазин"
+    assert refreshed.seller.name == "старый магазин №1"
+    assert refreshed.seller.normalized_name == "Новый магазин"
     assert refreshed.normalized_name == "новый товар"
     assert TransactionOut.from_model(refreshed).seller_name == "Новый магазин"
 
@@ -523,9 +555,7 @@ async def test_apply_regex_alias(session):
     )
     repo = TransactionRepository(session)
     rows = await repo.list_name_columns(user.id)
-    names = {
-        (await repo.get_owned(user.id, tx_id)).name for tx_id, _ in rows
-    }
+    names = {(await repo.get_owned(user.id, tx_id)).name for tx_id, _ in rows}
     assert names == {"РАЭ Сырок 45г", "Бананы"}
     loaded = [await repo.get_owned(user.id, tx_id) for tx_id, _ in rows]
     assert any(tx.name_alias_id is not None for tx in loaded)
@@ -534,7 +564,10 @@ async def test_apply_regex_alias(session):
 async def test_apply_without_repos_is_noop(session):
     """AliasService без tx/receipt репозиториев (тесты, другие вызовы) — noop."""
     user = await _make_user(UserRepository(session))
-    service = AliasService(AliasRepository(session))
+    service = AliasService(
+        AliasRepository(session),
+        SellerService(SellerRepository(session), AliasRepository(session)),
+    )
     alias = await service.create(
         user,
         AliasCreate(original_name="сырок", alias_name="Сырок", scope="product"),

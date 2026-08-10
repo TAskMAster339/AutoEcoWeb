@@ -42,6 +42,7 @@ from src.schemas.import_export import (
 )
 from src.services.aliases import AliasService
 from src.services.receipt_parser import normalize_product_name
+from src.services.sellers import SellerService
 
 __all__ = [
     "ExportRow",
@@ -408,12 +409,14 @@ class ImportExportService:
         session: AsyncSession,
         tx_repo: TransactionRepository,
         tag_repo: TagRepository,
-        alias_repo: AliasRepository | None = None,
+        alias_repo: AliasRepository,
+        seller_service: SellerService,
     ) -> None:
         self._session = session
         self._tx_repo = tx_repo
         self._tag_repo = tag_repo
         self._alias_repo = alias_repo
+        self._seller_service = seller_service
 
     async def import_rows(self, user: User, rows: list[ImportRowIn]) -> ImportResult:
         """Валидированные строки → теги (авто-создание) + bulk-insert транзакций."""
@@ -424,11 +427,6 @@ class ImportExportService:
         transactions: list[Transaction] = []
         product_aliases = (
             await self._alias_repo.list_all(user.id, scope="product")
-            if self._alias_repo is not None
-            else []
-        )
-        seller_aliases = (
-            await self._alias_repo.list_all(user.id, scope="seller")
             if self._alias_repo is not None
             else []
         )
@@ -453,9 +451,9 @@ class ImportExportService:
                 product_aliases,
                 row.description,
             )
-            seller_resolved = (
-                AliasService.resolve_with_alias(seller_aliases, row.store)
-                if row.store
+            seller = (
+                await self._seller_service.get_or_create(user.id, row.store)
+                if row.store and self._seller_service is not None
                 else None
             )
             transactions.append(
@@ -468,13 +466,7 @@ class ImportExportService:
                     name_alias_id=product_resolved.alias.id
                     if product_resolved.alias is not None
                     else None,
-                    seller_name=row.store,
-                    normalized_seller_name=seller_resolved.value
-                    if seller_resolved is not None
-                    else None,
-                    seller_name_alias_id=seller_resolved.alias.id
-                    if seller_resolved is not None and seller_resolved.alias is not None
-                    else None,
+                    seller_id=seller.id if seller is not None else None,
                     quantity=None,
                     unit=None,
                     price=None,
@@ -507,7 +499,9 @@ class ImportExportService:
                 ExportRow(
                     date=tx.check_datetime.date(),
                     category=tags.get(tx.tag_id) if tx.tag_id else None,
-                    store=tx.seller_name if tx.seller_name is not None else seller_name,
+                    # list_all already returns the effective (alias-resolved)
+                    # seller value, including the receipt fallback.
+                    store=seller_name,
                     description=tx.name,
                     income=tx.amount if is_income else Decimal("0"),
                     expense=tx.amount if not is_income else Decimal("0"),

@@ -16,6 +16,7 @@ import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined'
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
 import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined'
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined'
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
@@ -33,6 +34,7 @@ const NAV_ITEMS = [
   { to: '/analytics', label: 'Аналитика', icon: BarChartOutlinedIcon },
   { to: '/dashboard', label: 'Чеки', icon: ReceiptLongOutlinedIcon },
   { to: '/tags', label: 'Теги', icon: LabelOutlinedIcon },
+  { to: '/sellers', label: 'Магазины', icon: StorefrontOutlinedIcon },
   { to: '/rules', label: 'Правила и алиасы', icon: LinkOutlinedIcon },
   { to: '/data', label: 'Данные', icon: StorageOutlinedIcon },
   { to: '/settings', label: 'Настройки', icon: SettingsOutlinedIcon },

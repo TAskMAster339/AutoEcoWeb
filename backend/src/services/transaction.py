@@ -26,6 +26,7 @@ from src.schemas.transaction import (
 )
 from src.services.aliases import AliasService
 from src.services.receipt_parser import ReceiptItemData, normalize_product_name
+from src.services.sellers import SellerService
 
 # NOT NULL колонки transactions: явный null в PATCH → 422.
 # tag_id НЕ входит в набор — явный null снимает тег.  # noqa: RUF003
@@ -34,7 +35,6 @@ _TRANSACTION_NON_NULLABLE = frozenset(
 )
 
 _SCOPE_PRODUCT = "product"
-_SCOPE_SELLER = "seller"
 
 
 class TransactionService:
@@ -47,14 +47,16 @@ class TransactionService:
     def __init__(
         self,
         tx_repo: TransactionRepository,
-        receipt_repo: ReceiptRepository | None = None,
-        tag_repo: TagRepository | None = None,
-        alias_repo: AliasRepository | None = None,
+        receipt_repo: ReceiptRepository,
+        tag_repo: TagRepository,
+        alias_repo: AliasRepository,
+        seller_service: SellerService,
     ) -> None:
         self._tx_repo = tx_repo
         self._receipt_repo = receipt_repo
         self._tag_repo = tag_repo
         self._alias_repo = alias_repo
+        self._seller_service = seller_service
 
     # ---------- применение алиасов при создании ----------
 
@@ -66,20 +68,6 @@ class TransactionService:
         if not aliases:
             return name, None
         resolved = AliasService.resolve_with_alias(aliases, name)
-        return resolved.value, resolved.alias.id if resolved.alias is not None else None
-
-    async def _resolve_seller(
-        self,
-        user_id: UUID,
-        seller: str | None,
-    ) -> tuple[str | None, UUID | None]:
-        """Алиас продавца применяется к магазину ручной транзакции."""
-        if seller is None or self._alias_repo is None:
-            return seller, None
-        aliases = await self._alias_repo.list_all(user_id, scope=_SCOPE_SELLER)
-        if not aliases:
-            return seller, None
-        resolved = AliasService.resolve_with_alias(aliases, seller)
         return resolved.value, resolved.alias.id if resolved.alias is not None else None
 
     # ---------- создание из чеков ----------
@@ -172,8 +160,6 @@ class TransactionService:
             name=original_name,
             normalized_name=normalize_product_name(name),
             name_alias_id=name_alias_id,
-            seller_name_alias_id=receipt.seller_name_alias_id,
-            normalized_seller_name=receipt.normalized_seller_name,
             quantity=data.quantity,
             unit=data.unit,
             price=data.price,
@@ -200,10 +186,10 @@ class TransactionService:
         # значения сохраняются для последующего отката.
         original_name = data.name
         name, name_alias_id = await self._resolve_name(user.id, original_name)
-        original_seller = data.seller_name
-        seller_name, seller_name_alias_id = await self._resolve_seller(
-            user.id,
-            original_seller,
+        seller = (
+            await self._seller_service.get_or_create(user.id, data.seller_name)
+            if data.seller_name is not None and self._seller_service is not None
+            else None
         )
         tx = Transaction(
             user_id=user.id,
@@ -212,9 +198,7 @@ class TransactionService:
             name=original_name,
             normalized_name=normalize_product_name(name),
             name_alias_id=name_alias_id,
-            seller_name=original_seller,
-            normalized_seller_name=seller_name,
-            seller_name_alias_id=seller_name_alias_id,
+            seller_id=seller.id if seller is not None else None,
             quantity=data.quantity,
             unit=data.unit,
             price=data.price,
@@ -242,7 +226,7 @@ class TransactionService:
         sort_by: str = "date",
         sort_dir: str = "desc",
     ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int]:
-        """Страница транзакций (offset) + seller_name из чека + баланс + total.
+        """Страница транзакций (offset) + эффективный продавец + баланс + total.
 
         offset-пагинация нужна бесконечному скроллу AG Grid (startRow/endRow).
         """
@@ -384,16 +368,21 @@ class TransactionService:
 
     async def stores(self, user: User) -> list[StoreResponse]:
         """Магазины пользователя с alias/display/filter значениями."""  # noqa: RUF002
-        rows = await self._tx_repo.distinct_sellers(user.id)
+        rows = (
+            await self._seller_service.list_stores(user.id)
+            if self._seller_service is not None
+            else []
+        )
         return [
             StoreResponse(
+                seller_id=seller_id,
                 seller_name=raw,
                 normalized_seller_name=normalized,
                 alias_id=alias_id,
                 alias_name=alias_name,
-                filter_value=filter_value,
+                filter_value=normalized,
             )
-            for raw, normalized, alias_id, alias_name, filter_value in rows
+            for seller_id, raw, normalized, alias_id, alias_name in rows
         ]
 
     async def get(self, user: User, tx_id: UUID) -> Transaction:
@@ -420,7 +409,7 @@ class TransactionService:
         )
         if null_required:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Поля не могут быть null: {', '.join(null_required)}",
             )
         if "name" in fields:
@@ -428,24 +417,22 @@ class TransactionService:
             name, alias_id = await self._resolve_name(user.id, fields["name"])
             fields["normalized_name"] = normalize_product_name(name)
             fields["name_alias_id"] = alias_id
+        previous_seller_id = tx.seller_id
         if "seller_name" in fields:
-            # Keep the editable source and displayed alias-resolved values in sync.
-            seller_name = fields["seller_name"]
-            if seller_name is not None:
-                seller_name = seller_name.strip() or None
-            fields["seller_name"] = seller_name
-            normalized_seller, alias_id = await self._resolve_seller(
-                user.id,
-                seller_name,
-            )
-            fields["normalized_seller_name"] = normalized_seller
-            fields["seller_name_alias_id"] = alias_id
+            seller_name = fields.pop("seller_name")
+            seller = None
+            if seller_name is not None and self._seller_service is not None:
+                seller = await self._seller_service.get_or_create(user.id, seller_name)
+            fields["seller_id"] = seller.id if seller is not None else None
         if "comment" in fields and fields["comment"] is not None:
             # пустой комментарий — то же, что «нет комментария»
             fields["comment"] = fields["comment"].strip() or None
         if fields.get("tag_id") is not None:
             await self._ensure_tag(user.id, fields["tag_id"])
-        return await self._tx_repo.update(tx, **fields)
+        updated = await self._tx_repo.update(tx, **fields)
+        if "seller_name" in data.model_fields_set and previous_seller_id is not None:
+            await self._seller_service.delete_if_unused(user.id, previous_seller_id)
+        return updated
 
     async def delete(self, user: User, tx_id: UUID) -> None:
         tx = await self.get(user, tx_id)

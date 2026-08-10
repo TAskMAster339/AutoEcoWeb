@@ -128,6 +128,7 @@ class ReceiptPreviewOut(BaseModel):
 
 class ReceiptResponse(ReceiptPreviewOut):
     id: UUID
+    seller_id: UUID | None = None
     cashback: Decimal | None = None
     balance_after: Decimal | None = None
     created_at: dt
@@ -156,11 +157,11 @@ class ReceiptResponse(ReceiptPreviewOut):
             parsed = [
                 TransactionOut.from_model(
                     tx,
-                    seller_name=receipt.normalized_seller_name,
-                    seller_alias_id=receipt.seller_name_alias_id,
+                    seller_name=receipt.seller.normalized_name,
+                    seller_alias_id=receipt.seller.seller_alias_id,
                     seller_alias_name=(
-                        receipt.seller_name_alias.alias_name
-                        if receipt.seller_name_alias is not None
+                        receipt.seller.seller_alias.alias_name
+                        if receipt.seller.seller_alias is not None
                         else None
                     ),
                 )
@@ -171,12 +172,13 @@ class ReceiptResponse(ReceiptPreviewOut):
             qr=receipt.qr,
             receipt_number=receipt.receipt_number,
             operation_type=receipt.operation_type,
-            seller_name=receipt.seller_name,
-            normalized_seller_name=receipt.normalized_seller_name,
-            seller_name_alias_id=receipt.seller_name_alias_id,
+            seller_id=receipt.seller_id,
+            seller_name=receipt.seller.name,
+            normalized_seller_name=receipt.seller.normalized_name,
+            seller_name_alias_id=receipt.seller.seller_alias_id,
             seller_name_alias_name=(
-                receipt.seller_name_alias.alias_name
-                if receipt.seller_name_alias is not None
+                receipt.seller.seller_alias.alias_name
+                if receipt.seller.seller_alias is not None
                 else None
             ),
             seller_inn=receipt.seller_inn,

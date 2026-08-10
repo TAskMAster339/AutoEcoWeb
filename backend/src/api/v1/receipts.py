@@ -7,6 +7,7 @@ from src.core.dependencies import (
     CurrentUser,
     Proverkacheka,
     ReceiptRepo,
+    SellerSvc,
     TransactionRepo,
     TransactionSvc,
 )
@@ -37,6 +38,7 @@ async def parse_receipt(  # noqa: PLR0913
     current_user: CurrentUser,
     receipt_repo: ReceiptRepo,
     transaction_service: TransactionSvc,
+    seller_service: SellerSvc,
     alias_repo: AliasRepo,
     proverkacheka: Proverkacheka,
 ) -> ReceiptPreviewOut:
@@ -44,6 +46,7 @@ async def parse_receipt(  # noqa: PLR0913
         receipt_repo,
         transaction_service,
         alias_repo,
+        seller_service,
         proverkacheka,
     ).parse(current_user, data)
     return ReceiptPreviewOut.from_normalized(normalized, seller_name)
@@ -54,18 +57,20 @@ async def parse_receipt(  # noqa: PLR0913
     response_model=ReceiptResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_manual_receipt(
+async def create_manual_receipt(  # noqa: PLR0913
     data: ReceiptManualCreate,
     current_user: CurrentUser,
     receipt_repo: ReceiptRepo,
     tx_repo: TransactionRepo,
     transaction_service: TransactionSvc,
+    seller_service: SellerSvc,
     alias_repo: AliasRepo,
 ) -> ReceiptResponse:
     receipt = await ReceiptService(
         receipt_repo,
         transaction_service,
         alias_repo,
+        seller_service,
     ).create_manual(current_user, data)
     transactions = await tx_repo.list_by_receipt(receipt.id)
     return ReceiptResponse.from_model(receipt, transactions=transactions)
@@ -78,6 +83,7 @@ async def create_receipt(  # noqa: PLR0913
     receipt_repo: ReceiptRepo,
     tx_repo: TransactionRepo,
     transaction_service: TransactionSvc,
+    seller_service: SellerSvc,
     alias_repo: AliasRepo,
     proverkacheka: Proverkacheka,
 ) -> ReceiptResponse:
@@ -85,6 +91,7 @@ async def create_receipt(  # noqa: PLR0913
         receipt_repo,
         transaction_service,
         alias_repo,
+        seller_service,
         proverkacheka,
     ).create(current_user, data)
     transactions = await tx_repo.list_by_receipt(receipt.id)
@@ -97,6 +104,8 @@ async def list_receipts(  # noqa: PLR0913
     receipt_repo: ReceiptRepo,
     tx_repo: TransactionRepo,
     transaction_service: TransactionSvc,
+    alias_repo: AliasRepo,
+    seller_service: SellerSvc,
     limit: int = Query(50, ge=1, le=100),
     cursor: str | None = Query(None),
     date_from: date | None = Query(None),  # noqa: B008
@@ -106,6 +115,8 @@ async def list_receipts(  # noqa: PLR0913
     receipts, next_cursor = await ReceiptService(
         receipt_repo,
         transaction_service,
+        alias_repo,
+        seller_service=seller_service,
     ).list_all(
         _current_user,
         limit=limit,
@@ -139,10 +150,12 @@ async def get_receipt(
     receipt_repo: ReceiptRepo,
     tx_repo: TransactionRepo,
     transaction_service: TransactionSvc,
+    seller_service: SellerSvc,
 ) -> ReceiptResponse:
     receipt = await ReceiptService(
         receipt_repo,
         transaction_service,
+        seller_service=seller_service,
     ).get(_current_user, receipt_id)
     transactions = await tx_repo.list_by_receipt(receipt.id)
     return ReceiptResponse.from_model(receipt, transactions=transactions)
@@ -169,17 +182,19 @@ async def add_receipt_transaction(
 
 
 @router.patch("/{receipt_id}", response_model=ReceiptResponse)
-async def update_receipt(
+async def update_receipt(  # noqa: PLR0913
     receipt_id: UUID,
     data: ReceiptUpdate,
     _current_user: CurrentUser,
     receipt_repo: ReceiptRepo,
     tx_repo: TransactionRepo,
     transaction_service: TransactionSvc,
+    seller_service: SellerSvc,
 ) -> ReceiptResponse:
     receipt = await ReceiptService(
         receipt_repo,
         transaction_service,
+        seller_service=seller_service,
     ).update(_current_user, receipt_id, data)
     transactions = await tx_repo.list_by_receipt(receipt.id)
     return ReceiptResponse.from_model(receipt, transactions=transactions)
@@ -190,9 +205,11 @@ async def delete_receipt(
     receipt_id: UUID,
     _current_user: CurrentUser,
     receipt_repo: ReceiptRepo,
+    seller_service: SellerSvc,
     transaction_service: TransactionSvc,
 ) -> None:
     await ReceiptService(
         receipt_repo,
         transaction_service,
+        seller_service=seller_service,
     ).delete(_current_user, receipt_id)

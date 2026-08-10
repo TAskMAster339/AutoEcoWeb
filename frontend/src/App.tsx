@@ -14,6 +14,7 @@ const TransactionsPage = page(() => import('./pages/TransactionsPage'), 'Transac
 const DashboardPage = page(() => import('./pages/DashboardPage'), 'DashboardPage')
 const AnalyticsPage = page(() => import('./pages/AnalyticsPage'), 'AnalyticsPage')
 const TagsPage = page(() => import('./pages/TagsPage'), 'TagsPage')
+const SellersPage = page(() => import('./pages/SellersPage'), 'SellersPage')
 const RulesPage = page(() => import('./pages/RulesPage'), 'RulesPage')
 const DataPage = page(() => import('./pages/DataPage'), 'DataPage')
 const SettingsPage = page(() => import('./pages/SettingsPage'), 'SettingsPage')
@@ -44,6 +45,7 @@ const router = createBrowserRouter([
           { path: '/dashboard', element: suspense(<DashboardPage />) },
           { path: '/analytics', element: suspense(<AnalyticsPage />) },
           { path: '/tags', element: suspense(<TagsPage />) },
+          { path: '/sellers', element: suspense(<SellersPage />) },
           { path: '/rules', element: suspense(<RulesPage />) },
           { path: '/data', element: suspense(<DataPage />) },
           { path: '/settings', element: suspense(<SettingsPage />) },

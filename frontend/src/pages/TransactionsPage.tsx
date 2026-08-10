@@ -13,6 +13,7 @@ import {
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+
 import { StatisticCard } from '../components/common/StatisticCard'
 import { PeriodSelector } from '../components/common/PeriodSelector'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
@@ -89,6 +90,8 @@ export function TransactionsPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const online = useOnline()
   const queryClient = useQueryClient()
+
+  const storeFilters = useUiStore((s) => s.storeFilters)
   const { data: txRevision } = useQuery({ queryKey: ['txRevision'], queryFn: () => 0 })
 
   // Параметры фильтров (период/тег/поиск/магазин) — применяет бэкенд.
@@ -187,12 +190,16 @@ export function TransactionsPage() {
   const openAddMenu = useUiStore((s) => s.openAddMenu)
   const search = useUiStore((s) => s.search)
   const tagFilterIds = useUiStore((s) => s.tagFilterIds)
-  const storeFilters = useUiStore((s) => s.storeFilters)
   const periodKey = useUiStore((s) => s.periodKey)
   const customFrom = useUiStore((s) => s.customFrom)
   const customTo = useUiStore((s) => s.customTo)
   const monthYear = useUiStore((s) => s.monthYear)
   const resetFilters = useUiStore((s) => s.resetFilters)
+
+  const handleResetFilters = () => {
+    resetFilters()
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`)
+  }
 
   // Применённые фильтры можно сохранить/открыть ссылкой.
   const urlInitialized = useRef(false)
@@ -277,7 +284,7 @@ export function TransactionsPage() {
         <Button
           variant="text"
           color="inherit"
-          onClick={resetFilters}
+          onClick={handleResetFilters}
           disabled={!hasFilters}
           sx={{ color: 'text.secondary', textTransform: 'none' }}
         >
@@ -305,7 +312,7 @@ export function TransactionsPage() {
           actionLabel={hasFilters ? 'Сбросить фильтры' : 'Показать всё время'}
           onAction={() => {
             if (hasFilters) {
-              useUiStore.getState().resetFilters()
+              handleResetFilters()
             } else {
               // Активных фильтров нет — период пуст; показываем все операции.
               useUiStore.getState().setPeriodKey('all')

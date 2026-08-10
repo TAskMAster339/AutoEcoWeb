@@ -20,6 +20,7 @@ from src.services.receipt_parser import (
     ReceiptParseError,
     normalize_proverkacheka,
 )
+from src.services.sellers import SellerService
 from src.services.transaction import TransactionService
 
 # Остальные поля (receipt_number, seller_inn, cashback, balance_after) nullable —
@@ -40,12 +41,14 @@ class ReceiptService:
         self,
         repo: ReceiptRepository,
         transaction_service: TransactionService,
-        alias_repo: AliasRepository | None = None,
+        alias_repo: AliasRepository,
+        seller_service: SellerService,
         proverkacheka: ProverkachekaClient | None = None,
     ) -> None:
         self._repo = repo
         self._transaction_service = transaction_service
         self._alias_repo = alias_repo
+        self._seller_service = seller_service
         self._proverkacheka = proverkacheka
 
     async def parse(
@@ -54,9 +57,12 @@ class ReceiptService:
         data: ReceiptParseRequest,
     ) -> tuple[NormalizedReceipt, str]:
         normalized = await self._load_normalized(user, data)
-        seller_name, _seller_alias_id = await self._resolve_seller(
+        seller = await self._seller_service.get_or_create_required(
             user.id,
             normalized.seller_name,
+        )
+        seller_name = (
+            seller.normalized_name if seller is not None else normalized.seller_name
         )
         await self._resolve_items(user.id, normalized.items)
         return normalized, seller_name
@@ -70,18 +76,17 @@ class ReceiptService:
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Этот чек уже добавлен",
                 )
-        seller_name, seller_alias_id = await self._resolve_seller(
+        seller = await self._seller_service.get_or_create_required(
             user.id,
             normalized.seller_name,
         )
+
         receipt = await self._repo.create(
             user_id=user.id,
             qr=normalized.qr,
             receipt_number=normalized.receipt_number,
             operation_type=normalized.operation_type,
-            seller_name=normalized.seller_name,
-            normalized_seller_name=seller_name,
-            seller_name_alias_id=seller_alias_id,
+            seller_id=seller.id,
             seller_inn=normalized.seller_inn,
             check_datetime=normalized.check_datetime,
             total_sum=normalized.total_sum,
@@ -103,18 +108,17 @@ class ReceiptService:
         Транзакции маппятся в ReceiptItemData и создаются TransactionService
         (конструирование ORM — только там).
         """
-        seller_name, seller_alias_id = await self._resolve_seller(
+        seller = await self._seller_service.get_or_create_required(
             user.id,
             data.seller_name,
         )
+
         receipt = await self._repo.create(
             user_id=user.id,
             qr=None,
             receipt_number=data.receipt_number,
             operation_type=data.operation_type,
-            seller_name=data.seller_name,
-            normalized_seller_name=seller_name,
-            seller_name_alias_id=seller_alias_id,
+            seller_id=seller.id,
             seller_inn=data.seller_inn,
             check_datetime=data.check_datetime,
             total_sum=data.total_sum,
@@ -149,23 +153,25 @@ class ReceiptService:
         )
         if null_required:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Поля не могут быть null: {', '.join(null_required)}",
             )
+        previous_seller_id = receipt.seller_id
         if "seller_name" in fields:
             seller_name = fields["seller_name"].strip()
-            aliases = (
-                await self._alias_repo.list_all(user.id, scope="seller")
-                if self._alias_repo is not None
-                else []
+            seller = await self._seller_service.get_or_create_required(
+                user.id,
+                seller_name,
             )
-            resolved = AliasService.resolve_with_alias(aliases, seller_name)
-            fields["seller_name"] = seller_name
-            fields["normalized_seller_name"] = resolved.value
-            fields["seller_name_alias_id"] = (
-                resolved.alias.id if resolved.alias is not None else None
-            )
-        return await self._repo.update(receipt, **fields)
+            fields.pop("seller_name", None)
+            fields["seller_id"] = seller.id if seller is not None else None
+        updated = await self._repo.update(receipt, **fields)
+        if (
+            "seller_name" in data.model_fields_set
+            and previous_seller_id != updated.seller_id
+        ):
+            await self._seller_service.delete_if_unused(user.id, previous_seller_id)
+        return updated
 
     async def list_all(  # noqa: PLR0913
         self,
@@ -219,7 +225,7 @@ class ReceiptService:
         if data.qr is not None:
             if self._proverkacheka is None:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Сервис загрузки чеков proverkacheka не настроен",
                 )
             token = user.proverkacheka_token
@@ -241,7 +247,7 @@ class ReceiptService:
             return self._normalize_payload(payload, qr_override=data.qr)
 
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Передайте данные чека (raw_json) или QR для загрузки",
         )
 
@@ -255,22 +261,9 @@ class ReceiptService:
             return normalize_proverkacheka(payload, qr_override=qr_override)
         except ReceiptParseError as exc:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(exc),
             ) from exc
-
-    async def _resolve_seller(
-        self,
-        user_id: UUID,
-        raw_name: str,
-    ) -> tuple[str, UUID | None]:
-        if self._alias_repo is None:
-            return raw_name, None
-        aliases = await self._alias_repo.list_all(user_id, scope="seller")
-        if not aliases:
-            return raw_name, None
-        resolved = AliasService.resolve_with_alias(aliases, raw_name)
-        return resolved.value, resolved.alias.id if resolved.alias is not None else None
 
     async def _resolve_items(
         self,

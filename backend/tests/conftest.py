@@ -25,3 +25,11 @@ async def session():
 @pytest_asyncio.fixture
 def repo(session):
     return UserRepository(session)
+
+
+@pytest_asyncio.fixture
+async def user(session):
+    return await UserRepository(session).create(
+        email="fixture-user@example.com",
+        password_hash="x" * 60,
+    )
