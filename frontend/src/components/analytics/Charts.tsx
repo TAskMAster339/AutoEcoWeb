@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { Box, Card, Stack, Typography, useTheme } from '@mui/material'
 import { formatShortDate } from '../../lib/format'
 
@@ -105,8 +105,71 @@ export function LineChart({
   zeroBased = true,
   ariaLabel = 'График',
 }: LineChartProps) {
-  const theme = useTheme()
   const [tip, setTip] = useState<{ anchor: { x: number; y: number }; title: string; rows: TooltipRow[] } | null>(null)
+
+  // Стабильные обработчики: тело графика мемоизировано, при движении мыши
+  // перерисовывается только тултип (без этого React перерисовывал весь SVG
+  // на каждое событие mousemove — отсюда микролаги при наведении на точки).
+  const handlePointEnter = useCallback(
+    (e: React.MouseEvent<SVGElement>, p: LinePoint) => {
+      setTip({ anchor: { x: e.clientX, y: e.clientY }, title: p.label, rows: buildTipRows(p, formatValue, valueLabel) })
+    },
+    [formatValue, valueLabel],
+  )
+  const handlePointMove = useCallback((e: React.MouseEvent<SVGElement>) => {
+    setTip((t) => (t ? { ...t, anchor: { x: e.clientX, y: e.clientY } } : t))
+  }, [])
+  const handleLeave = useCallback(() => setTip(null), [])
+
+  return (
+    <Box sx={{ position: 'relative' }}>
+      <LineChartBody
+        points={points}
+        trend={trend}
+        median={median}
+        medianLabel={medianLabel}
+        formatValue={formatValue}
+        zeroBased={zeroBased}
+        ariaLabel={ariaLabel}
+        onPointEnter={handlePointEnter}
+        onPointMove={handlePointMove}
+        onLeave={handleLeave}
+      />
+      <ChartTooltip anchor={tip?.anchor ?? null} title={tip?.title ?? ''} rows={tip?.rows ?? []} />
+    </Box>
+  )
+}
+
+interface LineChartBodyProps {
+  points: LinePoint[]
+  /** значения тренда (МНК), выровнены с points; null — пропуск */
+  trend?: Array<number | null>
+  /** горизонтальная линия медианы */
+  median?: number | null
+  medianLabel?: string
+  formatValue: (v: number) => string
+  /** от 0 (расходы) или по данным (цены) */
+  zeroBased?: boolean
+  ariaLabel?: string
+  onPointEnter: (e: React.MouseEvent<SVGElement>, p: LinePoint) => void
+  onPointMove: (e: React.MouseEvent<SVGElement>) => void
+  onLeave: () => void
+}
+
+/** Статичная часть графика — мемоизирована, чтобы hover не перерисовывал SVG. */
+const LineChartBody = memo(function LineChartBody({
+  points,
+  trend,
+  median,
+  medianLabel,
+  formatValue,
+  zeroBased = true,
+  ariaLabel = 'График',
+  onPointEnter,
+  onPointMove,
+  onLeave,
+}: LineChartBodyProps) {
+  const theme = useTheme()
 
   const w = 640
   const h = 220
@@ -137,99 +200,96 @@ export function LineChart({
   const medianY = median !== null && median !== undefined ? yOf(median) : null
 
   return (
-    <Box sx={{ position: 'relative' }}>
-      <svg
-        viewBox={`0 0 ${w} ${h}`}
-        style={{ width: '100%', height: 'auto', display: 'block' }}
-        role="img"
-        aria-label={ariaLabel}
-        onMouseLeave={() => setTip(null)}
-      >
-        {[0.25, 0.5, 0.75, 1].map((f) => (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      style={{ width: '100%', height: 'auto', display: 'block' }}
+      role="img"
+      aria-label={ariaLabel}
+      onMouseLeave={onLeave}
+    >
+      {[0.25, 0.5, 0.75, 1].map((f) => (
+        <line
+          key={f}
+          x1={pad.left}
+          x2={w - pad.right}
+          y1={pad.top + innerH * (1 - f)}
+          y2={pad.top + innerH * (1 - f)}
+          stroke={grid}
+          strokeWidth={1}
+        />
+      ))}
+
+      {medianY !== null && (
+        <g>
           <line
-            key={f}
             x1={pad.left}
-            x2={w - pad.right}
-            y1={pad.top + innerH * (1 - f)}
-            y2={pad.top + innerH * (1 - f)}
-            stroke={grid}
-            strokeWidth={1}
-          />
-        ))}
-
-        {medianY !== null && (
-          <g>
-            <line
-              x1={pad.left}
-              x2={w - pad.right - 2}
-              y1={medianY}
-              y2={medianY}
-              stroke={theme.palette.text.secondary}
-              strokeWidth={1.5}
-              strokeDasharray="4 4"
-            />
-            {medianLabel && (
-              <text x={w - pad.right + 4} y={medianY + 3} fontSize={10} fill={theme.palette.text.secondary}>
-                {medianLabel}
-              </text>
-            )}
-          </g>
-        )}
-
-        {trend && trend.length === points.length && (
-          <path
-            d={smoothPath(
-              trend.map((t, i) => {
-                const pt = points[i]!
-                return { x: xOf(i), y: t === null ? yOf(pt.value) : yOf(t) }
-              }),
-            )}
-            fill="none"
-            stroke={theme.palette.primary.main}
+            x2={w - pad.right - 2}
+            y1={medianY}
+            y2={medianY}
+            stroke={theme.palette.text.secondary}
             strokeWidth={1.5}
-            strokeDasharray="5 4"
-            opacity={0.85}
+            strokeDasharray="4 4"
           />
-        )}
-
-        <path d={path} fill="none" stroke={theme.palette.primary.main} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-
-        {points.map((p, i) => {
-          const color = p.color ?? theme.palette.primary.main
-          const cx = xOf(i)
-          const cy = yOf(p.value)
-          return (
-            <g key={`${p.label}-${i}`}>
-              <circle cx={cx} cy={cy} r={3.5} fill={color} stroke={theme.palette.background.paper} strokeWidth={1.5} />
-              <circle
-                cx={cx}
-                cy={cy}
-                r={11}
-                fill="transparent"
-                style={{ cursor: 'pointer' }}
-                onMouseEnter={(e) => setTip({ anchor: { x: e.clientX, y: e.clientY }, title: p.label, rows: buildTipRows(p, formatValue, valueLabel) })}
-                onMouseMove={(e) => setTip((t) => (t ? { ...t, anchor: { x: e.clientX, y: e.clientY } } : t))}
-              />
-            </g>
-          )
-        })}
-
-        {points.map((p, i) =>
-          i % labelEvery === 0 ? (
-            <text key={`lbl-${i}`} x={xOf(i)} y={h - 8} textAnchor="middle" fontSize={10} fill={theme.palette.text.secondary}>
-              {formatShortDate(p.label)}
+          {medianLabel && (
+            <text x={w - pad.right + 4} y={medianY + 3} fontSize={10} fill={theme.palette.text.secondary}>
+              {medianLabel}
             </text>
-          ) : null,
-        )}
+          )}
+        </g>
+      )}
 
-        <text x={pad.left} y={pad.top - 4} fontSize={10} fill={theme.palette.text.secondary}>
-          макс {formatValue(max)}
-        </text>
-      </svg>
-      <ChartTooltip anchor={tip?.anchor ?? null} title={tip?.title ?? ''} rows={tip?.rows ?? []} />
-    </Box>
+      {trend && trend.length === points.length && (
+        <path
+          d={smoothPath(
+            trend.map((t, i) => {
+              const pt = points[i]!
+              return { x: xOf(i), y: t === null ? yOf(pt.value) : yOf(t) }
+            }),
+          )}
+          fill="none"
+          stroke={theme.palette.primary.main}
+          strokeWidth={1.5}
+          strokeDasharray="5 4"
+          opacity={0.85}
+        />
+      )}
+
+      <path d={path} fill="none" stroke={theme.palette.primary.main} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+
+      {points.map((p, i) => {
+        const color = p.color ?? theme.palette.primary.main
+        const cx = xOf(i)
+        const cy = yOf(p.value)
+        return (
+          <g key={`${p.label}-${i}`}>
+            <circle cx={cx} cy={cy} r={3.5} fill={color} stroke={theme.palette.background.paper} strokeWidth={1.5} />
+            <circle
+              cx={cx}
+              cy={cy}
+              r={11}
+              fill="transparent"
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={(e) => onPointEnter(e, p)}
+              onMouseMove={onPointMove}
+            />
+          </g>
+        )
+      })}
+
+      {points.map((p, i) =>
+        i % labelEvery === 0 ? (
+          <text key={`lbl-${i}`} x={xOf(i)} y={h - 8} textAnchor="middle" fontSize={10} fill={theme.palette.text.secondary}>
+            {formatShortDate(p.label)}
+          </text>
+        ) : null,
+      )}
+
+      <text x={pad.left} y={pad.top - 4} fontSize={10} fill={theme.palette.text.secondary}>
+        макс {formatValue(max)}
+      </text>
+    </svg>
   )
-}
+})
 
 function buildTipRows(p: LinePoint, formatValue: (v: number) => string, valueLabel: string): TooltipRow[] {
   return [
@@ -313,7 +373,7 @@ export function DonutChart({ items, formatValue, centerLabel = 'всего', dro
   }
 
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }} onMouseLeave={() => { setActive(null); setTip(null) }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }} onMouseLeave={() => { setActive(null); setTip(null) }}>
       <Box sx={{ position: 'relative', flexShrink: 0 }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Круговая диаграмма">
           {segments.length === 1 ? (
@@ -354,7 +414,7 @@ export function DonutChart({ items, formatValue, centerLabel = 'всего', dro
         </Box>
       </Box>
 
-      <Stack spacing={0.5} sx={{ flex: 1, minWidth: 140 }}>
+      <Stack spacing={0.5} sx={{ width: '100%', maxWidth: 300 }}>
         {segments.map(({ item }, i) => {
           const pct = ((item.value / total) * 100).toFixed(1)
           return (
