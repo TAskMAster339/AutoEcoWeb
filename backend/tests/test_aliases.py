@@ -1,5 +1,3 @@
-"""Алиасы со scope: создание, пагинация, применение к существующим записям."""
-
 from decimal import Decimal
 
 from fastapi import HTTPException

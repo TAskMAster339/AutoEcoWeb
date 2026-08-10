@@ -5,7 +5,17 @@ from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import Table, and_, bindparam, case, func, nulls_last, or_, select, update
+from sqlalchemy import (
+    Table,
+    and_,
+    bindparam,
+    case,
+    func,
+    nulls_last,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
@@ -679,7 +689,7 @@ class TransactionRepository:
         "*слово*" — wildcard-стиль: * трактуется как .* (только если паттерн
         не скомпилировался как есть); действительно невалидный regex -> 422.
         Только расходы с ценой (price или amount) > 0.
-        """
+        """  # noqa: RUF002
         conditions: list[ColumnElement[bool]] = [
             Transaction.user_id == user_id,  # type: ignore[arg-type]
             Transaction.operation_type.in_(_EXPENSE_TYPES),

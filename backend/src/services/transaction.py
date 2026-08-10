@@ -43,7 +43,7 @@ _SCOPE_PRODUCT = "product"
 
 
 def _money2(value: float) -> Decimal:
-    """float → Decimal с 2 знаками: без хвостов плавающей точки ('45.00', не '45.0')."""
+    """float → Decimal с 2 знаками: без хвостов плавающей точки ('45.00', не '45.0')."""  # noqa: RUF002
     return Decimal(str(round(value, 2))).quantize(Decimal("0.01"))
 
 
@@ -486,7 +486,7 @@ class TransactionService:
         - если хотя бы у одной price отсутствует — берём amount у всех
           (amount заполнен всегда). Статистика (avg/median/stddev) — по
           индивидуальным значениям; stddev популяционное (pstdev).
-        """
+        """  # noqa: RUF002
         if not name.strip():
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -508,7 +508,7 @@ class TransactionService:
                 stddev=Decimal("0"),
                 count=0,
             )
-        # Единый источник цены для всего матча: price у всех ИЛИ amount у всех.
+        # Единый источник цены для всего матча
         use_price = all(price is not None for _, price, _, _, _ in rows)
         effective: list[tuple[str, str | None, Decimal]] = []
         for day_, price, amount, store, _name in rows:

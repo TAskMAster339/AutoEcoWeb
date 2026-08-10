@@ -1118,7 +1118,11 @@ async def test_price_chart_no_mix_price_and_amount(session):
     user = await _make_user(session)
     service = _tx_service(session)
     # у первой price = 100, у остальных price=None; amount у всех заполнен
-    for price, amount, day in [("100.00", "40.00", 10), (None, "60.00", 12), (None, "50.00", 14)]:
+    for price, amount, day in [
+        ("100.00", "40.00", 10),
+        (None, "60.00", 12),
+        (None, "50.00", 14),
+    ]:
         await service.create_standalone(
             user,
             TransactionCreate(

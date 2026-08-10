@@ -41,7 +41,9 @@ class SellerService:
             )
         return seller
 
-    async def list_stores(self, user_id: UUID) -> list[tuple[UUID, str, str, UUID | None, str | None]]:
+    async def list_stores(
+        self, user_id: UUID
+    ) -> list[tuple[UUID, str, str, UUID | None, str | None]]:
         return await self._repo.list_stores(user_id)
 
     async def list_management(self, user_id: UUID):
@@ -50,17 +52,25 @@ class SellerService:
     async def get_owned(self, user_id: UUID, seller_id: UUID) -> Seller:
         seller = await self._repo.get_by_id(user_id, seller_id)
         if seller is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Магазин не найден")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Магазин не найден"
+            )
         return seller
 
     async def update(self, user_id: UUID, seller_id: UUID, raw_name: str) -> Seller:
         name = raw_name.strip()
         if not name:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Название магазина не может быть пустым")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Название магазина не может быть пустым",
+            )
         seller = await self.get_owned(user_id, seller_id)
         duplicate = await self._repo.get_by_name(user_id, name)
         if duplicate is not None and duplicate.id != seller.id:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Такой магазин уже существует")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Такой магазин уже существует",
+            )
         normalized, alias_id = await self._resolve(user_id, name)
         seller.name = name
         seller.normalized_name = normalized
@@ -71,14 +81,19 @@ class SellerService:
     async def delete(self, user_id: UUID, seller_id: UUID) -> None:
         seller = await self.get_owned(user_id, seller_id)
         if not await self._repo.delete_if_unused(seller):
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Нельзя удалить магазин, пока он используется")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Нельзя удалить магазин, пока он используется",
+            )
 
     async def delete_if_unused(self, user_id: UUID, seller_id: UUID) -> None:
         seller = await self._repo.get_by_id(user_id, seller_id)
         if seller is not None:
             await self._repo.delete_if_unused(seller)
 
-    async def reapply(self, user_id: UUID, *, rebuild_empty: bool = False) -> list[UUID]:
+    async def reapply(
+        self, user_id: UUID, *, rebuild_empty: bool = False
+    ) -> list[UUID]:
         aliases = await self._alias_repo.list_all(user_id, scope=_SCOPE_SELLER)
         rows = await self._repo.list_name_columns(user_id)
         if not rows or (not aliases and not rebuild_empty):

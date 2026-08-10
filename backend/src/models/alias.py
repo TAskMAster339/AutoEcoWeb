@@ -14,7 +14,6 @@ from src.models.base import BaseModel
 
 
 class Alias(BaseModel):
-
     __tablename__ = "aliases"
     __table_args__ = (
         Index(

@@ -55,7 +55,12 @@ class ImportRowIn(BaseModel):
     store: str | None = Field(default=None, max_length=255)
     description: str = Field(min_length=1, max_length=255)
     income: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
-    expense: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)  # noqa: E501
+    expense: Decimal = Field(
+        default=Decimal("0"),
+        ge=0,
+        max_digits=12,
+        decimal_places=2,
+    )
 
     @field_validator("category", "store", mode="before")
     @classmethod

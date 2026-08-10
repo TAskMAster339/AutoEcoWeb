@@ -33,8 +33,12 @@ async def test_get_or_create_required_rejects_blank(seller_service, user):
 
 async def test_get_or_create_applies_seller_alias(seller_service, session, user):
     await AliasRepository(session).create(
-        user_id=user.id, scope="seller", original_name="пятёр",
-        alias_name="Пятерочка", is_regex=False, priority=0,
+        user_id=user.id,
+        scope="seller",
+        original_name="пятёр",
+        alias_name="Пятерочка",
+        is_regex=False,
+        priority=0,
     )
     seller = await seller_service.get_or_create(user.id, "Пятёрочка №1")
     assert seller is not None
@@ -45,8 +49,12 @@ async def test_get_or_create_applies_seller_alias(seller_service, session, user)
 async def test_reapply_updates_normalized_from_aliases(seller_service, session, user):
     seller = await seller_service.get_or_create(user.id, "Перекресток")
     await AliasRepository(session).create(
-        user_id=user.id, scope="seller", original_name="перекр",
-        alias_name="ПЕРЕКРЕСТОК", is_regex=False, priority=0,
+        user_id=user.id,
+        scope="seller",
+        original_name="перекр",
+        alias_name="ПЕРЕКРЕСТОК",
+        is_regex=False,
+        priority=0,
     )
     changed = await seller_service.reapply(user.id)
     assert seller is not None and seller.id in changed
@@ -54,11 +62,17 @@ async def test_reapply_updates_normalized_from_aliases(seller_service, session, 
     assert seller.normalized_name == "ПЕРЕКРЕСТОК"
 
 
-async def test_reapply_after_alias_delete_restores_source(seller_service, session, user):
+async def test_reapply_after_alias_delete_restores_source(
+    seller_service, session, user
+):
     seller = await seller_service.get_or_create(user.id, "Пятёрочка")
     alias = await AliasRepository(session).create(
-        user_id=user.id, scope="seller", original_name="пят",
-        alias_name="5ka", is_regex=False, priority=0,
+        user_id=user.id,
+        scope="seller",
+        original_name="пят",
+        alias_name="5ka",
+        is_regex=False,
+        priority=0,
     )
     await seller_service.reapply(user.id)
     await session.refresh(seller)

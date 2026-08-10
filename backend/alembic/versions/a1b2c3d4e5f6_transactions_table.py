@@ -11,37 +11,38 @@ Revises: 44807a90ac0c
 Create Date: 2026-08-08
 
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+from typing import Union
+
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'a1b2c3d4e5f6'
-down_revision: Union[str, Sequence[str], None] = '44807a90ac0c'
+revision: str = "a1b2c3d4e5f6"
+down_revision: Union[str, Sequence[str], None] = "44807a90ac0c"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.rename_table('receipt_items', 'transactions')
+    op.rename_table("receipt_items", "transactions")
 
-    op.alter_column('transactions', 'product_name', new_column_name='name')
-    op.alter_column('transactions', 'total_price', new_column_name='amount')
+    op.alter_column("transactions", "product_name", new_column_name="name")
+    op.alter_column("transactions", "total_price", new_column_name="amount")
 
     # Новые колонки (nullable → бэкафилл → NOT NULL)
-    op.add_column('transactions', sa.Column('user_id', sa.Uuid(), nullable=True))
+    op.add_column("transactions", sa.Column("user_id", sa.Uuid(), nullable=True))
     op.add_column(
-        'transactions',
-        sa.Column('datetime', sa.DateTime(timezone=True), nullable=True),
+        "transactions",
+        sa.Column("datetime", sa.DateTime(timezone=True), nullable=True),
     )
     op.add_column(
-        'transactions',
-        sa.Column('operation_type', sa.SmallInteger(), nullable=True),
+        "transactions",
+        sa.Column("operation_type", sa.SmallInteger(), nullable=True),
     )
 
-    # Все существующие строки — из чеков: тянем владельца, дату и тип операции
     op.execute(
         """
         UPDATE transactions t
@@ -50,83 +51,81 @@ def upgrade() -> None:
             operation_type = r.operation_type
         FROM receipts r
         WHERE t.receipt_id = r.id
-        """
+        """,
     )
-    op.alter_column('transactions', 'user_id', nullable=False)
-    op.alter_column('transactions', 'datetime', nullable=False)
-    op.alter_column('transactions', 'operation_type', nullable=False)
+    op.alter_column("transactions", "user_id", nullable=False)
+    op.alter_column("transactions", "datetime", nullable=False)
+    op.alter_column("transactions", "operation_type", nullable=False)
 
     # Ручные транзакции: чек/позиция/кол-во/цена необязательны
-    op.alter_column('transactions', 'receipt_id', nullable=True)
-    op.alter_column('transactions', 'position', nullable=True)
-    op.alter_column('transactions', 'quantity', nullable=True)
-    op.alter_column('transactions', 'unit', nullable=True)
-    op.alter_column('transactions', 'price', nullable=True)
+    op.alter_column("transactions", "receipt_id", nullable=True)
+    op.alter_column("transactions", "position", nullable=True)
+    op.alter_column("transactions", "quantity", nullable=True)
+    op.alter_column("transactions", "unit", nullable=True)
+    op.alter_column("transactions", "price", nullable=True)
 
     # Индексы под новое имя
-    op.drop_index('ix_receipt_items_receipt', table_name='transactions')
-    op.drop_index('ix_receipt_items_tag', table_name='transactions')
-    op.create_index('ix_transactions_receipt', 'transactions', ['receipt_id'])
-    op.create_index('ix_transactions_tag', 'transactions', ['tag_id'])
+    op.drop_index("ix_receipt_items_receipt", table_name="transactions")
+    op.drop_index("ix_receipt_items_tag", table_name="transactions")
+    op.create_index("ix_transactions_receipt", "transactions", ["receipt_id"])
+    op.create_index("ix_transactions_tag", "transactions", ["tag_id"])
     op.create_index(
-        'ix_transactions_user_created',
-        'transactions',
-        ['user_id', 'created_at', 'id'],
+        "ix_transactions_user_created",
+        "transactions",
+        ["user_id", "created_at", "id"],
     )
 
     # FK: владелец + переименование старых ограничений
     op.create_foreign_key(
-        'fk_transactions_user_id',
-        'transactions',
-        'users',
-        ['user_id'],
-        ['id'],
-        ondelete='CASCADE',
+        "fk_transactions_user_id",
+        "transactions",
+        "users",
+        ["user_id"],
+        ["id"],
+        ondelete="CASCADE",
     )
     op.execute(
-        'ALTER TABLE transactions RENAME CONSTRAINT '
-        'receipt_items_pkey TO transactions_pkey'
+        "ALTER TABLE transactions RENAME CONSTRAINT "
+        "receipt_items_pkey TO transactions_pkey",
     )
     op.execute(
-        'ALTER TABLE transactions RENAME CONSTRAINT '
-        'receipt_items_receipt_id_fkey TO transactions_receipt_id_fkey'
+        "ALTER TABLE transactions RENAME CONSTRAINT "
+        "receipt_items_receipt_id_fkey TO transactions_receipt_id_fkey",
     )
     op.execute(
-        'ALTER TABLE transactions RENAME CONSTRAINT '
-        'receipt_items_tag_id_fkey TO transactions_tag_id_fkey'
+        "ALTER TABLE transactions RENAME CONSTRAINT "
+        "receipt_items_tag_id_fkey TO transactions_tag_id_fkey",
     )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     op.execute(
-        'ALTER TABLE transactions RENAME CONSTRAINT '
-        'transactions_tag_id_fkey TO receipt_items_tag_id_fkey'
+        "ALTER TABLE transactions RENAME CONSTRAINT "
+        "transactions_tag_id_fkey TO receipt_items_tag_id_fkey",
     )
     op.execute(
-        'ALTER TABLE transactions RENAME CONSTRAINT '
-        'transactions_receipt_id_fkey TO receipt_items_receipt_id_fkey'
+        "ALTER TABLE transactions RENAME CONSTRAINT "
+        "transactions_receipt_id_fkey TO receipt_items_receipt_id_fkey",
     )
     op.execute(
-        'ALTER TABLE transactions RENAME CONSTRAINT '
-        'transactions_pkey TO receipt_items_pkey'
+        "ALTER TABLE transactions RENAME CONSTRAINT "
+        "transactions_pkey TO receipt_items_pkey",
     )
-    op.drop_constraint(
-        'fk_transactions_user_id', 'transactions', type_='foreignkey'
-    )
-    op.drop_index('ix_transactions_user_created', table_name='transactions')
-    op.drop_index('ix_transactions_tag', table_name='transactions')
-    op.drop_index('ix_transactions_receipt', table_name='transactions')
-    op.create_index('ix_receipt_items_tag', 'transactions', ['tag_id'])
-    op.create_index('ix_receipt_items_receipt', 'transactions', ['receipt_id'])
-    op.alter_column('transactions', 'price', nullable=False)
-    op.alter_column('transactions', 'unit', nullable=False)
-    op.alter_column('transactions', 'quantity', nullable=False)
-    op.alter_column('transactions', 'position', nullable=False)
-    op.alter_column('transactions', 'receipt_id', nullable=False)
-    op.alter_column('transactions', 'operation_type', nullable=True)
-    op.alter_column('transactions', 'datetime', nullable=True)
-    op.alter_column('transactions', 'user_id', nullable=True)
-    op.alter_column('transactions', 'amount', new_column_name='total_price')
-    op.alter_column('transactions', 'name', new_column_name='product_name')
-    op.rename_table('transactions', 'receipt_items')
+    op.drop_constraint("fk_transactions_user_id", "transactions", type_="foreignkey")
+    op.drop_index("ix_transactions_user_created", table_name="transactions")
+    op.drop_index("ix_transactions_tag", table_name="transactions")
+    op.drop_index("ix_transactions_receipt", table_name="transactions")
+    op.create_index("ix_receipt_items_tag", "transactions", ["tag_id"])
+    op.create_index("ix_receipt_items_receipt", "transactions", ["receipt_id"])
+    op.alter_column("transactions", "price", nullable=False)
+    op.alter_column("transactions", "unit", nullable=False)
+    op.alter_column("transactions", "quantity", nullable=False)
+    op.alter_column("transactions", "position", nullable=False)
+    op.alter_column("transactions", "receipt_id", nullable=False)
+    op.alter_column("transactions", "operation_type", nullable=True)
+    op.alter_column("transactions", "datetime", nullable=True)
+    op.alter_column("transactions", "user_id", nullable=True)
+    op.alter_column("transactions", "amount", new_column_name="total_price")
+    op.alter_column("transactions", "name", new_column_name="product_name")
+    op.rename_table("transactions", "receipt_items")

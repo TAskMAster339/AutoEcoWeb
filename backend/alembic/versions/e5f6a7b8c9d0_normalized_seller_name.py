@@ -3,10 +3,12 @@
 Revision ID: e5f6a7b8c9d0
 Revises: d4e5f6a7b8c9
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+from typing import Union
+
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "e5f6a7b8c9d0"
 down_revision: Union[str, Sequence[str], None] = "d4e5f6a7b8c9"
@@ -26,14 +28,14 @@ def upgrade() -> None:
     op.execute(
         sa.text(
             "UPDATE receipts SET normalized_seller_name = seller_name "
-            "WHERE normalized_seller_name IS NULL"
-        )
+            "WHERE normalized_seller_name IS NULL",
+        ),
     )
     op.execute(
         sa.text(
             "UPDATE transactions SET normalized_seller_name = seller_name "
-            "WHERE normalized_seller_name IS NULL AND seller_name IS NOT NULL"
-        )
+            "WHERE normalized_seller_name IS NULL AND seller_name IS NOT NULL",
+        ),
     )
     op.alter_column("receipts", "normalized_seller_name", nullable=False)
 

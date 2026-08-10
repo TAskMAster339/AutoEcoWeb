@@ -3,10 +3,12 @@
 Revision ID: a7b8c9d0e1f2
 Revises: f6a7b8c9d0e1
 """
-from typing import Sequence, Union
 
-from alembic import op
+from collections.abc import Sequence
+from typing import Union
+
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "a7b8c9d0e1f2"
 down_revision: Union[str, Sequence[str], None] = "f6a7b8c9d0e1"
@@ -22,15 +24,33 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("normalized_name", sa.String(length=255), nullable=False),
         sa.Column("seller_alias_id", sa.Uuid(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["seller_alias_id"], ["aliases.id"], ondelete="SET NULL"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["seller_alias_id"],
+            ["aliases.id"],
+            ondelete="SET NULL",
+        ),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("user_id", "name", name="uq_sellers_user_name"),
     )
     op.create_index("ix_sellers_user_id", "sellers", ["user_id"])
-    op.create_index("ix_sellers_user_created", "sellers", ["user_id", "created_at", "id"])
+    op.create_index(
+        "ix_sellers_user_created",
+        "sellers",
+        ["user_id", "created_at", "id"],
+    )
     op.create_index("ix_sellers_seller_alias_id", "sellers", ["seller_alias_id"])
 
     op.execute(
@@ -134,13 +154,21 @@ def upgrade() -> None:
         ),
     )
 
-    op.drop_constraint("fk_receipts_seller_name_alias_id_aliases", "receipts", type_="foreignkey")
+    op.drop_constraint(
+        "fk_receipts_seller_name_alias_id_aliases",
+        "receipts",
+        type_="foreignkey",
+    )
     op.drop_index("ix_receipts_seller_name_alias_id", table_name="receipts")
     op.drop_column("receipts", "seller_name")
     op.drop_column("receipts", "normalized_seller_name")
     op.drop_column("receipts", "seller_name_alias_id")
 
-    op.drop_constraint("fk_transactions_seller_name_alias_id_aliases", "transactions", type_="foreignkey")
+    op.drop_constraint(
+        "fk_transactions_seller_name_alias_id_aliases",
+        "transactions",
+        type_="foreignkey",
+    )
     op.drop_index("ix_transactions_seller_name_alias_id", table_name="transactions")
     op.drop_column("transactions", "seller_name")
     op.drop_column("transactions", "normalized_seller_name")
@@ -148,12 +176,30 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.add_column("receipts", sa.Column("seller_name", sa.String(length=255), nullable=True))
-    op.add_column("receipts", sa.Column("normalized_seller_name", sa.String(length=255), nullable=True))
-    op.add_column("receipts", sa.Column("seller_name_alias_id", sa.Uuid(), nullable=True))
-    op.add_column("transactions", sa.Column("seller_name", sa.String(length=255), nullable=True))
-    op.add_column("transactions", sa.Column("normalized_seller_name", sa.String(length=255), nullable=True))
-    op.add_column("transactions", sa.Column("seller_name_alias_id", sa.Uuid(), nullable=True))
+    op.add_column(
+        "receipts",
+        sa.Column("seller_name", sa.String(length=255), nullable=True),
+    )
+    op.add_column(
+        "receipts",
+        sa.Column("normalized_seller_name", sa.String(length=255), nullable=True),
+    )
+    op.add_column(
+        "receipts",
+        sa.Column("seller_name_alias_id", sa.Uuid(), nullable=True),
+    )
+    op.add_column(
+        "transactions",
+        sa.Column("seller_name", sa.String(length=255), nullable=True),
+    )
+    op.add_column(
+        "transactions",
+        sa.Column("normalized_seller_name", sa.String(length=255), nullable=True),
+    )
+    op.add_column(
+        "transactions",
+        sa.Column("seller_name_alias_id", sa.Uuid(), nullable=True),
+    )
 
     op.execute(
         sa.text(
@@ -182,16 +228,42 @@ def downgrade() -> None:
 
     op.alter_column("receipts", "seller_name", nullable=False)
     op.alter_column("receipts", "normalized_seller_name", nullable=False)
-    op.create_foreign_key("fk_receipts_seller_name_alias_id_aliases", "receipts", "aliases", ["seller_name_alias_id"], ["id"], ondelete="SET NULL")
-    op.create_index("ix_receipts_seller_name_alias_id", "receipts", ["seller_name_alias_id"])
-    op.create_foreign_key("fk_transactions_seller_name_alias_id_aliases", "transactions", "aliases", ["seller_name_alias_id"], ["id"], ondelete="SET NULL")
-    op.create_index("ix_transactions_seller_name_alias_id", "transactions", ["seller_name_alias_id"])
+    op.create_foreign_key(
+        "fk_receipts_seller_name_alias_id_aliases",
+        "receipts",
+        "aliases",
+        ["seller_name_alias_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
+    op.create_index(
+        "ix_receipts_seller_name_alias_id",
+        "receipts",
+        ["seller_name_alias_id"],
+    )
+    op.create_foreign_key(
+        "fk_transactions_seller_name_alias_id_aliases",
+        "transactions",
+        "aliases",
+        ["seller_name_alias_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
+    op.create_index(
+        "ix_transactions_seller_name_alias_id",
+        "transactions",
+        ["seller_name_alias_id"],
+    )
 
     op.drop_index("ix_receipts_seller_id", table_name="receipts")
     op.drop_constraint("fk_receipts_seller_id_sellers", "receipts", type_="foreignkey")
     op.drop_column("receipts", "seller_id")
     op.drop_index("ix_transactions_seller_id", table_name="transactions")
-    op.drop_constraint("fk_transactions_seller_id_sellers", "transactions", type_="foreignkey")
+    op.drop_constraint(
+        "fk_transactions_seller_id_sellers",
+        "transactions",
+        type_="foreignkey",
+    )
     op.drop_column("transactions", "seller_id")
     op.drop_index("ix_sellers_seller_alias_id", table_name="sellers")
     op.drop_index("ix_sellers_user_created", table_name="sellers")
