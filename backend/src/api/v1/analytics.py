@@ -24,7 +24,7 @@ async def get_analytics(  # noqa: PLR0913
     search: str | None = Query(None, max_length=255),
     seller_names: list[str] | None = Query(None, max_length=255),  # noqa: B008
 ) -> AnalyticsResponse:
-    """Аналитика за период: по дням, по магазинам, по тегам — считает SQL."""
+    """Аналитика за период: по дням, магазинам, категориям — считает SQL."""
     return await transaction_service.analytics(
         _current_user,
         date_from=_day_bounds(date_from, end_of_day=False) if date_from else None,
