@@ -261,6 +261,7 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
                 autoFocus
                 placeholder="Например: Кофе, проезд, зарплата"
                 helperText={tx.nameAliasName ? `Алиас: оригинал «${tx.nameSource}»` : ' '}
+                sx={{ '& .MuiInputBase-root': { minHeight: 56 } }}
               />
               <Tooltip title="Создать алиас названия">
                 <span>
