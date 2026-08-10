@@ -665,7 +665,9 @@ class TransactionRepository:
         Возвращает ОБА значения (price/amount) — какой из них считать ценой
         решает сервис единообразно для всего матча (без смешивания масштабов).
         Подстрока ищется в name/normalized_name (ILIKE); при is_regex —
-        re.search(IGNORECASE) по тем же полям. Невалидный regex -> 422.
+        re.search(IGNORECASE) по тем же полям. "*слово*" — wildcard-стиль:
+        * трактуется как .* (только если паттерн не скомпилировался как есть);
+        действительно невалидный regex -> 422.
         Только расходы с ценой (price или amount) > 0.
         """
         conditions: list[ColumnElement[bool]] = [
@@ -705,18 +707,26 @@ class TransactionRepository:
         )
         rows = (await self._session.execute(stmt)).all()
         if is_regex:
+            pattern = name
             try:
-                pattern = re.compile(name, re.IGNORECASE)
-            except re.error as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail=f"Невалидное регулярное выражение: {exc}",
-                ) from exc
+                rx = re.compile(pattern, re.IGNORECASE)
+            except re.error:
+                # "*биойогурт*" — wildcard-стиль, невалидный regex (ведущий *
+                # без атома). Трактуем * как .* и пробуем снова; если и так
+                # не компилируется — честный 422.
+                pattern = pattern.replace("*", ".*")
+                try:
+                    rx = re.compile(pattern, re.IGNORECASE)
+                except re.error as exc:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                        detail=f"Невалидное регулярное выражение: {exc}",
+                    ) from exc
             rows = [
                 row
                 for row in rows
-                if pattern.search(str(row[4])) is not None
-                or pattern.search(str(row[3] or "")) is not None
+                if rx.search(str(row[4])) is not None
+                or rx.search(str(row[3] or "")) is not None
             ]
         return [
             (

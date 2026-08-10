@@ -1004,6 +1004,39 @@ async def test_price_chart_no_mix_price_and_amount(session):
     assert r.stddev == Decimal("8.16")
 
 
+async def test_price_chart_glob_wildcards(session):
+    """*биойогурт* — wildcard-стиль: ищется подстрока, а не 422."""
+    user = await _make_user(session)
+    service = _tx_service(session)
+    for name, amount, day in [
+        ("Биойогурт", "55.00", 10),
+        ("Биойогурт клубничный", "62.00", 12),
+        ("Снежок биойогурт", "30.00", 14),
+        ("Хлеб", "45.00", 15),  # не матчится
+    ]:
+        await service.create_standalone(
+            user,
+            TransactionCreate(
+                name=name,
+                amount=Decimal(amount),
+                price=Decimal(amount),
+                quantity=Decimal("1"),
+                datetime=datetime(2026, 1, day, tzinfo=timezone.utc),
+            ),
+        )
+    r = await service.price_chart(
+        user,
+        name="*биойогурт*",
+        is_regex=True,
+        date_from=None,
+        date_to=None,
+    )
+    assert r.count == 3
+    assert r.avg_price == Decimal("49.00")  # (55+62+30)/3
+    # все точки — только биойогурты, хлеб исключён
+    assert {p.day for p in r.points} == {"2026-01-10", "2026-01-12", "2026-01-14"}
+
+
 async def test_price_chart_invalid_regex(session):
     user = await _make_user(session)
     service = _tx_service(session)
