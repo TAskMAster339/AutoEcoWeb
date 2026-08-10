@@ -54,6 +54,8 @@ The AI MUST NEVER
 - invent backend fields
 - change authentication flow
 - fake backend implementation
+- log into the app or do manual browser testing (login, navigation, clicks,
+  form filling) — browser smoke checks only with explicit owner permission
 
 If an endpoint is missing:
 

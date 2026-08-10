@@ -459,9 +459,9 @@ async def test_list_page_filters_by_date_tag_search(session):
         params = {
             "date_from": None,
             "date_to": None,
-            "tag_id": None,
+            "tag_ids": None,
             "search": None,
-            "seller_name": None,
+            "seller_names": None,
             "sort_by": "date",
             "sort_dir": "desc",
         }
@@ -475,7 +475,7 @@ async def test_list_page_filters_by_date_tag_search(session):
     rows = await _list(date_to=datetime(2026, 1, 31, 23, 59, tzinfo=timezone.utc))
     assert {tx.id for tx, _, _ in rows} == {jan.id}
 
-    rows = await _list(tag_id=tag.id)
+    rows = await _list(tag_ids=[tag.id])
     assert {tx.id for tx, _, _ in rows} == {jan.id}
 
     # sqlite: lower() не знает кириллицу — ищем подстроку в нижнем регистре
@@ -495,13 +495,49 @@ async def test_list_page_filters_by_seller_name(session):
         TransactionCreate(name="Метро", amount=Decimal("62.00"), seller_name="Метрополитен"),
     )
     # свой магазин
-    rows, total = await service.list_page(user, limit=50, offset=0, seller_name="Метрополитен")
+    rows, total = await service.list_page(user, limit=50, offset=0, seller_names=["Метрополитен"])
     assert total == 1 and rows[0][0].name == "Метро"  # noqa: PLR2004
     # магазин из чека (COALESCE)
     receipt = await _make_receipt(session, user)
     await service.create_for_receipt(receipt, [_item("Молоко", "60.00")])
-    rows2, total2 = await service.list_page(user, limit=50, offset=0, seller_name="ПЕРЕКРЕСТОК")
+    rows2, total2 = await service.list_page(user, limit=50, offset=0, seller_names=["ПЕРЕКРЕСТОК"])
     assert total2 == 1 and rows2[0][0].name == "Молоко"  # noqa: PLR2004
+    # мультивыбор магазинов: IN по списку (свой + из чека)
+    rows3, total3 = await service.list_page(
+        user,
+        limit=50,
+        offset=0,
+        seller_names=["Метрополитен", "ПЕРЕКРЕСТОК"],
+    )
+    assert total3 == 2  # noqa: PLR2004
+    assert {row[0].name for row in rows3} == {"Метро", "Молоко"}
+
+
+async def test_list_page_filters_by_multiple_tags(session):
+    user = await _make_user(session)
+    tag_service = TagService(TagRepository(session))
+    food = await tag_service.create(user, TagCreate(name="Еда", color="#3B82F6"))
+    fun = await tag_service.create(user, TagCreate(name="Развлечения", color="#F59E0B"))
+    service = _tx_service(session)
+    tx_food = await service.create_standalone(
+        user,
+        TransactionCreate(name="Молоко", amount=Decimal("60.00"), tag_id=food.id),
+    )
+    tx_fun = await service.create_standalone(
+        user,
+        TransactionCreate(name="Steam", amount=Decimal("500.00"), tag_id=fun.id),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(name="Без тега", amount=Decimal("30.00")),
+    )
+    # один тег — как раньше
+    rows, total = await service.list_page(user, limit=50, offset=0, tag_ids=[food.id])
+    assert total == 1 and rows[0][0].id == tx_food.id  # noqa: PLR2004
+    # мультивыбор тегов: IN по списку
+    rows, total = await service.list_page(user, limit=50, offset=0, tag_ids=[food.id, fun.id])
+    assert total == 2  # noqa: PLR2004
+    assert {row[0].id for row in rows} == {tx_food.id, tx_fun.id}
 
 
 async def test_list_page_search_covers_comment_and_store(session):
@@ -644,9 +680,9 @@ async def test_summary_period_income_expenses_and_deltas(session):
         user,
         date_from=datetime(2026, 1, 1, tzinfo=timezone.utc),
         date_to=datetime(2026, 1, 31, 23, 59, 59, tzinfo=timezone.utc),
-        tag_id=None,
+        tag_ids=None,
         search=None,
-        seller_name=None,
+        seller_names=None,
     )
     assert s.income == Decimal("50.00")
     assert s.expenses == Decimal("100.00")
@@ -682,9 +718,9 @@ async def test_summary_opening_balance(session):
         user,
         date_from=datetime(2026, 1, 1, tzinfo=timezone.utc),
         date_to=datetime(2026, 1, 31, tzinfo=timezone.utc),
-        tag_id=None,
+        tag_ids=None,
         search=None,
-        seller_name=None,
+        seller_names=None,
     )
     assert s.opening_balance == Decimal("-200.00")
     assert s.expenses == Decimal("100.00")
@@ -702,9 +738,9 @@ async def test_summary_all_time_no_deltas(session):
         user,
         date_from=None,
         date_to=None,
-        tag_id=None,
+        tag_ids=None,
         search=None,
-        seller_name=None,
+        seller_names=None,
     )
     assert s.expenses == Decimal("100.00")
     assert s.opening_balance == Decimal("0")
@@ -755,9 +791,9 @@ async def test_analytics_grouping(session):
         user,
         date_from=None,
         date_to=None,
-        tag_id=None,
+        tag_ids=None,
         search=None,
-        seller_name=None,
+        seller_names=None,
     )
     daily = {d.day: (d.expenses, d.income) for d in a.daily}
     assert daily["2026-01-10"] == (Decimal("60.00"), Decimal("20.00"))

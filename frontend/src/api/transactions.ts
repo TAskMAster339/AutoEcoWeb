@@ -38,9 +38,11 @@ export interface TransactionsPageParams {
   offset?: number
   date_from?: string
   date_to?: string
-  tag_id?: string
+  /** Мультивыбор тегов (IN); пустой/отсутствующий = без фильтра. */
+  tag_ids?: string[]
   search?: string
-  seller_name?: string
+  /** Мультивыбор магазинов (IN); пустой/отсутствующий = без фильтра. */
+  seller_names?: string[]
   sort_by?: TransactionSortBy
   sort_dir?: 'asc' | 'desc'
 }
@@ -54,9 +56,10 @@ export function fetchTransactionsPage(
   if (params.offset !== undefined) search.set('offset', String(params.offset))
   if (params.date_from) search.set('date_from', params.date_from)
   if (params.date_to) search.set('date_to', params.date_to)
-  if (params.tag_id) search.set('tag_id', params.tag_id)
+  if (params.tag_ids?.length) params.tag_ids.forEach((id) => search.append('tag_ids', id))
   if (params.search) search.set('search', params.search)
-  if (params.seller_name) search.set('seller_name', params.seller_name)
+  if (params.seller_names?.length)
+    params.seller_names.forEach((name) => search.append('seller_names', name))
   if (params.sort_by) search.set('sort_by', params.sort_by)
   if (params.sort_dir) search.set('sort_dir', params.sort_dir)
   const qs = search.toString()

@@ -41,7 +41,10 @@ function invalidateAfterAliasChange(queryClient: ReturnType<typeof useQueryClien
 function updateSellerFilterAfterAlias(scope: AliasScope, originalName: string, aliasName: string) {
   if (scope !== 'seller') return
   const state = useUiStore.getState()
-  if (state.storeFilter === originalName) state.setStoreFilter(aliasName)
+  if (!state.storeFilters.includes(originalName)) return
+  state.setStoreFilters(
+    state.storeFilters.map((store) => (store === originalName ? aliasName : store)),
+  )
 }
 
 /**

@@ -20,16 +20,16 @@ async def get_analytics(  # noqa: PLR0913
     transaction_service: TransactionSvc,
     date_from: date | None = Query(None),  # noqa: B008
     date_to: date | None = Query(None),  # noqa: B008
-    tag_id: UUID | None = Query(None),
+    tag_ids: list[UUID] | None = Query(None),  # noqa: B008
     search: str | None = Query(None, max_length=255),
-    seller_name: str | None = Query(None, max_length=255),
+    seller_names: list[str] | None = Query(None, max_length=255),  # noqa: B008
 ) -> AnalyticsResponse:
     """Аналитика за период: по дням, по магазинам, по тегам — считает SQL."""
     return await transaction_service.analytics(
         _current_user,
         date_from=_day_bounds(date_from, end_of_day=False) if date_from else None,
         date_to=_day_bounds(date_to, end_of_day=True) if date_to else None,
-        tag_id=tag_id,
+        tag_ids=tag_ids,
         search=search,
-        seller_name=seller_name,
+        seller_names=seller_names,
     )

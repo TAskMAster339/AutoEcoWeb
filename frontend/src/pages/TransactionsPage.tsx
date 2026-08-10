@@ -186,8 +186,8 @@ export function TransactionsPage() {
   const openFilterSheet = useUiStore((s) => s.openFilterSheet)
   const openAddMenu = useUiStore((s) => s.openAddMenu)
   const search = useUiStore((s) => s.search)
-  const tagFilterId = useUiStore((s) => s.tagFilterId)
-  const storeFilter = useUiStore((s) => s.storeFilter)
+  const tagFilterIds = useUiStore((s) => s.tagFilterIds)
+  const storeFilters = useUiStore((s) => s.storeFilters)
   const periodKey = useUiStore((s) => s.periodKey)
   const customFrom = useUiStore((s) => s.customFrom)
   const customTo = useUiStore((s) => s.customTo)
@@ -201,15 +201,15 @@ export function TransactionsPage() {
     const query = new URLSearchParams(window.location.search)
     const state = useUiStore.getState()
     const urlSearch = query.get('search')
-    const urlTag = query.get('tag')
-    const urlStore = query.get('store')
+    const urlTags = query.getAll('tag')
+    const urlStores = query.getAll('store')
     const urlPeriod = query.get('period')
     const urlFrom = query.get('from')
     const urlTo = query.get('to')
     const urlMonth = query.get('month')
     if (urlSearch !== null) state.setSearch(urlSearch)
-    if (urlTag !== null) state.setTagFilter(urlTag || null)
-    if (urlStore !== null) state.setStoreFilter(urlStore || null)
+    if (urlTags.some(Boolean)) state.setTagFilterIds(urlTags.filter(Boolean))
+    if (urlStores.some(Boolean)) state.setStoreFilters(urlStores.filter(Boolean))
     if (urlFrom && urlTo) state.setCustomRange(urlFrom, urlTo)
     else if (urlMonth) state.setMonthPeriod(urlMonth)
     else if (urlPeriod) state.setPeriodKey(urlPeriod as Parameters<typeof state.setPeriodKey>[0])
@@ -220,8 +220,8 @@ export function TransactionsPage() {
     if (!urlInitialized.current) return
     const query = new URLSearchParams()
     if (search) query.set('search', search)
-    if (tagFilterId) query.set('tag', tagFilterId)
-    if (storeFilter) query.set('store', storeFilter)
+    if (tagFilterIds.length) tagFilterIds.forEach((id) => query.append('tag', id))
+    if (storeFilters.length) storeFilters.forEach((store) => query.append('store', store))
     if (periodKey !== 'all') query.set('period', periodKey)
     if (periodKey === 'custom' && customFrom && customTo) {
       query.set('from', customFrom)
@@ -233,10 +233,10 @@ export function TransactionsPage() {
     if (nextUrl !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
       window.history.replaceState(null, '', nextUrl)
     }
-  }, [search, tagFilterId, storeFilter, periodKey, customFrom, customTo, monthYear])
+  }, [search, tagFilterIds, storeFilters, periodKey, customFrom, customTo, monthYear])
 
   const tagsMap = useMemo(() => new Map((tags ?? []).map((t) => [t.id, t])), [tags])
-  const hasFilters = Boolean(search || tagFilterId || storeFilter || periodKey !== 'all')
+  const hasFilters = Boolean(search || tagFilterIds.length || storeFilters.length || periodKey !== 'all')
 
   const showNoTransactions = total === 0 && (allTimeTotal ?? 0) === 0 && !hasFilters
   const showNotFound = total === 0 && !showNoTransactions

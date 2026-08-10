@@ -236,9 +236,9 @@ class TransactionService:
         offset: int = 0,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-        tag_id: UUID | None = None,
+        tag_ids: list[UUID] | None = None,
         search: str | None = None,
-        seller_name: str | None = None,
+        seller_names: list[str] | None = None,
         sort_by: str = "date",
         sort_dir: str = "desc",
     ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int]:
@@ -252,9 +252,9 @@ class TransactionService:
             offset=offset,
             date_from=date_from,
             date_to=date_to,
-            tag_id=tag_id,
+            tag_ids=tag_ids,
             search=search,
-            seller_name=seller_name,
+            seller_names=seller_names,
             sort_by=sort_by,
             sort_dir=sort_dir,
         )
@@ -265,9 +265,9 @@ class TransactionService:
         *,
         date_from: datetime | None,
         date_to: datetime | None,
-        tag_id: UUID | None,
+        tag_ids: list[UUID] | None,
         search: str | None,
-        seller_name: str | None,
+        seller_names: list[str] | None,
     ) -> TransactionSummary:
         """Показатели за период: суммы, счётчик, дельты, тренд, opening.
 
@@ -278,9 +278,9 @@ class TransactionService:
             user_id=user.id,
             date_from=date_from,
             date_to=date_to,
-            tag_id=tag_id,
+            tag_ids=tag_ids,
             search=search,
-            seller_name=seller_name,
+            seller_names=seller_names,
         )
         opening = (
             await self._tx_repo.opening_balance(user.id, date_from)
@@ -291,9 +291,9 @@ class TransactionService:
             user_id=user.id,
             date_from=date_from,
             date_to=date_to,
-            tag_id=tag_id,
+            tag_ids=tag_ids,
             search=search,
-            seller_name=seller_name,
+            seller_names=seller_names,
         )
         trend: list[Decimal] = []
         acc = opening
@@ -310,9 +310,9 @@ class TransactionService:
                 user_id=user.id,
                 date_from=prev_from,
                 date_to=prev_to,
-                tag_id=tag_id,
+                tag_ids=tag_ids,
                 search=search,
-                seller_name=seller_name,
+                seller_names=seller_names,
             )
             income_delta = income - prev_income
             expenses_delta = expenses - prev_expenses
@@ -334,34 +334,34 @@ class TransactionService:
         *,
         date_from: datetime | None,
         date_to: datetime | None,
-        tag_id: UUID | None,
+        tag_ids: list[UUID] | None,
         search: str | None,
-        seller_name: str | None,
+        seller_names: list[str] | None,
     ) -> AnalyticsResponse:
         """Аналитика за период: по дням, по магазинам, по тегам (SQL GROUP BY)."""
         daily = await self._tx_repo.daily_breakdown(
             user_id=user.id,
             date_from=date_from,
             date_to=date_to,
-            tag_id=tag_id,
+            tag_ids=tag_ids,
             search=search,
-            seller_name=seller_name,
+            seller_names=seller_names,
         )
         stores = await self._tx_repo.by_store(
             user_id=user.id,
             date_from=date_from,
             date_to=date_to,
-            tag_id=tag_id,
+            tag_ids=tag_ids,
             search=search,
-            seller_name=seller_name,
+            seller_names=seller_names,
         )
         tags = await self._tx_repo.by_tag(
             user_id=user.id,
             date_from=date_from,
             date_to=date_to,
-            tag_id=tag_id,
+            tag_ids=tag_ids,
             search=search,
-            seller_name=seller_name,
+            seller_names=seller_names,
         )
         return AnalyticsResponse(
             daily=[

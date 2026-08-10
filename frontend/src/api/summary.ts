@@ -13,9 +13,10 @@ function buildQuery(params: TransactionsPageParams): string {
   const search = new URLSearchParams()
   if (params.date_from) search.set('date_from', params.date_from)
   if (params.date_to) search.set('date_to', params.date_to)
-  if (params.tag_id) search.set('tag_id', params.tag_id)
+  if (params.tag_ids?.length) params.tag_ids.forEach((id) => search.append('tag_ids', id))
   if (params.search) search.set('search', params.search)
-  if (params.seller_name) search.set('seller_name', params.seller_name)
+  if (params.seller_names?.length)
+    params.seller_names.forEach((name) => search.append('seller_names', name))
   const qs = search.toString()
   return qs ? `?${qs}` : ''
 }

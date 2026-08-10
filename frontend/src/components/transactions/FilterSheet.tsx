@@ -29,15 +29,15 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
   const open = useUiStore((s) => s.filterSheetOpen)
   const close = useUiStore((s) => s.closeFilterSheet)
   const search = useUiStore((s) => s.search)
-  const tagFilterId = useUiStore((s) => s.tagFilterId)
-  const storeFilter = useUiStore((s) => s.storeFilter)
+  const tagFilterIds = useUiStore((s) => s.tagFilterIds)
+  const storeFilters = useUiStore((s) => s.storeFilters)
   const periodKey = useUiStore((s) => s.periodKey)
   const applyFilters = useUiStore((s) => s.applyFilters)
   const resetFilters = useUiStore((s) => s.resetFilters)
 
   const [localSearch, setLocalSearch] = useState(search)
-  const [localTagFilterId, setLocalTagFilterId] = useState(tagFilterId)
-  const [localStoreFilter, setLocalStoreFilter] = useState(storeFilter)
+  const [localTagFilterIds, setLocalTagFilterIds] = useState<string[]>(tagFilterIds)
+  const [localStoreFilters, setLocalStoreFilters] = useState<string[]>(storeFilters)
   const [localPeriodKey, setLocalPeriodKey] = useState(periodKey)
   const uniqueStores = useMemo(() => {
     const byDisplayName = new Map<string, Store>()
@@ -51,19 +51,23 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
     return [...byDisplayName.values()]
   }, [stores])
 
+  /** Переключатель значения в списке мультивыбора: добавить/убрать. */
+  const toggleInList = (list: string[], value: string): string[] =>
+    list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
+
   useEffect(() => {
     if (!open) return
     setLocalSearch(search)
-    setLocalTagFilterId(tagFilterId)
-    setLocalStoreFilter(storeFilter)
+    setLocalTagFilterIds(tagFilterIds)
+    setLocalStoreFilters(storeFilters)
     setLocalPeriodKey(periodKey)
-  }, [open, search, tagFilterId, storeFilter, periodKey])
+  }, [open, search, tagFilterIds, storeFilters, periodKey])
 
   const apply = () => {
     applyFilters({
       search: localSearch,
-      tagFilterId: localTagFilterId,
-      storeFilter: localStoreFilter,
+      tagFilterIds: localTagFilterIds,
+      storeFilters: localStoreFilters,
       periodKey: localPeriodKey,
     })
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
@@ -122,10 +126,10 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
                   key={filterValue}
                   label={displayName}
                   clickable
-                  color={localStoreFilter === filterValue ? 'primary' : 'default'}
-                  variant={localStoreFilter === filterValue ? 'filled' : 'outlined'}
+                  color={localStoreFilters.includes(filterValue) ? 'primary' : 'default'}
+                  variant={localStoreFilters.includes(filterValue) ? 'filled' : 'outlined'}
                   onClick={() =>
-                    setLocalStoreFilter(localStoreFilter === filterValue ? null : filterValue)
+                    setLocalStoreFilters((prev) => toggleInList(prev, filterValue))
                   }
                 />
               )
@@ -143,9 +147,9 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
                 key={t.id}
                 label={t.name}
                 clickable
-                color={localTagFilterId === t.id ? 'primary' : 'default'}
-                variant={localTagFilterId === t.id ? 'filled' : 'outlined'}
-                onClick={() => setLocalTagFilterId(localTagFilterId === t.id ? null : t.id)}
+                color={localTagFilterIds.includes(t.id) ? 'primary' : 'default'}
+                variant={localTagFilterIds.includes(t.id) ? 'filled' : 'outlined'}
+                onClick={() => setLocalTagFilterIds((prev) => toggleInList(prev, t.id))}
               />
             ))}
           </Box>

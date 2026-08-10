@@ -21,8 +21,9 @@ interface UiState {
   /** Конкретный месяц в формате «YYYY-MM» (период 'month'). */
   monthYear: string | null
   search: string
-  tagFilterId: string | null
-  storeFilter: string | null
+  /** Мультивыбор: пустой массив = без фильтра. */
+  tagFilterIds: string[]
+  storeFilters: string[]
   /** Меню «Добавить»: чек (QR/камера) или транзакция (форма). */
   addMenuOpen: boolean
   receiptSheetOpen: boolean
@@ -38,12 +39,12 @@ interface UiState {
   /** Устанавливает период «конкретный месяц»: monthYear в формате «YYYY-MM». */
   setMonthPeriod: (monthYear: string) => void
   setSearch: (value: string) => void
-  setTagFilter: (tagId: string | null) => void
-  setStoreFilter: (store: string | null) => void
+  setTagFilterIds: (tagIds: string[]) => void
+  setStoreFilters: (stores: string[]) => void
   applyFilters: (filters: {
     search: string
-    tagFilterId: string | null
-    storeFilter: string | null
+    tagFilterIds: string[]
+    storeFilters: string[]
     periodKey: PeriodKey
   }) => void
   openAddMenu: () => void
@@ -66,8 +67,8 @@ export const useUiStore = create<UiState>()(
       customTo: null,
       monthYear: null,
       search: '',
-      tagFilterId: null,
-      storeFilter: null,
+      tagFilterIds: [],
+      storeFilters: [],
       addMenuOpen: false,
       receiptSheetOpen: false,
       transactionSheetOpen: false,
@@ -81,10 +82,10 @@ export const useUiStore = create<UiState>()(
       setCustomRange: (customFrom, customTo) => set({ customFrom, customTo, periodKey: 'custom' }),
       setMonthPeriod: (monthYear) => set({ monthYear, periodKey: 'month' }),
       setSearch: (search) => set({ search }),
-      setTagFilter: (tagFilterId) => set({ tagFilterId }),
-      setStoreFilter: (storeFilter) => set({ storeFilter }),
-      applyFilters: ({ search, tagFilterId, storeFilter, periodKey }) =>
-        set({ search, tagFilterId, storeFilter, periodKey }),
+      setTagFilterIds: (tagFilterIds) => set({ tagFilterIds }),
+      setStoreFilters: (storeFilters) => set({ storeFilters }),
+      applyFilters: ({ search, tagFilterIds, storeFilters, periodKey }) =>
+        set({ search, tagFilterIds, storeFilters, periodKey }),
       openAddMenu: () => set({ addMenuOpen: true }),
       closeAddMenu: () => set({ addMenuOpen: false }),
       openReceiptSheet: () => set({ receiptSheetOpen: true }),
@@ -93,7 +94,8 @@ export const useUiStore = create<UiState>()(
       closeTransactionSheet: () => set({ transactionSheetOpen: false }),
       openFilterSheet: () => set({ filterSheetOpen: true }),
       closeFilterSheet: () => set({ filterSheetOpen: false }),
-      resetFilters: () => set({ search: '', tagFilterId: null, storeFilter: null, monthYear: null, periodKey: 'all' }),
+      resetFilters: () =>
+        set({ search: '', tagFilterIds: [], storeFilters: [], monthYear: null, periodKey: 'all' }),
     }),
     {
       name: 'autoeco-ui',

@@ -14,8 +14,8 @@ export function filterParams(
   customTo: string | null,
   monthYear: string | null,
   search: string,
-  tagFilterId: string | null,
-  storeFilter: string | null,
+  tagFilterIds: string[],
+  storeFilters: string[],
 ): TransactionsPageParams {
   const params: TransactionsPageParams = {}
   // «Всё время» — без дат: бэкенд считает по всем транзакциям
@@ -27,8 +27,8 @@ export function filterParams(
   }
   const q = search.trim()
   if (q) params.search = q
-  if (tagFilterId) params.tag_id = tagFilterId
-  if (storeFilter) params.seller_name = storeFilter
+  if (tagFilterIds.length) params.tag_ids = tagFilterIds
+  if (storeFilters.length) params.seller_names = storeFilters
   return params
 }
 
@@ -40,10 +40,10 @@ export function useFilterParams(): TransactionsPageParams {
   const customTo = useUiStore((s) => s.customTo)
   const monthYear = useUiStore((s) => s.monthYear)
   const search = useUiStore((s) => s.search)
-  const tagFilterId = useUiStore((s) => s.tagFilterId)
-  const storeFilter = useUiStore((s) => s.storeFilter)
+  const tagFilterIds = useUiStore((s) => s.tagFilterIds)
+  const storeFilters = useUiStore((s) => s.storeFilters)
   return useMemo(
-    () => filterParams(periodKey, customFrom, customTo, monthYear, search, tagFilterId, storeFilter),
-    [periodKey, customFrom, customTo, monthYear, search, tagFilterId, storeFilter],
+    () => filterParams(periodKey, customFrom, customTo, monthYear, search, tagFilterIds, storeFilters),
+    [periodKey, customFrom, customTo, monthYear, search, tagFilterIds, storeFilters],
   )
 }

@@ -57,29 +57,30 @@ def _filters(
     *,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
-    tag_id: UUID | None = None,
+    tag_ids: list[UUID] | None = None,
     search: str | None = None,
-    seller_name: str | None = None,
+    seller_names: list[str] | None = None,
 ) -> list[ColumnElement[bool]]:
     """Общие WHERE-условия списка и агрегатов (требуют left join receipts).
 
     user_id добавляет вызывающий — у агрегатов и списка он свой контекст.
     Поиск покрывает name/comment/магазин (как раньше фильтровал клиент).
+    tag_ids/seller_names — мультивыбор: транзакция проходит, если её тег
+    входит в список ИЛИ магазин входит в список (IN-условия).
     """  # noqa: RUF002
     conditions: list[ColumnElement[bool]] = []
     if date_from is not None:
         conditions.append(Transaction.check_datetime >= date_from)  # type: ignore[arg-type]
     if date_to is not None:
         conditions.append(Transaction.check_datetime <= date_to)  # type: ignore[arg-type]
-    if tag_id is not None:
-        conditions.append(Transaction.tag_id == tag_id)  # type: ignore[arg-type]
-    if seller_name is not None:
+    if tag_ids:
+        conditions.append(Transaction.tag_id.in_(tag_ids))  # type: ignore[arg-type]
+    if seller_names:
         conditions.append(
             func.coalesce(
                 Transaction.normalized_seller_name,
                 Receipt.normalized_seller_name,
-            )
-            == seller_name,
+            ).in_(seller_names),
         )  # type: ignore[arg-type]
     if search:
         q = f"%{search}%"
@@ -180,9 +181,9 @@ class TransactionRepository:
         offset: int = 0,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-        tag_id: UUID | None = None,
+        tag_ids: list[UUID] | None = None,
         search: str | None = None,
-        seller_name: str | None = None,
+        seller_names: list[str] | None = None,
         sort_by: str = "date",
         sort_dir: str = "desc",
     ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int]:
@@ -197,9 +198,9 @@ class TransactionRepository:
             *_filters(
                 date_from=date_from,
                 date_to=date_to,
-                tag_id=tag_id,
+                tag_ids=tag_ids,
                 search=search,
-                seller_name=seller_name,
+                seller_names=seller_names,
             ),
         ]
 
@@ -257,9 +258,9 @@ class TransactionRepository:
         user_id: UUID,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-        tag_id: UUID | None = None,
+        tag_ids: list[UUID] | None = None,
         search: str | None = None,
-        seller_name: str | None = None,
+        seller_names: list[str] | None = None,
     ) -> tuple[Decimal, Decimal, int]:
         """income, expenses, count за период — SQL-агрегация с фильтрами."""  # noqa: RUF002
         stmt = (
@@ -284,9 +285,9 @@ class TransactionRepository:
                 *_filters(
                     date_from=date_from,
                     date_to=date_to,
-                    tag_id=tag_id,
+                    tag_ids=tag_ids,
                     search=search,
-                    seller_name=seller_name,
+                    seller_names=seller_names,
                 ),
             )
         )
@@ -321,9 +322,9 @@ class TransactionRepository:
         user_id: UUID,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-        tag_id: UUID | None = None,
+        tag_ids: list[UUID] | None = None,
         search: str | None = None,
-        seller_name: str | None = None,
+        seller_names: list[str] | None = None,
     ) -> list[tuple[str, Decimal]]:
         """День -> нетто, по возрастанию дней."""
         day = func.date(Transaction.check_datetime)
@@ -349,9 +350,9 @@ class TransactionRepository:
                 *_filters(
                     date_from=date_from,
                     date_to=date_to,
-                    tag_id=tag_id,
+                    tag_ids=tag_ids,
                     search=search,
-                    seller_name=seller_name,
+                    seller_names=seller_names,
                 ),
             )
             .group_by(day)
@@ -366,9 +367,9 @@ class TransactionRepository:
         user_id: UUID,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-        tag_id: UUID | None = None,
+        tag_ids: list[UUID] | None = None,
         search: str | None = None,
-        seller_name: str | None = None,
+        seller_names: list[str] | None = None,
     ) -> list[tuple[str, Decimal, Decimal]]:
         """День -> для графика «Расходы по дням»."""
         day = func.date(Transaction.check_datetime)
@@ -394,9 +395,9 @@ class TransactionRepository:
                 *_filters(
                     date_from=date_from,
                     date_to=date_to,
-                    tag_id=tag_id,
+                    tag_ids=tag_ids,
                     search=search,
-                    seller_name=seller_name,
+                    seller_names=seller_names,
                 ),
             )
             .group_by(day)
@@ -411,9 +412,9 @@ class TransactionRepository:
         user_id: UUID,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-        tag_id: UUID | None = None,
+        tag_ids: list[UUID] | None = None,
         search: str | None = None,
-        seller_name: str | None = None,
+        seller_names: list[str] | None = None,
     ) -> list[tuple[str, Decimal]]:
         """Магазин -> расходы, по убыванию."""
         store = func.coalesce(
@@ -437,9 +438,9 @@ class TransactionRepository:
                 *_filters(
                     date_from=date_from,
                     date_to=date_to,
-                    tag_id=tag_id,
+                    tag_ids=tag_ids,
                     search=search,
-                    seller_name=seller_name,
+                    seller_names=seller_names,
                 ),
             )
             .group_by(store)
@@ -458,9 +459,9 @@ class TransactionRepository:
         user_id: UUID,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-        tag_id: UUID | None = None,
+        tag_ids: list[UUID] | None = None,
         search: str | None = None,
-        seller_name: str | None = None,
+        seller_names: list[str] | None = None,
     ) -> list[tuple[UUID, str, str, Decimal]]:
         """Тег -> сумма, по убыванию.
 
@@ -480,9 +481,9 @@ class TransactionRepository:
                 *_filters(
                     date_from=date_from,
                     date_to=date_to,
-                    tag_id=tag_id,
+                    tag_ids=tag_ids,
                     search=search,
-                    seller_name=seller_name,
+                    seller_names=seller_names,
                 ),
             )
             .group_by(Transaction.tag_id, Tag.name, Tag.color)

@@ -134,6 +134,14 @@ export function buildTheme(mode: 'light' | 'dark'): Theme {
           colorPrimary: ({ theme }) => ({
             backgroundColor: softBg(theme),
             color: softFg(theme),
+            // Выбранный чип (filled+primary) при ховере/фокусе получает от MUI
+            // сплошной фиолетовый фон (clickableColorPrimary:hover), а цвет
+            // текста оставался softFg — в светлой теме текст сливался с фоном.
+            // Ховер/фокус: сплошной фиолетовый фон + белый текст.
+            '&:hover, &.Mui-focusVisible': {
+              backgroundColor: theme.palette.primary.dark,
+              color: theme.palette.primary.contrastText,
+            },
           }),
         },
       },
