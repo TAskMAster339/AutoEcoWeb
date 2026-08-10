@@ -29,7 +29,7 @@ const TITLES: Record<string, string> = {
   '/analytics': 'Аналитика',
   '/dashboard': 'Чеки',
   '/tags': 'Теги',
-  '/rules': 'Правила и алиасы',
+  '/rules': 'Правила',
   '/settings': 'Настройки',
   '/admin': 'Администрирование',
   '/about': 'О приложении',

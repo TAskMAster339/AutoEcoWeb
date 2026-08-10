@@ -35,7 +35,7 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'Чеки', icon: ReceiptLongOutlinedIcon },
   { to: '/tags', label: 'Теги', icon: LabelOutlinedIcon },
   { to: '/sellers', label: 'Магазины', icon: StorefrontOutlinedIcon },
-  { to: '/rules', label: 'Правила и алиасы', icon: LinkOutlinedIcon },
+  { to: '/rules', label: 'Правила', icon: LinkOutlinedIcon },
   { to: '/data', label: 'Данные', icon: StorageOutlinedIcon },
   { to: '/settings', label: 'Настройки', icon: SettingsOutlinedIcon },
   { to: '/about', label: 'О приложении', icon: InfoOutlinedIcon },

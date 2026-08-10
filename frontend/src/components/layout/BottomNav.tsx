@@ -62,7 +62,7 @@ export function BottomNav() {
   const [moreAnchor, setMoreAnchor] = useState<null | HTMLElement>(null)
 
   const moreItems = [
-    { to: '/rules', label: 'Правила и алиасы', icon: LinkOutlinedIcon },
+    { to: '/rules', label: 'Правила', icon: LinkOutlinedIcon },
     { to: '/sellers', label: 'Магазины', icon: StorefrontOutlinedIcon },
     { to: '/data', label: 'Данные', icon: StorageOutlinedIcon },
     { to: '/settings', label: 'Настройки', icon: SettingsOutlinedIcon },

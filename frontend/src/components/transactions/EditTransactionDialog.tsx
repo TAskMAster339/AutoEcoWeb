@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import {
   Alert,
   Autocomplete,
@@ -59,6 +59,7 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
   const [store, setStore] = useState('')
   const [selectedStore, setSelectedStore] = useState<Store | null>(null)
   const [storeEdited, setStoreEdited] = useState(false)
+  const [storePopupOpen, setStorePopupOpen] = useState(false)
   const [comment, setComment] = useState('')
   const [price, setPrice] = useState('')
   const [quantity, setQuantity] = useState('1')
@@ -112,6 +113,7 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
       ? Math.round(priceNum * qtyNum * 100) / 100
       : null
   const amountText = computedAmount !== null ? computedAmount.toFixed(2).replace('.', ',') : ''
+  const storeOptions = useMemo(() => stores ?? [], [stores])
 
   if (!tx) return null
 
@@ -279,13 +281,32 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
               <Box sx={{ flex: 1, minWidth: 0 }}>
               <Autocomplete
                 freeSolo
-                options={stores ?? []}
+                openOnFocus
+                clearOnEscape
+                autoHighlight
+                autoSelect
+                selectOnFocus
+                options={storeOptions}
                 value={selectedStore}
                 inputValue={store}
+                open={storePopupOpen}
+                onOpen={() => setStorePopupOpen(true)}
+                onClose={() => setStorePopupOpen(false)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
-                    // Let Autocomplete select the highlighted option; the
-                    // dialog must not treat this as a form submission.
+                    const query = store.trim().toLocaleLowerCase()
+                    const firstMatch = storeOptions.find((option) => {
+                      const label = option.alias_name || option.normalized_seller_name || option.seller_name
+                      return !query || label.toLocaleLowerCase().includes(query)
+                    })
+                    if (storePopupOpen && firstMatch) {
+                      event.preventDefault()
+                      setSelectedStore(firstMatch)
+                      setStore(firstMatch.alias_name || firstMatch.normalized_seller_name || firstMatch.seller_name)
+                      setStoreEdited(true)
+                      setStorePopupOpen(false)
+                    }
+                    // Never let the dialog treat Enter in this field as submit.
                     event.stopPropagation()
                   }
                 }}
@@ -301,7 +322,7 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
                   }
                 }}
                 onInputChange={(_, value, reason) => {
-                  if (reason === 'input') {
+                  if (reason === 'input' || reason === 'clear') {
                     setSelectedStore(null)
                     setStore(value)
                     setStoreEdited(true)
@@ -309,6 +330,7 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
                 }}
                 getOptionLabel={(option) => typeof option === 'string' ? option : option.alias_name || option.normalized_seller_name || option.seller_name}
                 isOptionEqualToValue={(option, value) => option.seller_id === value.seller_id}
+                noOptionsText="Магазин не найден — Enter создаст новое имя"
                 renderOption={(props, option) => (
                   <li {...props} key={option.seller_id}>
                     <Stack direction="row" spacing={1} alignItems="center">
@@ -323,6 +345,7 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
                     label="Магазин (необязательно)"
                     placeholder="Выберите или введите новый"
                     helperText={selectedStore?.alias_name ? `Алиас: оригинал «${selectedStore.seller_name}»` : 'Можно выбрать существующий или ввести новый'}
+                    sx={{ '& .MuiInputBase-root': { minHeight: 56 } }}
                     slotProps={{
                       input: {
                         ...params.InputProps,
@@ -337,9 +360,6 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
                   />
                 )}
               />
-              <Typography variant="caption" color="text.secondary">
-                «Без магазина» — очистите поле. Новое имя создаст отдельный магазин.
-              </Typography>
               </Box>
               <Tooltip title="Создать алиас магазина">
                 <span>

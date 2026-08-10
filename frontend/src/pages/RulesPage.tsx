@@ -132,7 +132,7 @@ export function RulesPage() {
   return (
     <Stack spacing={2}>
       <PageHeader
-        title="Правила и алиасы"
+        title="Правила"
         subtitle="Нормализация названий магазинов и товаров: новый алиас сразу применяется к существующим записям"
         actions={
           <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
