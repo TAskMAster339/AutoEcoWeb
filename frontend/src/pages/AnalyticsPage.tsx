@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
-import { Box, Grid2 as Grid, Skeleton, Stack } from '@mui/material'
+import { Box, Grid2 as Grid, Skeleton, Stack, useMediaQuery, useTheme } from '@mui/material'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import CategoryIcon from '@mui/icons-material/Category'
 import PaymentsIcon from '@mui/icons-material/Payments'
 import StorefrontIcon from '@mui/icons-material/Storefront'
+import { useNavigate } from 'react-router-dom'
 import {
   ChartCard,
   DonutChart,
@@ -21,15 +22,36 @@ import { LoadingState, ErrorState, OfflineState } from '../components/common/Sta
 import { useAnalytics, useSummary } from '../hooks/useSummary'
 import { useOnline } from '../hooks/useOnline'
 import { formatCurrency, plural } from '../lib/format'
+import { useUiStore } from '../store/uiStore'
 import { colors } from '../theme'
 
 /** Аналитика — расходы по дням (тренд), круговые по магазинам/категориям/доходам,
  *  траты по дням недели, индикаторы и график цен товара. Считает бэкенд. */
 export function AnalyticsPage() {
+  const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+  const navigate = useNavigate()
   const online = useOnline()
 
   const { data, isLoading, isError, error, refetch } = useAnalytics()
   const summary = useSummary()
+
+  // Переход на транзакции с фильтром магазина(ов): «Другое» выбирает все
+  // слитые магазины сразу (мульти-фильтр ?store=A&store=B). Сброс поиска и
+  // тегов, чтобы фильтр доната был единственным; период сохраняется.
+  const goToStore = (labels: string[]) => {
+    const u = useUiStore.getState()
+    u.setSearch('')
+    u.setTagFilterIds([])
+    navigate(`/transactions?${labels.map((l) => `store=${encodeURIComponent(l)}`).join('&')}`)
+  }
+  // Категории фильтруются по id тегов — мульти тоже поддерживается.
+  const goToCategory = (ids: string[]) => {
+    const u = useUiStore.getState()
+    u.setSearch('')
+    u.setStoreFilters([])
+    navigate(`/transactions?${ids.map((id) => `tag=${encodeURIComponent(id)}`).join('&')}`)
+  }
 
   const dailyPoints = useMemo(
     () =>
@@ -49,30 +71,31 @@ export function AnalyticsPage() {
   const totalExpenses = useMemo(() => (data?.daily ?? []).reduce((s, d) => s + d.expenses, 0), [data])
   const totalIncome = useMemo(() => (data?.daily ?? []).reduce((s, d) => s + d.income, 0), [data])
 
-  // Пироги: доли < 1 % сливаются в «Другое», чтобы не было десятков секций.
-  const storeSlices = useMemo(
-    () =>
-      mergeSmallSlices((data?.byStore ?? []).map((s) => ({ label: s.store, value: s.value }))).map((s, i) => ({
-        ...s,
-        color: s.label === 'Другое' ? OTHER_SLICE_COLOR : storeColor(i),
-      })),
-    [data],
-  )
-  const storeIncomeSlices = useMemo(
-    () =>
-      mergeSmallSlices((data?.byStoreIncome ?? []).map((s) => ({ label: s.store, value: s.value }))).map((s, i) => ({
-        ...s,
-        color: s.label === 'Другое' ? OTHER_SLICE_COLOR : storeColor(i),
-      })),
-    [data],
-  )
-  const categorySlices = useMemo(
-    () =>
-      mergeSmallSlices(
-        (data?.byCategory ?? []).map((c) => ({ label: c.tag.name, value: c.value, color: c.tag.color })),
-      ).map((s) => ({ ...s, color: s.label === 'Другое' ? OTHER_SLICE_COLOR : s.color })),
-    [data],
-  )
+  // Пироги: доли < 1 % сливаются в «Другое» (несёт список слитых элементов
+  // в `others` — по клику открываем транзакции со всеми магазинами сразу).
+  const storeSlices = useMemo(() => {
+    const colored = (data?.byStore ?? []).map((s, i) => ({ label: s.store, value: s.value, color: storeColor(i) }))
+    return mergeSmallSlices(colored).map((s) => (s.label === 'Другое' ? { ...s, color: OTHER_SLICE_COLOR } : s))
+  }, [data])
+  const storeIncomeSlices = useMemo(() => {
+    const colored = (data?.byStoreIncome ?? []).map((s, i) => ({ label: s.store, value: s.value, color: storeColor(i) }))
+    return mergeSmallSlices(colored).map((s) => (s.label === 'Другое' ? { ...s, color: OTHER_SLICE_COLOR } : s))
+  }, [data])
+  const categorySlices = useMemo(() => {
+    const colored = (data?.byCategory ?? []).map((c) => ({
+      label: c.tag.name,
+      value: c.value,
+      color: c.tag.color,
+      id: c.tag.id,
+    }))
+    return mergeSmallSlices(colored).map((s) =>
+      s.label === 'Другое' ? { ...s, color: OTHER_SLICE_COLOR, id: undefined } : s,
+    )
+  }, [data])
+
+  // Разность доходов и расходов за период — как на странице транзакций:
+  // зелёная при >= 0, красная при < 0.
+  const net = summary.data ? summary.data.income - summary.data.expenses : undefined
 
   if (isLoading) {
     return (
@@ -105,7 +128,10 @@ export function AnalyticsPage() {
           <StatisticCard
             label="Баланс"
             value={formatCurrency(summary.data?.balance ?? 0)}
-            sparkline={summary.data?.balanceTrend}
+            delta={net}
+            // Спарклайн только на десктопе: на мобильном не помещается рядом с дельтой
+            // (то же поведение, что на странице транзакций).
+            sparkline={isMobile ? undefined : summary.data?.balanceTrend}
           />
         </Grid>
         <Grid size={{ xs: 6, md: 3 }}>
@@ -166,6 +192,10 @@ export function AnalyticsPage() {
               items={storeSlices}
               formatValue={formatCurrency}
               centerLabel="расходы"
+              getItemClick={(item) => () => {
+                if (item.others) goToStore(item.others.map((o) => o.label))
+                else goToStore([item.label])
+              }}
             />
           </ChartCard>
         </Grid>
@@ -175,6 +205,10 @@ export function AnalyticsPage() {
               items={storeIncomeSlices}
               formatValue={formatCurrency}
               centerLabel="доходы"
+              getItemClick={(item) => () => {
+                if (item.others) goToStore(item.others.map((o) => o.label))
+                else goToStore([item.label])
+              }}
             />
           </ChartCard>
         </Grid>
@@ -184,6 +218,14 @@ export function AnalyticsPage() {
               items={categorySlices}
               formatValue={formatCurrency}
               centerLabel="расходы"
+              getItemClick={(item) => () => {
+                const ids = item.others
+                  ? item.others.map((o) => o.id).filter((id): id is string => Boolean(id))
+                  : item.id
+                    ? [item.id]
+                    : []
+                if (ids.length) goToCategory(ids)
+              }}
             />
           </ChartCard>
         </Grid>

@@ -321,6 +321,10 @@ export interface DonutItem {
   label: string
   value: number
   color: string
+  /** id для клика-перехода (например, id тега категории) */
+  id?: string
+  /** слитые в «Другое» элементы — клик по секции выбирает все оставшиеся */
+  others?: DonutItem[]
 }
 
 interface DonutChartProps {
@@ -330,10 +334,12 @@ interface DonutChartProps {
   centerLabel?: string
   /** скрыть сектора с нулевым значением (по умолчанию да) */
   dropZeros?: boolean
+  /** обработчик клика по элементу; null/undefined — некликабельный элемент */
+  getItemClick?: (item: DonutItem) => (() => void) | null | undefined
 }
 
 /** Кольцевая диаграмма: %, точные суммы в легенде, тултип на секторе. */
-export function DonutChart({ items, formatValue, centerLabel = 'всего', dropZeros = true }: DonutChartProps) {
+export function DonutChart({ items, formatValue, centerLabel = 'всего', dropZeros = true, getItemClick }: DonutChartProps) {
   const [active, setActive] = useState<number | null>(null)
   const [tip, setTip] = useState<{ anchor: { x: number; y: number }; title: string; rows: TooltipRow[] } | null>(null)
 
@@ -386,22 +392,27 @@ export function DonutChart({ items, formatValue, centerLabel = 'всего', dro
               fill="none"
               stroke={segments[0]!.item.color}
               strokeWidth={rOuter - rInner}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: getItemClick?.(segments[0]!.item) ? 'pointer' : 'default' }}
+              onClick={getItemClick?.(segments[0]!.item) ?? undefined}
               onMouseEnter={(e) => showTip(e, 0)}
               onMouseMove={(e) => setTip((t) => (t ? { ...t, anchor: { x: e.clientX, y: e.clientY } } : t))}
             />
           ) : (
-            segments.map(({ item, a0, a1 }, i) => (
-              <path
-                key={item.label}
-                d={arcPath(cx, cy, rInner, rOuter, a0, a1)}
-                fill={item.color}
-                opacity={active === null || active === i ? 1 : 0.3}
-                style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
-                onMouseEnter={(e) => showTip(e, i)}
-                onMouseMove={(e) => setTip((t) => (t ? { ...t, anchor: { x: e.clientX, y: e.clientY } } : t))}
-              />
-            ))
+            segments.map(({ item, a0, a1 }, i) => {
+              const onClick = getItemClick?.(item)
+              return (
+                <path
+                  key={item.label}
+                  d={arcPath(cx, cy, rInner, rOuter, a0, a1)}
+                  fill={item.color}
+                  opacity={active === null || active === i ? 1 : 0.3}
+                  style={{ cursor: onClick ? 'pointer' : 'default', transition: 'opacity 0.15s' }}
+                  onClick={onClick ?? undefined}
+                  onMouseEnter={(e) => showTip(e, i)}
+                  onMouseMove={(e) => setTip((t) => (t ? { ...t, anchor: { x: e.clientX, y: e.clientY } } : t))}
+                />
+              )
+            })
           )}
         </svg>
         <Box sx={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
@@ -417,10 +428,34 @@ export function DonutChart({ items, formatValue, centerLabel = 'всего', dro
       <Stack spacing={0.5} sx={{ width: '100%', maxWidth: 300 }}>
         {segments.map(({ item }, i) => {
           const pct = ((item.value / total) * 100).toFixed(1)
+          const onClick = getItemClick?.(item)
           return (
             <Box
               key={item.label}
-              sx={{ display: 'flex', alignItems: 'center', gap: 0.75, opacity: active === null || active === i ? 1 : 0.45 }}
+              role={onClick ? 'button' : undefined}
+              tabIndex={onClick ? 0 : undefined}
+              onClick={onClick ?? undefined}
+              onKeyDown={
+                onClick
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onClick()
+                      }
+                    }
+                  : undefined
+              }
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.75,
+                opacity: active === null || active === i ? 1 : 0.45,
+                cursor: onClick ? 'pointer' : 'default',
+                borderRadius: '6px',
+                px: 0.75,
+                mx: -0.75,
+                '&:hover': onClick ? { bgcolor: 'action.hover' } : undefined,
+              }}
               onMouseEnter={(e) => {
                 setActive(i)
                 setTip({
@@ -602,11 +637,12 @@ export const OTHER_SLICE_COLOR = '#64748B'
 
 /** Объединяет доли меньше minFraction от суммы в одну секцию «Другое».
  *  Сумма не меняется; порядок — по убыванию. Если всё < 1 %, крупнейшая
- *  доля остаётся отдельной, чтобы пирог не вырождался в одно кольцо. */
+ *  доля остаётся отдельной, чтобы пирог не вырождался в одно кольцо.
+ *  Слитая секция несёт исходные элементы в `others` — для мульти-фильтра. */
 export function mergeSmallSlices<T extends { label: string; value: number }>(
   items: readonly T[],
   minFraction = 0.01,
-): T[] {
+): (T & { others?: T[] })[] {
   if (items.length <= 1) return [...items]
   const total = items.reduce((s, i) => s + i.value, 0)
   if (total <= 0) return [...items]
@@ -618,5 +654,5 @@ export function mergeSmallSlices<T extends { label: string; value: number }>(
   const rest = big.length > 0 ? small : sorted.slice(1)
   const otherSum = rest.reduce((s, i) => s + i.value, 0)
   if (otherSum <= 0) return sorted
-  return [...keep, { ...(rest[0] ?? sorted[0]!), label: 'Другое', value: otherSum }]
+  return [...keep, { ...(rest[0] ?? sorted[0]!), label: 'Другое', value: otherSum, others: rest }]
 }
