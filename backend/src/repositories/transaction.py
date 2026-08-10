@@ -468,8 +468,9 @@ class TransactionRepository:
             )
             .group_by(store)
             .having(
-                func.sum(Transaction.amount)
-                .filter(Transaction.operation_type.in_(_EXPENSE_TYPES))
+                func.sum(Transaction.amount).filter(
+                    Transaction.operation_type.in_(_EXPENSE_TYPES),
+                )
                 > 0,
             )
             .order_by(
@@ -519,8 +520,9 @@ class TransactionRepository:
             )
             .group_by(store)
             .having(
-                func.sum(Transaction.amount)
-                .filter(Transaction.operation_type.in_(_INCOME_TYPES))
+                func.sum(Transaction.amount).filter(
+                    Transaction.operation_type.in_(_INCOME_TYPES),
+                )
                 > 0,
             )
             .order_by(
@@ -546,7 +548,7 @@ class TransactionRepository:
 
         Только расходы (_EXPENSE_TYPES). Возвращает
         (tag_id, tag_name, tag_color, value, count).
-        """
+        """  # noqa: RUF002
         stmt = (
             select(
                 Transaction.tag_id,
@@ -603,7 +605,7 @@ class TransactionRepository:
         """День недели (ISO, 1=Пн..7=Вс) -> (расходы, число операций).
 
         Всегда ровно 7 строк: отсутствующие дни заполняются нулями.
-        """
+        """  # noqa: RUF002
         day = func.date(Transaction.check_datetime)
         stmt = (
             select(
@@ -649,7 +651,7 @@ class TransactionRepository:
             for wd in range(1, 8)
         ]
 
-    async def price_points(  # noqa: PLR0913
+    async def price_points(
         self,
         *,
         user_id: UUID,
@@ -657,18 +659,22 @@ class TransactionRepository:
         is_regex: bool,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
-    ) -> list[tuple[date, Decimal, str | None, str]]:
-        """Покупки товара: (день, цена, магазин, name) — для ценового графика.
+    ) -> list[tuple[date, Decimal | None, Decimal, str | None, str]]:
+        """Покупки товара: (день, price-or-None, amount, магазин, name).
 
+        Возвращает ОБА значения (price/amount) — какой из них считать ценой
+        решает сервис единообразно для всего матча (без смешивания масштабов).
         Подстрока ищется в name/normalized_name (ILIKE); при is_regex —
         re.search(IGNORECASE) по тем же полям. Невалидный regex -> 422.
-        Только расходы, price > 0.
+        Только расходы с ценой (price или amount) > 0.
         """
         conditions: list[ColumnElement[bool]] = [
             Transaction.user_id == user_id,  # type: ignore[arg-type]
             Transaction.operation_type.in_(_EXPENSE_TYPES),
-            Transaction.price.is_not(None),
-            Transaction.price > 0,
+            or_(
+                Transaction.price.is_not(None),
+                Transaction.amount > 0,
+            ),
         ]
         if date_from is not None:
             conditions.append(Transaction.check_datetime >= date_from)  # type: ignore[arg-type]
@@ -687,6 +693,7 @@ class TransactionRepository:
             select(
                 func.date(Transaction.check_datetime),
                 Transaction.price,
+                Transaction.amount,
                 store,
                 Transaction.name,
             )
@@ -708,12 +715,18 @@ class TransactionRepository:
             rows = [
                 row
                 for row in rows
-                if pattern.search(str(row[3])) is not None
-                or pattern.search(str(row[2] or "")) is not None
+                if pattern.search(str(row[4])) is not None
+                or pattern.search(str(row[3] or "")) is not None
             ]
         return [
-            (day_, Decimal(price_), (str(s) if s is not None else None), str(n))
-            for day_, price_, s, n in rows
+            (
+                day_,
+                Decimal(price_) if price_ is not None else None,
+                Decimal(amount_),
+                (str(s) if s is not None else None),
+                str(n),
+            )
+            for day_, price_, amount_, s, n in rows
         ]
 
     async def count_by_seller_ids(self, user_id: UUID, seller_ids: list[UUID]) -> int:

@@ -936,6 +936,74 @@ async def test_price_chart_regex(session):
     assert r.stddev == Decimal("5.00")
 
 
+async def test_price_chart_uses_amount_when_no_price(session):
+    """Нет price ни у одной покупки — цена = amount у всех."""
+    user = await _make_user(session)
+    service = _tx_service(session)
+    for amount, day in [("45.00", 10), ("50.00", 12), ("48.00", 14)]:
+        await service.create_standalone(
+            user,
+            TransactionCreate(
+                name="Хлеб",
+                amount=Decimal(amount),
+                price=None,  # транзакции без цены
+                quantity=Decimal("1"),
+                datetime=datetime(2026, 1, day, tzinfo=timezone.utc),
+            ),
+        )
+    r = await service.price_chart(
+        user,
+        name="хлеб",
+        is_regex=False,
+        date_from=None,
+        date_to=None,
+    )
+    assert r.count == 3
+    assert {p.price for p in r.points} == {
+        Decimal("45.00"),
+        Decimal("50.00"),
+        Decimal("48.00"),
+    }
+    assert r.avg_price == Decimal("47.67")
+    assert r.median_price == Decimal("48.00")
+    assert r.stddev == Decimal("2.05")
+
+
+async def test_price_chart_no_mix_price_and_amount(session):
+    """Хоть у одной покупки нет price — у ВСЕХ берётся amount (без смешивания)."""
+    user = await _make_user(session)
+    service = _tx_service(session)
+    # у первой price = 100, у остальных price=None; amount у всех заполнен
+    for price, amount, day in [("100.00", "40.00", 10), (None, "60.00", 12), (None, "50.00", 14)]:
+        await service.create_standalone(
+            user,
+            TransactionCreate(
+                name="Хлеб",
+                amount=Decimal(amount),
+                price=Decimal(price) if price is not None else None,
+                quantity=Decimal("1"),
+                datetime=datetime(2026, 1, day, tzinfo=timezone.utc),
+            ),
+        )
+    r = await service.price_chart(
+        user,
+        name="хлеб",
+        is_regex=False,
+        date_from=None,
+        date_to=None,
+    )
+    assert r.count == 3
+    # price 100 нигде не должен фигурировать: график целиком по amount
+    assert {p.price for p in r.points} == {
+        Decimal("40.00"),
+        Decimal("60.00"),
+        Decimal("50.00"),
+    }
+    assert r.avg_price == Decimal("50.00")
+    assert r.median_price == Decimal("50.00")
+    assert r.stddev == Decimal("8.16")
+
+
 async def test_price_chart_invalid_regex(session):
     user = await _make_user(session)
     service = _tx_service(session)

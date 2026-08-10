@@ -42,10 +42,15 @@ _TRANSACTION_NON_NULLABLE = frozenset(
 _SCOPE_PRODUCT = "product"
 
 
+def _money2(value: float) -> Decimal:
+    """float → Decimal с 2 знаками: без хвостов плавающей точки ('45.00', не '45.0')."""
+    return Decimal(str(round(value, 2))).quantize(Decimal("0.01"))
+
+
 def _least_squares_trend(values: list[Decimal]) -> list[Decimal | None]:
-    """Линейный тренд (МНК) по индексам; None, если точек < 2."""
+    """Линейный тренд (МНК) по индексам; None, если точек < 2."""  # noqa: RUF002
     n = len(values)
-    if n < 2:
+    if n < 2:  # noqa: PLR2004
         return [None] * n
     xs = list(range(n))
     x_mean = (n - 1) / 2
@@ -57,7 +62,7 @@ def _least_squares_trend(values: list[Decimal]) -> list[Decimal | None]:
     return [Decimal(round(slope * x + intercept, 2)) for x in xs]
 
 
-def _build_indicators(  # noqa: PLR0913
+def _build_indicators(
     stores: list[tuple[str, Decimal]],
     categories: list[tuple[UUID, str, str, Decimal, int]],
     weekdays: list[tuple[int, Decimal, int]],
@@ -70,11 +75,15 @@ def _build_indicators(  # noqa: PLR0913
     top_category = None
     if categories:
         tag_id_, name, color, value, count_ = max(
-            categories, key=lambda c: (c[4], c[3])
+            categories,
+            key=lambda c: (c[4], c[3]),
         )
         top_category = AnalyticsByCategory(
-            tag_id=tag_id_, tag_name=name, tag_color=color,
-            value=value, count=count_,
+            tag_id=tag_id_,
+            tag_name=name,
+            tag_color=color,
+            value=value,
+            count=count_,
         )
     top_weekday = None
     if weekdays:
@@ -438,8 +447,7 @@ class TransactionService:
         return AnalyticsResponse(
             daily=daily_rows,
             by_store=[
-                AnalyticsByStore(store=store, value=value)
-                for store, value in stores
+                AnalyticsByStore(store=store, value=value) for store, value in stores
             ],
             by_store_income=[
                 AnalyticsByStore(store=store, value=value)
@@ -473,8 +481,11 @@ class TransactionService:
     ) -> PriceChartResponse:
         """График цен товара: точки (день×магазин, средняя цена) и статистика.
 
-        Статистика (avg/median/stddev) считается по ВСЕМ индивидуальным
-        ценам покупок, попавших в матч; stddev — популяционное (pstdev).
+        Источник цены единый для всего матча, без смешивания масштабов:
+        - если у ВСЕХ покупок заполнен price — берём price;
+        - если хотя бы у одной price отсутствует — берём amount у всех
+          (amount заполнен всегда). Статистика (avg/median/stddev) — по
+          индивидуальным значениям; stddev популяционное (pstdev).
         """
         if not name.strip():
             raise HTTPException(
@@ -488,8 +499,7 @@ class TransactionService:
             date_from=date_from,
             date_to=date_to,
         )
-        prices = [price for _, price, _, _ in rows]
-        if not prices:
+        if not rows:
             return PriceChartResponse(
                 points=[],
                 stores=[],
@@ -498,11 +508,18 @@ class TransactionService:
                 stddev=Decimal("0"),
                 count=0,
             )
+        # Единый источник цены для всего матча: price у всех ИЛИ amount у всех.
+        use_price = all(price is not None for _, price, _, _, _ in rows)
+        effective: list[tuple[str, str | None, Decimal]] = []
+        for day_, price, amount, store, _name in rows:
+            value = price if use_price and price is not None else amount
+            effective.append((str(day_), store, value))
+        prices = [value for _, _, value in effective]
 
         per_day: dict[tuple[str, str | None], list[Decimal]] = {}
         store_order: list[str | None] = []
-        for day_, price, store, _name in rows:
-            key = (str(day_), store)
+        for day_, store, price in effective:
+            key = (day_, store)
             per_day.setdefault(key, []).append(price)
             if store not in store_order:
                 store_order.append(store)
@@ -510,7 +527,7 @@ class TransactionService:
         points = [
             PricePoint(
                 day=day_,
-                price=Decimal(round(float(sum(v)) / len(v), 2)),
+                price=_money2(float(sum(v)) / len(v)),
                 count=len(v),
                 store=store,
             )
@@ -520,9 +537,9 @@ class TransactionService:
         return PriceChartResponse(
             points=points,
             stores=store_order,
-            avg_price=Decimal(round(mean(f_prices), 2)),
-            median_price=Decimal(round(median(f_prices), 2)),
-            stddev=Decimal(round(pstdev(f_prices), 2)),
+            avg_price=_money2(mean(f_prices)),
+            median_price=_money2(median(f_prices)),
+            stddev=_money2(pstdev(f_prices)),
             count=len(prices),
         )
 

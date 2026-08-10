@@ -298,32 +298,51 @@ export function DonutChart({ items, formatValue, centerLabel = 'всего', dro
     return seg
   })
 
+  const showTip = (e: React.MouseEvent<SVGElement>, i: number) => {
+    const item = segments[i]!.item
+    const pct = ((item.value / total) * 100).toFixed(1)
+    setActive(i)
+    setTip({
+      anchor: { x: e.clientX, y: e.clientY },
+      title: item.label,
+      rows: [
+        { label: 'Сумма', value: formatValue(item.value), color: item.color },
+        { label: 'Доля', value: `${pct}%` },
+      ],
+    })
+  }
+
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }} onMouseLeave={() => { setActive(null); setTip(null) }}>
       <Box sx={{ position: 'relative', flexShrink: 0 }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Круговая диаграмма">
-          {segments.map(({ item, a0, a1 }, i) => (
-            <path
-              key={item.label}
-              d={arcPath(cx, cy, rInner, rOuter, a0, a1)}
-              fill={item.color}
-              opacity={active === null || active === i ? 1 : 0.3}
-              style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
-              onMouseEnter={(e) => {
-                setActive(i)
-                const pct = ((item.value / total) * 100).toFixed(1)
-                setTip({
-                  anchor: { x: e.clientX, y: e.clientY },
-                  title: item.label,
-                  rows: [
-                    { label: 'Сумма', value: formatValue(item.value), color: item.color },
-                    { label: 'Доля', value: `${pct}%` },
-                  ],
-                })
-              }}
+          {segments.length === 1 ? (
+            // Один сегмент: дуга полного круга (a0 == a1) не рендерится в SVG —
+            // рисуем кольцо целиком как окружность со штрихом.
+            <circle
+              cx={cx}
+              cy={cy}
+              r={(rOuter + rInner) / 2}
+              fill="none"
+              stroke={segments[0]!.item.color}
+              strokeWidth={rOuter - rInner}
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={(e) => showTip(e, 0)}
               onMouseMove={(e) => setTip((t) => (t ? { ...t, anchor: { x: e.clientX, y: e.clientY } } : t))}
             />
-          ))}
+          ) : (
+            segments.map(({ item, a0, a1 }, i) => (
+              <path
+                key={item.label}
+                d={arcPath(cx, cy, rInner, rOuter, a0, a1)}
+                fill={item.color}
+                opacity={active === null || active === i ? 1 : 0.3}
+                style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
+                onMouseEnter={(e) => showTip(e, i)}
+                onMouseMove={(e) => setTip((t) => (t ? { ...t, anchor: { x: e.clientX, y: e.clientY } } : t))}
+              />
+            ))
+          )}
         </svg>
         <Box sx={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
           <Typography className="tnum" sx={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em' }}>
