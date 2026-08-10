@@ -5,7 +5,7 @@ from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import Table, bindparam, case, func, nulls_last, or_, select, update
+from sqlalchemy import Table, and_, bindparam, case, func, nulls_last, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
@@ -72,6 +72,10 @@ def _filters(  # noqa: PLR0913
 
     user_id добавляет вызывающий — у агрегатов и списка он свой контекст.
     Поиск покрывает name/comment/магазин (как раньше фильтровал клиент).
+    Название товара ищется по «эффективному» имени: у записей с применённым
+    товарным алиасом это normalized_name (значение алиаса), исходное name
+    не участвует — иначе поиск «хлеб» возвращал бы уже переименованные
+    в «батон» записи. Без алиаса — по исходному name (и normalized).
     tag_ids/seller_names — мультивыбор: транзакция проходит, если её тег
     входит в список ИЛИ магазин входит в список (IN-условия).
     """  # noqa: RUF002
@@ -90,7 +94,11 @@ def _filters(  # noqa: PLR0913
         q = f"%{search}%"
         conditions.append(
             or_(
-                Transaction.name.ilike(q),
+                and_(
+                    Transaction.name_alias_id.is_(None),
+                    Transaction.name.ilike(q),
+                ),
+                Transaction.normalized_name.ilike(q),
                 Transaction.comment.ilike(q),
                 _store_expr(own_seller, receipt_seller).ilike(q),
             ),  # type: ignore[arg-type]
@@ -664,10 +672,12 @@ class TransactionRepository:
 
         Возвращает ОБА значения (price/amount) — какой из них считать ценой
         решает сервис единообразно для всего матча (без смешивания масштабов).
-        Подстрока ищется в name/normalized_name (ILIKE); при is_regex —
-        re.search(IGNORECASE) по тем же полям. "*слово*" — wildcard-стиль:
-        * трактуется как .* (только если паттерн не скомпилировался как есть);
-        действительно невалидный regex -> 422.
+        Подстрока ищется в «эффективном» имени (см. _filters): у записей
+        с применённым товарным алиасом — в normalized_name (значение алиаса),
+        исходное name не участвует; без алиаса — в name и normalized_name.
+        При is_regex — re.search(IGNORECASE) по тем же полям (и магазину).
+        "*слово*" — wildcard-стиль: * трактуется как .* (только если паттерн
+        не скомпилировался как есть); действительно невалидный regex -> 422.
         Только расходы с ценой (price или amount) > 0.
         """
         conditions: list[ColumnElement[bool]] = [
@@ -686,7 +696,10 @@ class TransactionRepository:
             q = f"%{name}%"
             conditions.append(
                 or_(
-                    Transaction.name.ilike(q),
+                    and_(
+                        Transaction.name_alias_id.is_(None),
+                        Transaction.name.ilike(q),
+                    ),
                     Transaction.normalized_name.ilike(q),
                 ),
             )
@@ -698,6 +711,8 @@ class TransactionRepository:
                 Transaction.amount,
                 store,
                 Transaction.name,
+                Transaction.normalized_name,
+                Transaction.name_alias_id,
             )
             .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
             .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
@@ -725,7 +740,8 @@ class TransactionRepository:
             rows = [
                 row
                 for row in rows
-                if rx.search(str(row[4])) is not None
+                if (row[6] is None and rx.search(str(row[4])) is not None)
+                or rx.search(str(row[5] or "")) is not None
                 or rx.search(str(row[3] or "")) is not None
             ]
         return [
@@ -736,7 +752,7 @@ class TransactionRepository:
                 (str(s) if s is not None else None),
                 str(n),
             )
-            for day_, price_, amount_, s, n in rows
+            for day_, price_, amount_, s, n, _normalized, _alias_id in rows
         ]
 
     async def count_by_seller_ids(self, user_id: UUID, seller_ids: list[UUID]) -> int:

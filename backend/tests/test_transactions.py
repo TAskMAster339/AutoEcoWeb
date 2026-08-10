@@ -16,6 +16,7 @@ from src.repositories.seller import SellerRepository
 from src.repositories.tag import TagRepository
 from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
+from src.schemas.alias import AliasCreate
 from src.schemas.tag import TagCreate
 from src.schemas.transaction import (
     TransactionCreate,
@@ -24,6 +25,7 @@ from src.schemas.transaction import (
     TransactionOut,
     TransactionUpdate,
 )
+from src.services.aliases import AliasService
 from src.services.receipt_parser import ReceiptItemData
 from src.services.tags import TagService
 from src.services.transaction import TransactionService
@@ -76,6 +78,148 @@ def _item(name: str, price: str, quantity: str = "1") -> ReceiptItemData:
         nds=None,
         unit="шт",
     )
+
+
+# ---------- поиск с учётом товарных алиасов ----------
+
+
+def _alias_service(session) -> AliasService:
+    alias_repo = AliasRepository(session)
+    return AliasService(
+        alias_repo,
+        SellerService(SellerRepository(session), alias_repo),
+        TransactionRepository(session),
+        ReceiptRepository(session),
+    )
+
+
+async def test_list_page_search_uses_effective_name_after_alias(session):
+    """Алиас «хлеб → батон»: поиск «батон» находит и переименованные записи,
+    поиск «хлеб» НЕ возвращает записи с применённым алиасом."""
+    user = await _make_user(session)
+    service = _tx_service(session)
+
+    khleb = await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Хлеб",
+            amount=Decimal("30.00"),
+            datetime=datetime(2026, 1, 10, tzinfo=timezone.utc),
+        ),
+    )
+    baton = await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Батон НАРЕЗНОЙ",
+            amount=Decimal("45.00"),
+            datetime=datetime(2026, 1, 11, tzinfo=timezone.utc),
+        ),
+    )
+    borodinsky = await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Хлеб Бородинский",
+            amount=Decimal("70.00"),
+            datetime=datetime(2026, 1, 12, tzinfo=timezone.utc),
+        ),
+    )
+
+    # Алиас применяется и к уже сохранённым записям (apply_scope внутри create).
+    # ^хлеб$ — только точное «Хлеб»; «Хлеб Бородинский» остаётся без алиаса.
+    await _alias_service(session).create(
+        user,
+        AliasCreate(
+            scope="product",
+            original_name="^хлеб$",
+            alias_name="батон",
+            is_regex=True,
+        ),
+    )
+
+    async def _ids(q: str) -> set:
+        rows, _ = await service.list_page(
+            user,
+            limit=50,
+            offset=0,
+            date_from=None,
+            date_to=None,
+            tag_ids=None,
+            search=q,
+            seller_names=None,
+            sort_by="date",
+            sort_dir="desc",
+        )
+        return {tx.id for tx, _, _ in rows}
+
+    # «батон» — и настоящие батоны, и переименованные «Хлеб» (normalized = «батон»)
+    assert await _ids("батон") == {khleb.id, baton.id}
+    # «хлеб» — только записи БЕЗ алиаса; переименованные не всплывают
+    assert await _ids("хлеб") == {borodinsky.id}
+
+
+async def test_price_chart_search_uses_effective_name_after_alias(session):
+    """Ценовой график ищет так же: «батон» находит переименованные «Хлеб»,
+    «хлеб» — не находит записи с применённым алиасом (подстрока и regex)."""
+    user = await _make_user(session)
+    service = _tx_service(session)
+
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Хлеб",
+            amount=Decimal("30.00"),
+            price=Decimal("30.00"),
+            quantity=Decimal("1"),
+            datetime=datetime(2026, 1, 10, tzinfo=timezone.utc),
+        ),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Батон НАРЕЗНОЙ",
+            amount=Decimal("45.00"),
+            price=Decimal("45.00"),
+            quantity=Decimal("1"),
+            datetime=datetime(2026, 1, 11, tzinfo=timezone.utc),
+        ),
+    )
+    await service.create_standalone(
+        user,
+        TransactionCreate(
+            name="Хлеб Бородинский",
+            amount=Decimal("70.00"),
+            price=Decimal("70.00"),
+            quantity=Decimal("1"),
+            datetime=datetime(2026, 1, 12, tzinfo=timezone.utc),
+        ),
+    )
+
+    await _alias_service(session).create(
+        user,
+        AliasCreate(
+            scope="product",
+            original_name="^хлеб$",
+            alias_name="батон",
+            is_regex=True,
+        ),
+    )
+
+    repo = TransactionRepository(session)
+
+    def _names(points) -> set[str]:
+        return {name for _day, _price, _amount, _store, name in points}
+
+    # подстрока: «батон» находит переименованный «Хлеб», «хлеб» — только без алиаса
+    points = await repo.price_points(user_id=user.id, name="батон", is_regex=False)
+    assert _names(points) == {"Хлеб", "Батон НАРЕЗНОЙ"}
+    points = await repo.price_points(user_id=user.id, name="хлеб", is_regex=False)
+    assert _names(points) == {"Хлеб Бородинский"}
+
+    # regex-режим — та же семантика
+    points = await repo.price_points(user_id=user.id, name="батон", is_regex=True)
+    assert _names(points) == {"Хлеб", "Батон НАРЕЗНОЙ"}
+    points = await repo.price_points(user_id=user.id, name="хлеб", is_regex=True)
+    assert _names(points) == {"Хлеб Бородинский"}
 
 
 # ---------- создание из чека ----------
