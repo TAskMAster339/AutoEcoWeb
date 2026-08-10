@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Box, Card, Grid2 as Grid, Skeleton, Stack, Switch, TextField, Typography } from '@mui/material'
-import { LineChart, storeColor } from './Charts'
+import { EmptyChart, LineChart, storeColor } from './Charts'
 import { StatisticCard } from '../common/StatisticCard'
 import { ErrorState } from '../common/States'
 import { usePriceChart } from '../../hooks/useSummary'
@@ -46,6 +46,8 @@ export function PriceChartCard() {
   )
 
   const hasInput = debounced.trim().length > 0
+  const hasData = Boolean(data && data.count > 0)
+  const statValue = (v: number) => (hasData ? formatCurrency(v) : '—')
 
   return (
     <Card sx={{ p: 2.5 }}>
@@ -73,38 +75,26 @@ export function PriceChartCard() {
           placeholder="Хлеб, молоко, ^Молоко.*"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          helperText="Название или регулярное выражение товара. Учитывается выбранный период."
+          helperText="Название, *биойогурт* или regex (^Молоко.*). Учитывается выбранный период."
           aria-label="Название или regex товара"
         />
 
-        {!hasInput && (
-          <Typography variant="body2" color="text.secondary" sx={{ py: 8, textAlign: 'center' }}>
-            Введите название товара, чтобы построить график цен
-          </Typography>
-        )}
-
-        {hasInput && isFetching && (
-          <Skeleton variant="rounded" height={220} sx={{ borderRadius: '8px' }} />
-        )}
-
-        {hasInput && !isFetching && isError && (
+        {!hasInput ? (
+          <EmptyChart text="Введите название товара — например, *биойогурт*" ariaLabel="График цен ожидает ввода" />
+        ) : isFetching ? (
+          <Skeleton variant="rounded" height={180} sx={{ borderRadius: '8px' }} />
+        ) : isError ? (
           <ErrorState
             message={error instanceof Error ? error.message : 'Ошибка загрузки'}
             onRetry={() => void refetch()}
           />
-        )}
-
-        {hasInput && !isFetching && !isError && data && data.count === 0 && (
-          <Typography variant="body2" color="text.secondary" sx={{ py: 8, textAlign: 'center' }}>
-            Ничего не найдено за выбранный период
-          </Typography>
-        )}
-
-        {hasInput && !isFetching && !isError && data && data.count > 0 && (
+        ) : data && data.count === 0 ? (
+          <EmptyChart text="Ничего не найдено за выбранный период" ariaLabel="График цен пуст" />
+        ) : (
           <>
             <LineChart
               points={points}
-              median={data.medianPrice}
+              median={data!.medianPrice}
               medianLabel="медиана"
               formatValue={formatCurrency}
               valueLabel="Цена"
@@ -113,7 +103,7 @@ export function PriceChartCard() {
             />
 
             <Stack direction="row" spacing={1.25} sx={{ flexWrap: 'wrap' }}>
-              {data.stores.map((s, i) => (
+              {data!.stores.map((s, i) => (
                 <Box key={s ?? 'null'} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: storeColor(i) }} />
                   <Typography variant="caption" color="text.secondary">
@@ -122,20 +112,24 @@ export function PriceChartCard() {
                 </Box>
               ))}
             </Stack>
-
-            <Grid container spacing={2} sx={{ mt: 0.5 }}>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <StatisticCard label="Средняя цена" value={formatCurrency(data.avgPrice)} />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <StatisticCard label="Медианная цена" value={formatCurrency(data.medianPrice)} />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <StatisticCard label="Станд. отклонение" value={formatCurrency(data.stddev)} hint={`${data.count} ${plural(data.count, 'покупка', 'покупки', 'покупок')}`} />
-              </Grid>
-            </Grid>
           </>
         )}
+
+        <Grid container spacing={2} sx={{ mt: 0.5 }}>
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <StatisticCard label="Средняя цена" value={statValue(data?.avgPrice ?? 0)} />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <StatisticCard label="Медианная цена" value={statValue(data?.medianPrice ?? 0)} />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <StatisticCard
+              label="Станд. отклонение"
+              value={statValue(data?.stddev ?? 0)}
+              hint={hasData && data ? `${data.count} ${plural(data.count, 'покупка', 'покупки', 'покупок')}` : undefined}
+            />
+          </Grid>
+        </Grid>
       </Stack>
     </Card>
   )

@@ -8,7 +8,9 @@ import {
   ChartCard,
   DonutChart,
   LineChart,
+  OTHER_SLICE_COLOR,
   WeekdayBars,
+  mergeSmallSlices,
   storeColor,
   weekdayLabel,
 } from '../components/analytics/Charts'
@@ -46,6 +48,31 @@ export function AnalyticsPage() {
   const dailyTrend = useMemo(() => data?.daily.map((d) => d.trend) ?? [], [data])
   const totalExpenses = useMemo(() => (data?.daily ?? []).reduce((s, d) => s + d.expenses, 0), [data])
   const totalIncome = useMemo(() => (data?.daily ?? []).reduce((s, d) => s + d.income, 0), [data])
+
+  // Пироги: доли < 1 % сливаются в «Другое», чтобы не было десятков секций.
+  const storeSlices = useMemo(
+    () =>
+      mergeSmallSlices((data?.byStore ?? []).map((s) => ({ label: s.store, value: s.value }))).map((s, i) => ({
+        ...s,
+        color: s.label === 'Другое' ? OTHER_SLICE_COLOR : storeColor(i),
+      })),
+    [data],
+  )
+  const storeIncomeSlices = useMemo(
+    () =>
+      mergeSmallSlices((data?.byStoreIncome ?? []).map((s) => ({ label: s.store, value: s.value }))).map((s, i) => ({
+        ...s,
+        color: s.label === 'Другое' ? OTHER_SLICE_COLOR : storeColor(i),
+      })),
+    [data],
+  )
+  const categorySlices = useMemo(
+    () =>
+      mergeSmallSlices(
+        (data?.byCategory ?? []).map((c) => ({ label: c.tag.name, value: c.value, color: c.tag.color })),
+      ).map((s) => ({ ...s, color: s.label === 'Другое' ? OTHER_SLICE_COLOR : s.color })),
+    [data],
+  )
 
   if (isLoading) {
     return (
@@ -122,7 +149,7 @@ export function AnalyticsPage() {
       </Grid>
 
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 7 }}>
+        <Grid size={{ xs: 12 }}>
           <ChartCard title="Расходы по дням">
             <LineChart
               points={dailyPoints}
@@ -133,28 +160,28 @@ export function AnalyticsPage() {
             />
           </ChartCard>
         </Grid>
-        <Grid size={{ xs: 12, md: 5 }}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <ChartCard title="По магазинам">
             <DonutChart
-              items={data.byStore.map((s, i) => ({ label: s.store, value: s.value, color: storeColor(i) }))}
+              items={storeSlices}
               formatValue={formatCurrency}
               centerLabel="расходы"
             />
           </ChartCard>
         </Grid>
-        <Grid size={{ xs: 12, md: 5 }}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <ChartCard title="Доходы по источникам">
             <DonutChart
-              items={data.byStoreIncome.map((s, i) => ({ label: s.store, value: s.value, color: storeColor(i) }))}
+              items={storeIncomeSlices}
               formatValue={formatCurrency}
               centerLabel="доходы"
             />
           </ChartCard>
         </Grid>
-        <Grid size={{ xs: 12, md: 7 }}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <ChartCard title="По категориям">
             <DonutChart
-              items={data.byCategory.map((c) => ({ label: c.tag.name, value: c.value, color: c.tag.color }))}
+              items={categorySlices}
               formatValue={formatCurrency}
               centerLabel="расходы"
             />

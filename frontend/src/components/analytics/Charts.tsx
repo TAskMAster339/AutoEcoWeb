@@ -504,7 +504,7 @@ export function WeekdayBars({ data, formatValue }: WeekdayBarsProps) {
 }
 
 /** Пустой график-заглушка. */
-function EmptyChart({ text, ariaLabel }: { text: string; ariaLabel: string }) {
+export function EmptyChart({ text, ariaLabel }: { text: string; ariaLabel: string }) {
   return (
     <Box
       role="img"
@@ -514,7 +514,7 @@ function EmptyChart({ text, ariaLabel }: { text: string; ariaLabel: string }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        border: 1,
+        border: '1px dashed',
         borderColor: 'divider',
         borderRadius: '8px',
       }}
@@ -526,12 +526,37 @@ function EmptyChart({ text, ariaLabel }: { text: string; ariaLabel: string }) {
   )
 }
 
-/** Детерминированная палитра для магазинов (индекс в массиве stores). */
+/** Детерминированная палитра для магазинов (индекс в массиве stores).
+ *  Без фиолетовых — они сливаются с акцентным цветом приложения. */
 export const STORE_COLORS = [
-  '#6C5CE7', '#3B82F6', '#10B981', '#F59E0B', '#EF4444',
-  '#8B5CF6', '#06B6D4', '#EC4899', '#84CC16', '#F97316',
+  '#2563EB', '#0EA5E9', '#10B981', '#84CC16', '#F59E0B',
+  '#F97316', '#EF4444', '#14B8A6', '#EC4899', '#64748B',
 ] as const
 
 export function storeColor(index: number): string {
   return STORE_COLORS[index % STORE_COLORS.length]!
+}
+
+/** Нейтральный цвет секции «Другое» (слитые доли < 1 %). */
+export const OTHER_SLICE_COLOR = '#64748B'
+
+/** Объединяет доли меньше minFraction от суммы в одну секцию «Другое».
+ *  Сумма не меняется; порядок — по убыванию. Если всё < 1 %, крупнейшая
+ *  доля остаётся отдельной, чтобы пирог не вырождался в одно кольцо. */
+export function mergeSmallSlices<T extends { label: string; value: number }>(
+  items: readonly T[],
+  minFraction = 0.01,
+): T[] {
+  if (items.length <= 1) return [...items]
+  const total = items.reduce((s, i) => s + i.value, 0)
+  if (total <= 0) return [...items]
+  const sorted = [...items].sort((a, b) => b.value - a.value)
+  const big = sorted.filter((i) => i.value / total >= minFraction)
+  const small = sorted.filter((i) => i.value / total < minFraction)
+  if (small.length === 0) return sorted
+  const keep = big.length > 0 ? big : [sorted[0]!]
+  const rest = big.length > 0 ? small : sorted.slice(1)
+  const otherSum = rest.reduce((s, i) => s + i.value, 0)
+  if (otherSum <= 0) return sorted
+  return [...keep, { ...(rest[0] ?? sorted[0]!), label: 'Другое', value: otherSum }]
 }
