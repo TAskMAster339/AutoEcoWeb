@@ -75,9 +75,15 @@ class EmailService:
         text = _PURPOSE_TEXTS[purpose]
         safe_code = escape(code)
         safe_email = escape(to_email)
-        action_label = "Подтвердить почту" if purpose == EmailCodePurpose.VERIFY_EMAIL else "Перейти к восстановлению"
-        page_path = "/verify-email" if purpose == EmailCodePurpose.VERIFY_EMAIL else "/recover"
-        action_url = f"{settings.app_url.rstrip('/')}{page_path}?{urlencode({'email': to_email})}"
+        action_label = (
+            "Подтвердить почту"
+            if purpose == EmailCodePurpose.VERIFY_EMAIL
+            else "Перейти к восстановлению"
+        )
+        page_path = (
+            "/verify-email" if purpose == EmailCodePurpose.VERIFY_EMAIL else "/recover"
+        )
+        action_url = f"{settings.app_url.rstrip('/')}{page_path}?{urlencode({'email': to_email})}"  # noqa: E501
         safe_action_url = escape(action_url, quote=True)
         ttl = settings.email_code_ttl_minutes
         html = f"""
