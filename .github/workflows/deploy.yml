@@ -67,10 +67,14 @@ jobs:
             git checkout -- .
             git pull --ff-only origin main
             docker compose -f docker-compose.deploy.yml up -d --build
-            # nginx.conf монтируется по пути, а git при pull заменяет inode —
-            if ! git diff --quiet HEAD@{1} HEAD -- deploy/nginx.conf; then
-              docker compose -f docker-compose.deploy.yml up -d --force-recreate nginx
-            fi
-            sleep 5
+            # nginx кэширует IP апстримов (backend/frontend) при старте, а контейнеры
+            # после пересборки получают новые IP → 502 до пересоздания nginx.
+            # Пересоздаём ВСЕГДА; заодно подхватывается свежий nginx.conf (git заменяет inode).
+            docker compose -f docker-compose.deploy.yml up -d --force-recreate nginx
+            # Ждём готовности: backend стартует несколько секунд после пересоздания
+            for i in $(seq 1 12); do
+              curl -sf https://autoeco.mooo.com/health >/dev/null && break
+              sleep 5
+            done
             curl -sf https://autoeco.mooo.com/health >/dev/null
             curl -sf -o /dev/null https://autoeco.mooo.com/
