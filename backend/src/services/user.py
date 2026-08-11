@@ -5,23 +5,12 @@ from src.core.enums.user_status import UserStatus
 from src.core.security import hash_password
 from src.models.user import User
 from src.repositories.user import UserRepository
-from src.schemas.user import AdminUserUpdate, UserCreate, UserUpdate
+from src.schemas.user import AdminUserUpdate, UserUpdate
 
 
 class UserService:
     def __init__(self, repo: UserRepository) -> None:
         self._repo = repo
-
-    async def register(self, data: UserCreate) -> User:
-        email = data.email.lower()
-        existing = await self._repo.get_by_email(email)
-        if existing is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Пользователь с таким email уже существует",  # noqa: RUF001
-            )
-        password_hash = hash_password(data.password)
-        return await self._repo.create(email=email, password_hash=password_hash)
 
     async def update_profile(self, user: User, data: UserUpdate) -> User:
         changes = data.model_dump(exclude_unset=True)
@@ -92,6 +81,16 @@ class AdminUserService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Нельзя менять роль/статус самому себе",  # noqa: RUF001
+            )
+        if (
+            "role" in changes
+            and target.role == UserRole.ADMIN
+            and changes["role"] != UserRole.ADMIN
+            and await self._repo.count_admins() <= 1
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Нельзя снять роль администратора с последнего админа",  # noqa: RUF001
             )
         return await self._repo.update(target, **changes)
 

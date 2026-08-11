@@ -22,23 +22,14 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material'
-import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined'
-import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined'
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
-import PersonOffOutlinedIcon from '@mui/icons-material/PersonOffOutlined'
 import SearchIcon from '@mui/icons-material/Search'
 import { messageFromError } from '../api/client'
 import type { AdminUser, UserRole, UserStatus } from '../api/types'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
 import { PageHeader } from '../components/common/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '../components/common/States'
-import {
-  useAdminUsers,
-  useDeleteUser,
-  useUpdateUserRole,
-  useUpdateUserStatus,
-} from '../hooks/useAdminUsers'
+import { useAdminUsers, useDeleteUser, useUpdateUser } from '../hooks/useAdminUsers'
 import { formatLongDate } from '../lib/format'
 import { useAuthStore } from '../store/authStore'
 import { colors } from '../theme'
@@ -46,6 +37,7 @@ import { colors } from '../theme'
 const STATUS_COLORS: Record<UserStatus, string> = {
   active: colors.green,
   pending: colors.amber,
+  verified: colors.primary,
   blocked: colors.red,
 }
 
@@ -53,27 +45,8 @@ const ROLE_LABEL: Record<UserRole, string> = { admin: 'Админ', user: 'По�
 const STATUS_LABEL: Record<UserStatus, string> = {
   active: 'Активен',
   pending: 'Ожидает',
+  verified: 'Подтверждён',
   blocked: 'Заблокирован',
-}
-
-// Fixed chip WIDTH — not minWidth (a min lets the label grow the chip, a fixed
-// width can't) — so a label change (Активен -> Заблокирован, Админ -> Пользователь)
-// never shifts the layout. Label padding is zeroed; ellipsis is a safety net.
-const CHIP_DESKTOP_SX = {
-  height: 22,
-  fontSize: 12,
-  width: 100,
-  px: 0,
-  justifyContent: 'center',
-  '& .MuiChip-label': { px: 0, overflow: 'hidden', textOverflow: 'ellipsis' },
-}
-const CHIP_MOBILE_SX = {
-  height: 20,
-  fontSize: 11,
-  width: 88,
-  px: 0,
-  justifyContent: 'center',
-  '& .MuiChip-label': { px: 0, overflow: 'hidden', textOverflow: 'ellipsis' },
 }
 
 /** Debounce for the search field. */
@@ -86,92 +59,72 @@ function useDebounced<T>(value: T, delay = 300): T {
   return debounced
 }
 
-interface UserActionsProps {
+interface RowSelectsProps {
   user: AdminUser
   disabled: boolean
-  onActivate: () => void
-  onBlock: () => void
-  onMakeAdmin: () => void
-  onRevokeAdmin: () => void
-  onDelete: () => void
+  onRoleChange: (role: UserRole) => void
+  onStatusChange: (status: UserStatus) => void
 }
 
-/** Icon actions row: block/activate, promote/demote, delete. Hidden for the caller's own row. */
-function UserActions({ user, disabled, onActivate, onBlock, onMakeAdmin, onRevokeAdmin, onDelete }: UserActionsProps) {
+/** Селекты роли и статуса в строке — любой статус/роль из списка. */
+function RowSelects({ user, disabled, onRoleChange, onStatusChange }: RowSelectsProps) {
   return (
-    <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'flex-end' }}>
-      {user.status === 'active' ? (
-        <Tooltip title="Заблокировать">
-          <span>
-            <IconButton size="small" disabled={disabled} onClick={onBlock}>
-              <BlockOutlinedIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-      ) : (
-        <Tooltip title="Активировать">
-          <span>
-            <IconButton size="small" disabled={disabled} onClick={onActivate}>
-              <CheckCircleOutlineIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-      )}
-      {user.role === 'admin' ? (
-        <Tooltip title="Снять админа">
-          <span>
-            <IconButton size="small" disabled={disabled} onClick={onRevokeAdmin}>
-              <PersonOffOutlinedIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-      ) : (
-        <Tooltip title="Сделать админом">
-          <span>
-            <IconButton size="small" disabled={disabled} onClick={onMakeAdmin}>
-              <AdminPanelSettingsOutlinedIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-      )}
-      <Tooltip title="Удалить">
-        <span>
-          <IconButton size="small" disabled={disabled} onClick={onDelete} sx={{ color: colors.red }}>
-            <DeleteOutlineIcon fontSize="small" />
-          </IconButton>
-        </span>
-      </Tooltip>
-    </Box>
+    <Stack direction={{ xs: 'row', sm: 'row' }} spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+      <TextField
+        select
+        size="small"
+        label="Роль"
+        value={user.role}
+        disabled={disabled}
+        onChange={(e) => onRoleChange(e.target.value as UserRole)}
+        sx={{ minWidth: 132 }}
+      >
+        {(Object.keys(ROLE_LABEL) as UserRole[]).map((value) => (
+          <MenuItem key={value} value={value}>
+            {ROLE_LABEL[value]}
+          </MenuItem>
+        ))}
+      </TextField>
+      <TextField
+        select
+        size="small"
+        label="Статус"
+        value={user.status}
+        disabled={disabled}
+        onChange={(e) => onStatusChange(e.target.value as UserStatus)}
+        sx={{
+          minWidth: 150,
+          '& .MuiInputBase-input': { color: STATUS_COLORS[user.status], fontWeight: 600 },
+        }}
+      >
+        {(Object.keys(STATUS_LABEL) as UserStatus[]).map((value) => (
+          <MenuItem key={value} value={value}>
+            {STATUS_LABEL[value]}
+          </MenuItem>
+        ))}
+      </TextField>
+    </Stack>
   )
 }
 
 interface AdminUserRowProps {
   user: AdminUser
   isMe: boolean
-  actionsDisabled: boolean
-  onActivate: () => void
-  onBlock: () => void
-  onMakeAdmin: () => void
-  onRevokeAdmin: () => void
+  disabled: boolean
+  onRoleChange: (role: UserRole) => void
+  onStatusChange: (status: UserStatus) => void
   onDelete: () => void
 }
 
-/** Mobile card: email, role/status chips, registration date, actions. */
-function AdminUserCard({ user, isMe, actionsDisabled, ...actions }: AdminUserRowProps) {
+/** Mobile card: email, role/status selects, registration date, delete. */
+function AdminUserCard({ user, isMe, disabled, onRoleChange, onStatusChange, onDelete }: AdminUserRowProps) {
   return (
     <Card sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
           {user.email}
         </Typography>
-        <Stack direction="row" spacing={0.75} sx={{ mt: 0.75, alignItems: 'center' }}>
-          <Chip size="small" label={ROLE_LABEL[user.role]} variant="outlined" sx={CHIP_MOBILE_SX} />
-          <Chip
-            size="small"
-            label={STATUS_LABEL[user.status]}
-            sx={{ ...CHIP_MOBILE_SX, bgcolor: `${STATUS_COLORS[user.status]}1A`, color: STATUS_COLORS[user.status] }}
-          />
-        </Stack>
+        <RowSelects user={user} disabled={disabled || isMe} onRoleChange={onRoleChange} onStatusChange={onStatusChange} />
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
           {formatLongDate(user.created_at)}
         </Typography>
@@ -179,7 +132,13 @@ function AdminUserCard({ user, isMe, actionsDisabled, ...actions }: AdminUserRow
       {isMe ? (
         <Chip size="small" label="Это вы" sx={{ height: 20, fontSize: 11 }} />
       ) : (
-        <UserActions user={user} disabled={actionsDisabled} {...actions} />
+        <Tooltip title="Удалить">
+          <span>
+            <IconButton size="small" disabled={disabled} onClick={onDelete} sx={{ color: colors.red }}>
+              <DeleteOutlineIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
       )}
     </Card>
   )
@@ -195,6 +154,7 @@ export function AdminPage() {
   const [role, setRole] = useState<UserRole | ''>('')
   const [status, setStatus] = useState<UserStatus | ''>('')
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const debouncedQ = useDebounced(q, 300)
 
   const filters = useMemo(
@@ -211,12 +171,30 @@ export function AdminPage() {
 
   const users = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data])
 
-  const updateStatus = useUpdateUserStatus()
-  const updateRole = useUpdateUserRole()
+  const updateUser = useUpdateUser()
   const removeUser = useDeleteUser()
-  const anyActionPending = updateStatus.isPending || updateRole.isPending || removeUser.isPending
+  const anyActionPending = updateUser.isPending || removeUser.isPending
+
+  const changeRole = (user: AdminUser, roleValue: UserRole) => {
+    if (roleValue === user.role) return
+    setActionError(null)
+    updateUser.mutate(
+      { id: user.id, role: roleValue },
+      { onError: (err) => setActionError(messageFromError(err)) },
+    )
+  }
+
+  const changeStatus = (user: AdminUser, statusValue: UserStatus) => {
+    if (statusValue === user.status) return
+    setActionError(null)
+    updateUser.mutate(
+      { id: user.id, status: statusValue },
+      { onError: (err) => setActionError(messageFromError(err)) },
+    )
+  }
 
   const handleDelete = (user: AdminUser) => {
+    setActionError(null)
     setDeleteTarget(user)
   }
 
@@ -224,6 +202,7 @@ export function AdminPage() {
     if (!deleteTarget) return
     removeUser.mutate(deleteTarget.id, {
       onSuccess: () => setDeleteTarget(null),
+      onError: (err) => setActionError(messageFromError(err)),
     })
   }
 
@@ -235,14 +214,6 @@ export function AdminPage() {
       </Stack>
     )
   }
-
-  const rowActions = (u: AdminUser) => ({
-    onActivate: () => updateStatus.mutate({ id: u.id, status: 'active' }),
-    onBlock: () => updateStatus.mutate({ id: u.id, status: 'blocked' }),
-    onMakeAdmin: () => updateRole.mutate({ id: u.id, role: 'admin' }),
-    onRevokeAdmin: () => updateRole.mutate({ id: u.id, role: 'user' }),
-    onDelete: () => handleDelete(u),
-  })
 
   const fillSx = isMobile
     ? undefined
@@ -284,8 +255,11 @@ export function AdminPage() {
           sx={{ minWidth: 160 }}
         >
           <MenuItem value="">Все</MenuItem>
-          <MenuItem value="admin">Админ</MenuItem>
-          <MenuItem value="user">Пользователь</MenuItem>
+          {(Object.keys(ROLE_LABEL) as UserRole[]).map((value) => (
+            <MenuItem key={value} value={value}>
+              {ROLE_LABEL[value]}
+            </MenuItem>
+          ))}
         </TextField>
         <TextField
           select
@@ -296,11 +270,19 @@ export function AdminPage() {
           sx={{ minWidth: 160 }}
         >
           <MenuItem value="">Все</MenuItem>
-          <MenuItem value="active">Активен</MenuItem>
-          <MenuItem value="pending">Ожидает</MenuItem>
-          <MenuItem value="blocked">Заблокирован</MenuItem>
+          {(Object.keys(STATUS_LABEL) as UserStatus[]).map((value) => (
+            <MenuItem key={value} value={value}>
+              {STATUS_LABEL[value]}
+            </MenuItem>
+          ))}
         </TextField>
       </Stack>
+
+      {actionError && (
+        <Alert severity="error" onClose={() => setActionError(null)}>
+          {actionError}
+        </Alert>
+      )}
 
       {isPending ? (
         <Box sx={fillSx}>
@@ -320,7 +302,15 @@ export function AdminPage() {
       ) : isMobile ? (
         <Stack spacing={1.25}>
           {users.map((u) => (
-            <AdminUserCard key={u.id} user={u} isMe={u.id === me?.id} actionsDisabled={anyActionPending} {...rowActions(u)} />
+            <AdminUserCard
+              key={u.id}
+              user={u}
+              isMe={u.id === me?.id}
+              disabled={anyActionPending}
+              onRoleChange={(r) => changeRole(u, r)}
+              onStatusChange={(s) => changeStatus(u, s)}
+              onDelete={() => handleDelete(u)}
+            />
           ))}
         </Stack>
       ) : (
@@ -328,8 +318,6 @@ export function AdminPage() {
           <Table size="small" stickyHeader>
             <TableHead sx={{ '& th': { bgcolor: 'background.paper' } }}>
               <TableRow>
-                {/* Email absorbs the free space so the actions column stays compact
-                    and its right-aligned header/buttons line up. */}
                 <TableCell sx={{ width: '100%' }}>Email</TableCell>
                 <TableCell>Роль</TableCell>
                 <TableCell>Статус</TableCell>
@@ -345,18 +333,56 @@ export function AdminPage() {
                     {u.id === me?.id && <Chip size="small" label="Это вы" sx={{ ml: 1, height: 20, fontSize: 11 }} />}
                   </TableCell>
                   <TableCell>
-                    <Chip size="small" label={ROLE_LABEL[u.role]} variant="outlined" sx={CHIP_DESKTOP_SX} />
+                    <TextField
+                      select
+                      size="small"
+                      value={u.role}
+                      disabled={anyActionPending || u.id === me?.id}
+                      onChange={(e) => changeRole(u, e.target.value as UserRole)}
+                      sx={{ minWidth: 132 }}
+                    >
+                      {(Object.keys(ROLE_LABEL) as UserRole[]).map((value) => (
+                        <MenuItem key={value} value={value}>
+                          {ROLE_LABEL[value]}
+                        </MenuItem>
+                      ))}
+                    </TextField>
                   </TableCell>
                   <TableCell>
-                    <Chip
+                    <TextField
+                      select
                       size="small"
-                      label={STATUS_LABEL[u.status]}
-                      sx={{ ...CHIP_DESKTOP_SX, bgcolor: `${STATUS_COLORS[u.status]}1A`, color: STATUS_COLORS[u.status] }}
-                    />
+                      value={u.status}
+                      disabled={anyActionPending || u.id === me?.id}
+                      onChange={(e) => changeStatus(u, e.target.value as UserStatus)}
+                      sx={{
+                        minWidth: 150,
+                        '& .MuiInputBase-input': { color: STATUS_COLORS[u.status], fontWeight: 600 },
+                      }}
+                    >
+                      {(Object.keys(STATUS_LABEL) as UserStatus[]).map((value) => (
+                        <MenuItem key={value} value={value}>
+                          {STATUS_LABEL[value]}
+                        </MenuItem>
+                      ))}
+                    </TextField>
                   </TableCell>
                   <TableCell sx={{ color: 'text.secondary', fontSize: 13 }}>{formatLongDate(u.created_at)}</TableCell>
                   <TableCell align="right">
-                    {u.id === me?.id ? null : <UserActions user={u} disabled={anyActionPending} {...rowActions(u)} />}
+                    {u.id === me?.id ? null : (
+                      <Tooltip title="Удалить">
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={anyActionPending}
+                            onClick={() => handleDelete(u)}
+                            sx={{ color: colors.red }}
+                          >
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

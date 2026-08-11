@@ -1,6 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/admin'
-import type { AdminUserFilters, UserRole, UserStatus } from '../api/types'
+import type { AdminUser, AdminUserFilters } from '../api/types'
 
 const PAGE_SIZE = 50
 
@@ -16,20 +16,13 @@ export function useAdminUsers(filters: AdminUserFilters) {
   })
 }
 
-export function useUpdateUserStatus() {
+export function useUpdateUser() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: UserStatus }) => api.updateUserStatus(id, status),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-users'] })
-    },
-  })
-}
-
-export function useUpdateUserRole() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, role }: { id: string; role: UserRole }) => api.updateUserRole(id, role),
+    mutationFn: ({
+      id,
+      ...patch
+    }: { id: string } & Partial<Pick<AdminUser, 'role' | 'status'>>) => api.updateUser(id, patch),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-users'] })
     },

@@ -11,6 +11,7 @@ from src.core.enums.user_status import UserStatus
 from src.core.security import decode_access_token
 from src.models.user import User
 from src.repositories.alias import AliasRepository
+from src.repositories.email_code import EmailCodeRepository
 from src.repositories.receipt import ReceiptRepository
 from src.repositories.refresh_token import RefreshTokenRepository
 from src.repositories.tag import TagRepository
@@ -18,6 +19,7 @@ from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
 from src.services.aliases import AliasService
 from src.services.import_export import ImportExportService
+from src.services.email import EmailService
 from src.services.proverkacheka import ProverkachekaClient
 from src.services.sellers import SellerService
 from src.services.transaction import TransactionService
@@ -37,6 +39,20 @@ async def get_refresh_repo(session: DBSession) -> RefreshTokenRepository:
 
 
 RefreshRepo = Annotated[RefreshTokenRepository, Depends(get_refresh_repo)]
+
+
+async def get_email_code_repo(session: DBSession) -> EmailCodeRepository:
+    return EmailCodeRepository(session)
+
+
+EmailCodeRepo = Annotated[EmailCodeRepository, Depends(get_email_code_repo)]
+
+
+def get_email_service() -> EmailService:
+    return EmailService()
+
+
+EmailSvc = Annotated[EmailService, Depends(get_email_service)]
 
 
 async def get_receipt_repo(session: DBSession) -> ReceiptRepository:

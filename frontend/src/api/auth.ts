@@ -16,6 +16,35 @@ export function register(email: string, password: string): Promise<User> {
   return api.post<User>('/api/v1/auth/register', { email, password })
 }
 
+/** Подтверждение почты 6-значным кодом из письма (POST /api/v1/auth/verify-email). */
+export function verifyEmail(email: string, code: string): Promise<User> {
+  return api.post<User>('/api/v1/auth/verify-email', { email, code })
+}
+
+/** Новый код подтверждения почты (POST /api/v1/auth/verify-email/resend). */
+export function resendVerification(email: string): Promise<void> {
+  return api.post<void>('/api/v1/auth/verify-email/resend', { email })
+}
+
+/** Запрос кода восстановления пароля (POST /api/v1/auth/password-recovery/request). */
+export function requestPasswordRecovery(email: string): Promise<void> {
+  return api.post<void>('/api/v1/auth/password-recovery/request', { email })
+}
+
+/** Проверка кода восстановления (POST /api/v1/auth/password-recovery/verify). */
+export function verifyRecoveryCode(email: string, code: string): Promise<void> {
+  return api.post<void>('/api/v1/auth/password-recovery/verify', { email, code })
+}
+
+/** Смена пароля по коду (POST /api/v1/auth/password-recovery/reset). */
+export function resetPassword(email: string, code: string, newPassword: string): Promise<void> {
+  return api.post<void>('/api/v1/auth/password-recovery/reset', {
+    email,
+    code,
+    new_password: newPassword,
+  })
+}
+
 export function fetchMe(): Promise<User> {
   return api.get<User>('/api/v1/auth/me')
 }

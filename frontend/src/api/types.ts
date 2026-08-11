@@ -7,7 +7,7 @@
 /* ---------- Backend (real, mirrors OpenAPI) ---------- */
 
 export type UserRole = 'user' | 'admin'
-export type UserStatus = 'pending' | 'active' | 'blocked'
+export type UserStatus = 'pending' | 'verified' | 'active' | 'blocked'
 
 export interface User {
   id: string

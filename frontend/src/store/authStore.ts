@@ -20,13 +20,17 @@ interface AuthState {
   bootstrap: () => Promise<void>
   login: (email: string, password: string) => Promise<boolean>
   register: (email: string, password: string) => Promise<boolean>
+  /** Подтверждение почты кодом из письма (pending → verified). */
+  verifyEmail: (email: string, code: string) => Promise<boolean>
+  /** Запросить новый код подтверждения почты. */
+  resendVerification: (email: string) => Promise<boolean>
   logout: () => Promise<void>
   /** Смена пароля — бэкенд ротирует куки, в сторе обновляется пользователь. */
   changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>
   resetError: () => void
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   status: 'idle',
   error: null,
@@ -58,16 +62,35 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (email, password) => {
     set({ status: 'loading', error: null })
     try {
-      const user = await authApi.register(email, password)
-      // Backend returns the user but no tokens on register — sign in right after.
-      const ok = await get().login(email, password)
-      if (!ok) {
-        set({ user, status: 'unauthenticated', error: 'Регистрация успешна, но не удалось войти' })
-        return false
-      }
+      // Регистрация создаёт пользователя со статусом pending и отправляет код
+      // на почту — входа нет до подтверждения и активации администратором.
+      await authApi.register(email, password)
+      set({ status: 'unauthenticated', error: null })
       return true
     } catch (err) {
       set({ status: 'unauthenticated', error: messageFromError(err) })
+      return false
+    }
+  },
+
+  verifyEmail: async (email, code) => {
+    try {
+      await authApi.verifyEmail(email, code)
+      set({ error: null })
+      return true
+    } catch (err) {
+      set({ error: messageFromError(err) })
+      return false
+    }
+  },
+
+  resendVerification: async (email) => {
+    try {
+      await authApi.resendVerification(email)
+      set({ error: null })
+      return true
+    } catch (err) {
+      set({ error: messageFromError(err) })
       return false
     }
   },

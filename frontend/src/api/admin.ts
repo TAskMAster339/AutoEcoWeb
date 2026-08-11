@@ -23,12 +23,12 @@ export function fetchUsers(params: FetchUsersParams = {}): Promise<CursorPage<Ad
   return api.get<CursorPage<AdminUser>>(`/api/v1/admin/users${qs ? `?${qs}` : ''}`)
 }
 
-export function updateUserRole(id: string, role: UserRole): Promise<AdminUser> {
-  return api.patch<AdminUser>(`/api/v1/admin/users/${id}`, { role })
-}
-
-export function updateUserStatus(id: string, status: UserStatus): Promise<AdminUser> {
-  return api.patch<AdminUser>(`/api/v1/admin/users/${id}`, { status })
+/** Обновление роли и/или статуса пользователя (PATCH /api/v1/admin/users/{id}). */
+export function updateUser(
+  id: string,
+  patch: { role?: UserRole; status?: UserStatus },
+): Promise<AdminUser> {
+  return api.patch<AdminUser>(`/api/v1/admin/users/${id}`, patch)
 }
 
 export function deleteUser(id: string): Promise<void> {

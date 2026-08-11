@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -14,6 +16,16 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, hashed_password: str) -> bool:
     return password_hash.verify(password, hashed_password)
+
+
+def generate_email_code() -> str:
+    """Случайный 6-значный код подтверждения (000000..999999)."""
+    return f"{secrets.randbelow(10**6):06d}"
+
+
+def hash_email_code(code: str) -> str:
+    """Код хранится в БД только в виде SHA-256 — в открытом виде нигде не лежит."""
+    return hashlib.sha256(code.encode()).hexdigest()
 
 
 def create_access_token(subject: UUID) -> str:

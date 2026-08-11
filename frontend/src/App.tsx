@@ -4,6 +4,8 @@ import { AppShell } from './components/layout/AppShell'
 import { ProtectedRoute, PublicOnlyRoute, FullPageSplash } from './components/common/RouteGuards'
 import { useAuthStore } from './store/authStore'
 import { LoginPage } from './pages/LoginPage'
+import { RecoveryPage } from './pages/RecoveryPage'
+import { EmailVerificationPage } from './pages/EmailVerificationPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 
 // Route-level code splitting (AGENTS.md: lazy loading, route splitting).
@@ -31,6 +33,22 @@ const router = createBrowserRouter([
     element: (
       <PublicOnlyRoute>
         <LoginPage />
+      </PublicOnlyRoute>
+    ),
+  },
+  {
+    path: '/recover',
+    element: (
+      <PublicOnlyRoute>
+        <RecoveryPage />
+      </PublicOnlyRoute>
+    ),
+  },
+  {
+    path: '/verify-email',
+    element: (
+      <PublicOnlyRoute>
+        <EmailVerificationPage />
       </PublicOnlyRoute>
     ),
   },
