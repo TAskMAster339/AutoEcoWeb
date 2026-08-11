@@ -66,7 +66,14 @@ jobs:
             # Сбрасываем случайные правки отслеживаемых файлов (сервер — деплой-таргет, не рабочая копия)
             git checkout -- .
             git pull --ff-only origin main
-            docker compose -f docker-compose.deploy.yml up -d --build
+            # Собираем образы, но стек пока НЕ поднимаем: сначала накатываем миграции,
+            # чтобы новый backend не успел отдать 500 на непромигрированную БД.
+            docker compose -f docker-compose.deploy.yml build
+            # Прогон alembic-миграций на прод-БД (env из .env на сервере).
+            # Идемпотентно: применяет только новые ревизии; падение = фейл деплоя.
+            # -T: без псевдо-TTY (ssh-action запускает команды без tty).
+            docker compose -f docker-compose.deploy.yml run --rm -T backend alembic upgrade head
+            docker compose -f docker-compose.deploy.yml up -d
             # nginx кэширует IP апстримов (backend/frontend) при старте, а контейнеры
             # после пересборки получают новые IP → 502 до пересоздания nginx.
             # Пересоздаём ВСЕГДА; заодно подхватывается свежий nginx.conf (git заменяет inode).
