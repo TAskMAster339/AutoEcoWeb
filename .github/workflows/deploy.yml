@@ -35,7 +35,10 @@ jobs:
       - name: Backend - pytest (sqlite in-memory, БД не нужна)
         working-directory: backend
         run: |
-          pip install -r requirements.txt pytest
+          # pytest отдельно: requirements.txt с хэшами (uv export) включает
+          # --require-hashes, и unpinned пакет в той же команде pip падает
+          pip install pytest
+          pip install -r requirements.txt
           python -m pytest tests/ -q
 
   deploy:
