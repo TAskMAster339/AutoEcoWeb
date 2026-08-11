@@ -34,3 +34,14 @@ export function fetchProverkachekaTokenStatus(): Promise<{ has_token: boolean }>
 export function saveProverkachekaToken(token: string): Promise<{ has_token: boolean }> {
   return api.put<{ has_token: boolean }>('/api/v1/auth/me/proverkacheka-token', { token })
 }
+
+/**
+ * Смена пароля (POST /api/v1/auth/change-password).
+ * Бэкенд проверяет текущий пароль, отзывает остальные сессии и ротирует куки.
+ */
+export function changePassword(currentPassword: string, newPassword: string): Promise<User> {
+  return api.post<User>('/api/v1/auth/change-password', {
+    current_password: currentPassword,
+    new_password: newPassword,
+  })
+}

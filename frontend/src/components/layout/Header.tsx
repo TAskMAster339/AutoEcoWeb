@@ -30,7 +30,7 @@ const TITLES: Record<string, string> = {
   '/dashboard': 'Чеки',
   '/tags': 'Теги',
   '/rules': 'Правила',
-  '/settings': 'Настройки',
+  '/profile': 'Профиль',
   '/admin': 'Администрирование',
   '/about': 'О приложении',
 }

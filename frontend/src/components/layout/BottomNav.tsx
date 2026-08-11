@@ -9,7 +9,7 @@ import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined'
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz'
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined'
-import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline'
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { useAuthStore } from '../../store/authStore'
@@ -65,7 +65,7 @@ export function BottomNav() {
     { to: '/rules', label: 'Правила', icon: LinkOutlinedIcon },
     { to: '/sellers', label: 'Магазины', icon: StorefrontOutlinedIcon },
     { to: '/data', label: 'Данные', icon: StorageOutlinedIcon },
-    { to: '/settings', label: 'Настройки', icon: SettingsOutlinedIcon },
+    { to: '/profile', label: 'Профиль', icon: PersonOutlineIcon },
     { to: '/about', label: 'О приложении', icon: InfoOutlinedIcon },
     ...(role === 'admin' ? [{ to: '/admin', label: 'Администрирование', icon: AdminPanelSettingsOutlinedIcon }] : []),
   ]

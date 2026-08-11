@@ -21,6 +21,8 @@ interface AuthState {
   login: (email: string, password: string) => Promise<boolean>
   register: (email: string, password: string) => Promise<boolean>
   logout: () => Promise<void>
+  /** Смена пароля — бэкенд ротирует куки, в сторе обновляется пользователь. */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>
   resetError: () => void
 }
 
@@ -79,6 +81,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // clears the HttpOnly cookies on its side when it can)
     } finally {
       set({ user: null, status: 'unauthenticated', error: null })
+    }
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    // статус не трогаем: 'loading' → FullPageSplash, 'unauthenticated' → /login
+    try {
+      const user = await authApi.changePassword(currentPassword, newPassword)
+      set({ user, status: 'authenticated', error: null })
+      return true
+    } catch (err) {
+      set({ error: messageFromError(err) })
+      return false
     }
   },
 

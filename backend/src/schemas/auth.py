@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from src.schemas.user import UserResponse
 
 
@@ -18,3 +18,10 @@ class RefreshRequest(BaseModel):
 
 class LogoutRequest(BaseModel):
     refresh_token: str
+
+
+class PasswordChange(BaseModel):
+    """Тело POST /auth/change-password — смена пароля с проверкой текущего."""
+
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)

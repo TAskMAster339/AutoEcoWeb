@@ -19,7 +19,6 @@ import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined'
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined'
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined'
-import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
@@ -37,7 +36,6 @@ const NAV_ITEMS = [
   { to: '/sellers', label: 'Магазины', icon: StorefrontOutlinedIcon },
   { to: '/rules', label: 'Правила', icon: LinkOutlinedIcon },
   { to: '/data', label: 'Данные', icon: StorageOutlinedIcon },
-  { to: '/settings', label: 'Настройки', icon: SettingsOutlinedIcon },
   { to: '/about', label: 'О приложении', icon: InfoOutlinedIcon },
 ] as const
 
@@ -171,10 +169,13 @@ export function Sidebar() {
         )}
       </List>
 
-      {/* User — fixed-height card: avatar tile (collapsed) or avatar + email/plan */}
+      {/* User — fixed-height card: avatar tile (collapsed) or avatar + email/plan.
+          Клик по карточке ведёт в профиль (/profile). */}
       <Divider sx={{ mx: collapsed ? 0.5 : 1, my: 1.5 }} />
-      <Tooltip title={collapsed ? (user?.email ?? 'Профиль') : ''} placement="right" arrow>
+      <Tooltip title={collapsed ? 'Профиль' : ''} placement="right" arrow>
         <Box
+          component={NavLink}
+          to="/profile"
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -185,7 +186,12 @@ export function Sidebar() {
             borderRadius: '8px',
             bgcolor: collapsed ? 'transparent' : isDark ? 'rgba(255,255,255,0.04)' : '#F7F7FA',
             minWidth: 0,
+            textDecoration: 'none',
+            color: 'inherit',
+            '&.active': { bgcolor: softBg(theme), color: softFg(theme) },
+            '&:hover': { bgcolor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF5' },
           }}
+          aria-label="Профиль"
         >
           <Avatar
             sx={{
@@ -197,7 +203,6 @@ export function Sidebar() {
               fontWeight: 700,
               flexShrink: 0,
             }}
-            aria-label="Профиль"
           >
             {user?.email.charAt(0).toUpperCase() ?? '?'}
           </Avatar>

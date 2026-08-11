@@ -6,7 +6,12 @@ from src.core.config import settings
 from src.core.cookies import REFRESH_COOKIE, clear_auth_cookies, set_auth_cookies
 from src.core.dependencies import CurrentUser, RefreshRepo, UserRepo
 from src.models.user import User
-from src.schemas.auth import LogoutRequest, RefreshRequest, TokenPair
+from src.schemas.auth import (
+    LogoutRequest,
+    PasswordChange,
+    RefreshRequest,
+    TokenPair,
+)
 from src.schemas.user import (
     ProverkachekaTokenStatus,
     ProverkachekaTokenUpdate,
@@ -122,6 +127,29 @@ async def update_proverkacheka_token(
 ) -> ProverkachekaTokenStatus:
     user = await UserService(repo).update_proverkacheka_token(current_user, data.token)
     return ProverkachekaTokenStatus(has_token=bool(user.proverkacheka_token))
+
+
+@router.post("/change-password", response_model=UserResponse)
+async def change_password(
+    data: PasswordChange,
+    current_user: CurrentUser,
+    user_repo: UserRepo,
+    refresh_repo: RefreshRepo,
+    response: Response,
+) -> UserResponse:
+    """Смена пароля: проверка текущего, отзыв всех прочих сессий, ротация кук."""
+    tokens = await AuthService(user_repo, refresh_repo).change_password(
+        current_user,
+        data.current_password,
+        data.new_password,
+    )
+    set_auth_cookies(
+        response,
+        tokens.access_token,
+        tokens.refresh_token,
+        settings.cookie_secure,
+    )
+    return tokens.user
 
 
 @router.post("/token", response_model=TokenPair)

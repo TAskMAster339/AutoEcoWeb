@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.refresh_token import RefreshToken
 
@@ -40,4 +40,16 @@ class RefreshTokenRepository:
 
     async def revoke(self, token: RefreshToken) -> None:
         token.revoked_at = datetime.now(timezone.utc)
+        await self._session.commit()
+
+    async def revoke_all_for_user(self, user_id: UUID) -> None:
+        """Отзывает ВСЕ активные refresh-токены пользователя (смена пароля)."""
+        await self._session.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=datetime.now(timezone.utc))
+        )
         await self._session.commit()

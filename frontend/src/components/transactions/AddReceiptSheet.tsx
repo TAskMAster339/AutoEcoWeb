@@ -32,7 +32,7 @@ interface Html5QrcodeLike {
 /**
  * Bottom sheet «Добавить чек»: камера В ПРИОРИТЕТЕ (запускается сразу),
  * ручной ввод QR — запасной вариант. POST /api/v1/receipts (proverkacheka;
- * нужен токен — см. Настройки → «Сервис чеков»).
+ * нужен ключ — см. Профиль → «Ключ сервиса проверки чеков»).
  */
 export function AddReceiptSheet() {
   const open = useUiStore((s) => s.receiptSheetOpen)

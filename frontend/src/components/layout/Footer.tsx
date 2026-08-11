@@ -25,8 +25,8 @@ export function Footer() {
       <Typography variant="caption">© {year} AutoEco — учёт чеков и расходов</Typography>
       <Box sx={{ flex: 1 }} />
       <Typography variant="caption">v0.1.0</Typography>
-      <Link component={RouterLink} to="/settings" variant="caption" underline="hover" color="inherit">
-        Настройки
+      <Link component={RouterLink} to="/profile" variant="caption" underline="hover" color="inherit">
+        Профиль
       </Link>
       <Link component={RouterLink} to="/about" variant="caption" underline="hover" color="inherit">
         О приложении

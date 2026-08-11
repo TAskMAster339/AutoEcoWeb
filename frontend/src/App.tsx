@@ -17,7 +17,7 @@ const TagsPage = page(() => import('./pages/TagsPage'), 'TagsPage')
 const SellersPage = page(() => import('./pages/SellersPage'), 'SellersPage')
 const RulesPage = page(() => import('./pages/RulesPage'), 'RulesPage')
 const DataPage = page(() => import('./pages/DataPage'), 'DataPage')
-const SettingsPage = page(() => import('./pages/SettingsPage'), 'SettingsPage')
+const ProfilePage = page(() => import('./pages/ProfilePage'), 'ProfilePage')
 const AdminPage = page(() => import('./pages/AdminPage'), 'AdminPage')
 const AboutPage = page(() => import('./pages/AboutPage'), 'AboutPage')
 
@@ -48,7 +48,9 @@ const router = createBrowserRouter([
           { path: '/sellers', element: suspense(<SellersPage />) },
           { path: '/rules', element: suspense(<RulesPage />) },
           { path: '/data', element: suspense(<DataPage />) },
-          { path: '/settings', element: suspense(<SettingsPage />) },
+          { path: '/profile', element: suspense(<ProfilePage />) },
+          // старый путь настроек → профиль
+          { path: '/settings', element: <Navigate to="/profile" replace /> },
           { path: '/admin', element: suspense(<AdminPage />) },
           { path: '/about', element: suspense(<AboutPage />) },
         ],

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from src.core.config import settings
 from src.core.enums.user_status import UserStatus
-from src.core.security import create_access_token, verify_password
+from src.core.security import create_access_token, hash_password, verify_password
 from src.models.user import User
 from src.repositories.refresh_token import RefreshTokenRepository
 from src.repositories.user import UserRepository
@@ -58,6 +58,34 @@ class AuthService:
         token = await self._tokens.get_active(_hash_refresh_token(raw_token))
         if token is not None:
             await self._tokens.revoke(token)
+
+    async def change_password(
+        self,
+        user: User,
+        current_password: str,
+        new_password: str,
+    ) -> LoginResponse:
+        """Смена пароля: проверка текущего, отзыв всех сессий, ротация токенов.
+
+        Текущая сессия не вылетает (выдаётся свежая пара токенов и новые
+        куки), все остальные устройства — выходят.
+        """
+        if not verify_password(current_password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Текущий пароль неверен",  # noqa: RUF001
+            )
+        if current_password == new_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Новый пароль должен отличаться от текущего",  # noqa: RUF001
+            )
+        updated = await self._users.update(
+            user,
+            password_hash=hash_password(new_password),
+        )
+        await self._tokens.revoke_all_for_user(user.id)
+        return await self._issue_tokens(updated)
 
     async def _issue_tokens(self, user: User) -> LoginResponse:
         access_token = create_access_token(user.id)
