@@ -32,8 +32,17 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Backend - pytest (sqlite in-memory, БД не нужна)
+      - name: Backend - pytest
         working-directory: backend
+        env:
+          # Значения фиктивные: Settings (pydantic-settings) требует эти поля при
+          # импорте, а тесты ходят в sqlite in-memory (conftest), не в postgres
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB_NAME: test
+          JWT_SECRET: test-secret
         run: |
           # pytest, pytest-asyncio, aiosqlite отдельно: requirements.txt с хэшами
           pip install pytest pytest-asyncio aiosqlite
