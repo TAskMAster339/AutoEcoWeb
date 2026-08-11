@@ -11,6 +11,7 @@ import {
 } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import { Logo } from '../components/common/Logo'
+import { PasswordField } from '../components/common/PasswordField'
 import { useAuthStore } from '../store/authStore'
 
 /** /login — sign in or register (register auto-signs-in). */
@@ -88,9 +89,8 @@ export function LoginPage() {
                 autoComplete="email"
                 required
               />
-              <TextField
+              <PasswordField
                 label="Пароль"
-                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 fullWidth
@@ -98,9 +98,8 @@ export function LoginPage() {
                 required
               />
               {mode === 'register' && (
-                <TextField
+                <PasswordField
                   label="Повторите пароль"
-                  type="password"
                   value={password2}
                   onChange={(e) => setPassword2(e.target.value)}
                   fullWidth

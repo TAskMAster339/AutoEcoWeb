@@ -19,8 +19,10 @@ import QrCodeScannerOutlinedIcon from '@mui/icons-material/QrCodeScannerOutlined
 import PlaylistAddOutlinedIcon from '@mui/icons-material/PlaylistAddOutlined'
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined'
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined'
+import BrightnessAutoOutlinedIcon from '@mui/icons-material/BrightnessAutoOutlined'
 import { useLocation } from 'react-router-dom'
 import { useUiStore } from '../../store/uiStore'
+import type { ThemeMode } from '../../store/uiStore'
 import { Logo } from '../common/Logo'
 import { alpha } from '@mui/material/styles'
 
@@ -38,6 +40,13 @@ const TITLES: Record<string, string> = {
 /** Пауза ввода, после которой поиск применяется (иначе каждый символ
  *  дёргает сводку + список + грид — три запроса на нажатие клавиши). */
 const SEARCH_DEBOUNCE_MS = 350
+
+/** Подпись кнопки темы в шапке — текущий режим (а не следующий по кругу). */
+const THEME_LABEL: Record<ThemeMode, string> = {
+  light: 'Светлая тема',
+  dark: 'Тёмная тема',
+  system: 'Системная тема',
+}
 
 export function Header() {
   const theme = useTheme()
@@ -122,13 +131,19 @@ export function Header() {
 
         {!isMobile && searchField}
 
-        <Tooltip title={themeMode === 'dark' ? 'Светлая тема' : 'Тёмная тема'}>
+        <Tooltip title={THEME_LABEL[themeMode]}>
           <IconButton
             onClick={toggleThemeMode}
             aria-label="Переключить тему"
             sx={{ color: 'text.secondary' }}
           >
-            {themeMode === 'dark' ? <LightModeOutlinedIcon /> : <DarkModeOutlinedIcon />}
+            {themeMode === 'dark' ? (
+              <DarkModeOutlinedIcon />
+            ) : themeMode === 'system' ? (
+              <BrightnessAutoOutlinedIcon />
+            ) : (
+              <LightModeOutlinedIcon />
+            )}
           </IconButton>
         </Tooltip>
 

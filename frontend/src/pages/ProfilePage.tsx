@@ -7,15 +7,14 @@ import {
   Chip,
   CircularProgress,
   Grid2 as Grid,
-  Link,
+  Slider,
   Stack,
-  Switch,
-  TextField,
   Typography,
   useTheme,
 } from '@mui/material'
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined'
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined'
+import BrightnessAutoOutlinedIcon from '@mui/icons-material/BrightnessAutoOutlined'
 import LogoutIcon from '@mui/icons-material/Logout'
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline'
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
@@ -26,9 +25,11 @@ import { Link as RouterLink } from 'react-router-dom'
 import { PageHeader } from '../components/common/PageHeader'
 import { useAuthStore } from '../store/authStore'
 import { useUiStore } from '../store/uiStore'
+import type { ThemeMode } from '../store/uiStore'
 import { fetchProverkachekaTokenStatus, saveProverkachekaToken } from '../api/auth'
 import { messageFromError } from '../api/client'
 import { colors, softBg, softFg } from '../theme'
+import { PasswordField } from '../components/common/PasswordField'
 
 const ROLE_LABELS: Record<string, string> = { user: 'Пользователь', admin: 'Администратор' }
 const STATUS_LABELS: Record<string, string> = {
@@ -42,7 +43,19 @@ const STATUS_COLORS: Record<string, string> = {
   blocked: colors.red,
 }
 
-/** Квадратная иконка-подложка тайла — никаких кругов. */
+const MODE_LABELS: Record<ThemeMode, string> = {
+  light: 'Светлая тема включена',
+  dark: 'Тёмная тема включена',
+  system: 'Системная тема — как на устройстве',
+}
+
+const MODE_ICONS: Record<ThemeMode, ReactNode> = {
+  light: <LightModeOutlinedIcon sx={{ fontSize: 20 }} />,
+  dark: <DarkModeOutlinedIcon sx={{ fontSize: 20 }} />,
+  system: <BrightnessAutoOutlinedIcon sx={{ fontSize: 20 }} />,
+}
+
+/** Иконка-подложка тайла — никаких кругов. */
 function TileIcon({ children }: { children: ReactNode }) {
   const theme = useTheme()
   return (
@@ -64,6 +77,105 @@ function TileIcon({ children }: { children: ReactNode }) {
   )
 }
 
+/** Положения ползунка: слева тёмная, по центру системная, справа светлая. */
+const SLIDER_MODES: ThemeMode[] = ['dark', 'system', 'light']
+
+const SLIDER_ARIA: Record<ThemeMode, string> = {
+  dark: 'Тёмная',
+  system: 'Системная',
+  light: 'Светлая',
+}
+
+/** Ползунок темы с тремя положениями: тёмная / системная / светлая. */
+function ThemeSlider() {
+  const themeMode = useUiStore((s) => s.themeMode)
+  const setThemeMode = useUiStore((s) => s.setThemeMode)
+  const marks = [
+    {
+      value: 0,
+      label: (
+        <Box
+          component="span"
+          aria-hidden="true"
+          onClick={() => setThemeMode('dark')}
+          sx={{ cursor: 'pointer' }}
+        >
+          <DarkModeOutlinedIcon sx={{ fontSize: 18 }} />
+        </Box>
+      ),
+    },
+    {
+      value: 1,
+      label: (
+        <Box
+          component="span"
+          aria-hidden="true"
+          onClick={() => setThemeMode('system')}
+          sx={{ cursor: 'pointer' }}
+        >
+          <BrightnessAutoOutlinedIcon sx={{ fontSize: 18 }} />
+        </Box>
+      ),
+    },
+    {
+      value: 2,
+      label: (
+        <Box
+          component="span"
+          aria-hidden="true"
+          onClick={() => setThemeMode('light')}
+          sx={{ cursor: 'pointer' }}
+        >
+          <LightModeOutlinedIcon sx={{ fontSize: 18 }} />
+        </Box>
+      ),
+    },
+  ]
+  return (
+    <Slider
+      min={0}
+      max={2}
+      step={1}
+      value={Math.max(0, SLIDER_MODES.indexOf(themeMode))}
+      onChange={(_, value) => setThemeMode(SLIDER_MODES[value as number]!)}
+      getAriaValueText={(value) => `Тема: ${SLIDER_ARIA[SLIDER_MODES[value]!]}`}
+      aria-label="Тема оформления"
+      marks={marks}
+      valueLabelDisplay="off"
+      sx={{
+        width: '100%',
+        maxWidth: 280,
+        mx: 'auto',
+        mt: 2.5,
+        mb: 4,
+        color: 'primary.main',
+        '& .MuiSlider-rail': { borderRadius: 4, opacity: 0.25 },
+        '& .MuiSlider-track': { borderRadius: 4, border: 'none' },
+        '& .MuiSlider-thumb': {
+          width: 18,
+          height: 18,
+          borderRadius: '5px',
+          boxShadow: 'none',
+          '&:hover, &.Mui-focusVisible, &.Mui-active': {
+            boxShadow: '0 0 0 6px rgba(108, 92, 231, 0.18)',
+          },
+        },
+        '& .MuiSlider-mark': { display: 'none' },
+        '& .MuiSlider-markLabel': {
+          top: 40,
+          fontSize: 18,
+          lineHeight: 1,
+          color: 'text.secondary',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          '&.MuiSlider-markLabelActive': { color: 'primary.main' },
+        },
+      }}
+    />
+  )
+}
+
 /** Профиль — аккаунт, оформление, сервис проверки чеков (данные из /me). */
 export function ProfilePage() {
   const theme = useTheme()
@@ -71,7 +183,6 @@ export function ProfilePage() {
   const logout = useAuthStore((s) => s.logout)
   const changePassword = useAuthStore((s) => s.changePassword)
   const themeMode = useUiStore((s) => s.themeMode)
-  const setThemeMode = useUiStore((s) => s.setThemeMode)
 
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -187,6 +298,15 @@ export function ProfilePage() {
                     />
                   )}
                 </Stack>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 1.5, lineHeight: 1.5 }}
+                >
+                  Аккаунт используется для входа в приложение и доступа к данным на всех
+                  устройствах. Ниже можно сменить пароль, настроить оформление и подключить
+                  сервис проверки чеков.
+                </Typography>
               </Box>
             </Stack>
           </Card>
@@ -228,7 +348,7 @@ export function ProfilePage() {
 
         {/* Ключ сервиса проверки чеков */}
         <Grid size={{ xs: 12, md: 7 }}>
-          <Card sx={{ p: 2.5, height: '100%' }}>
+          <Card sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 1.25 }}>
               <TileIcon>
                 <VpnKeyOutlinedIcon sx={{ fontSize: 20 }} />
@@ -240,10 +360,10 @@ export function ProfilePage() {
               QR-коду. Получить его можно в личном кабинете сервиса проверки чеков
               (proverkacheka.com).
             </Typography>
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
-              <TextField
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start', mt: 'auto', pt: 2 }}>
+              <PasswordField
                 label="Ключ проверки чеков"
-                type="password"
+                autoComplete="new-password"
                 value={tokenInput}
                 onChange={(e) => setTokenInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -258,7 +378,7 @@ export function ProfilePage() {
                 onClick={saveToken}
                 disabled={tokenBusy || !tokenInput.trim()}
                 startIcon={tokenBusy ? <CircularProgress size={16} color="inherit" /> : <VpnKeyOutlinedIcon />}
-                sx={{ height: 40, whiteSpace: 'nowrap' }}
+                sx={{ height: 40, whiteSpace: 'nowrap', px: 3, flexShrink: 0 }}
               >
                 Сохранить
               </Button>
@@ -277,34 +397,31 @@ export function ProfilePage() {
 
         {/* Оформление */}
         <Grid size={{ xs: 12, md: 5 }}>
-          <Card sx={{ p: 2.5, height: '100%' }}>
+          <Card sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-              <TileIcon>
-                {themeMode === 'dark' ? (
-                  <DarkModeOutlinedIcon sx={{ fontSize: 20 }} />
-                ) : (
-                  <LightModeOutlinedIcon sx={{ fontSize: 20 }} />
-                )}
-              </TileIcon>
+              <TileIcon>{MODE_ICONS[themeMode]}</TileIcon>
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography sx={{ fontWeight: 700, fontSize: 14 }}>Оформление</Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                  {themeMode === 'dark' ? 'Тёмная тема включена' : 'Светлая тема включена'}
+                  {MODE_LABELS[themeMode]}
                 </Typography>
               </Box>
-              <Switch
-                checked={themeMode === 'dark'}
-                onChange={(e) => setThemeMode(e.target.checked ? 'dark' : 'light')}
-                inputProps={{ 'aria-label': 'Переключить тёмную тему' }}
-                color="primary"
-              />
             </Stack>
+            <ThemeSlider />
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mt: 1.5, lineHeight: 1.5 }}
+            >
+              Тёмная тема — слева, светлая — справа, по центру — системная: она следует за
+              оформлением вашего устройства. Двигайте ползунок или нажимайте на иконку.
+            </Typography>
           </Card>
         </Grid>
 
         {/* Смена пароля */}
-        <Grid size={{ xs: 12, md: 7 }}>
-          <Card sx={{ p: 2.5, height: '100%' }}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 1.25 }}>
               <TileIcon>
                 <LockOutlinedIcon sx={{ fontSize: 20 }} />
@@ -316,9 +433,8 @@ export function ProfilePage() {
               выйдут из аккаунта.
             </Typography>
             <Stack spacing={1.5} sx={{ mt: 1.5 }}>
-              <TextField
+              <PasswordField
                 label="Текущий пароль"
-                type="password"
                 value={currentPw}
                 onChange={(e) => setCurrentPw(e.target.value)}
                 onKeyDown={(e) => {
@@ -327,9 +443,8 @@ export function ProfilePage() {
                 fullWidth
                 autoComplete="current-password"
               />
-              <TextField
+              <PasswordField
                 label="Новый пароль"
-                type="password"
                 value={newPw}
                 onChange={(e) => setNewPw(e.target.value)}
                 onKeyDown={(e) => {
@@ -338,9 +453,8 @@ export function ProfilePage() {
                 fullWidth
                 autoComplete="new-password"
               />
-              <TextField
+              <PasswordField
                 label="Повторите новый пароль"
-                type="password"
                 value={confirmPw}
                 onChange={(e) => setConfirmPw(e.target.value)}
                 onKeyDown={(e) => {
@@ -350,7 +464,7 @@ export function ProfilePage() {
                 autoComplete="new-password"
               />
             </Stack>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 2, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1.5, mt: 'auto', pt: 2, flexWrap: 'wrap' }}>
               <Button
                 variant="contained"
                 onClick={handleChangePassword}
@@ -369,8 +483,8 @@ export function ProfilePage() {
         </Grid>
 
         {/* О приложении */}
-        <Grid size={{ xs: 12, md: 5 }}>
-          <Card sx={{ p: 2.5, height: '100%' }}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
               <TileIcon>
                 <InfoOutlinedIcon sx={{ fontSize: 20 }} />
@@ -381,17 +495,28 @@ export function ProfilePage() {
                   Как устроен учёт: периоды, дельты, баланс
                 </Typography>
               </Box>
-              <Link
-                component={RouterLink}
-                to="/about"
-                variant="body2"
-                underline="hover"
-                color="primary"
-                sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}
-              >
-                Открыть
-              </Link>
             </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, lineHeight: 1.5 }}>
+              AutoEco помогает вести учёт расходов: добавляйте чеки и транзакции, следите
+              за периодами и дельтами баланса, анализируйте траты по магазинам и категориям.
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, lineHeight: 1.5 }}>
+              Данные хранятся в вашем аккаунте и доступны на всех устройствах. Сканируйте
+              QR-код чека — сведения подтянутся напрямую из ФНС через сервис проверки чеков.
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, lineHeight: 1.5 }}>
+              По ссылке ниже — подробная вики проекта со всеми необходимыми материалами:
+              документацией, инструкциями и описанием всех разделов приложения.
+            </Typography>
+            <Button
+              component={RouterLink}
+              to="/about"
+              variant="contained"
+              color="primary"
+              sx={{ mt: 'auto', alignSelf: 'center' }}
+            >
+              Открыть
+            </Button>
           </Card>
         </Grid>
 

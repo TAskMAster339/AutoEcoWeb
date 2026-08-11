@@ -6,12 +6,10 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 export type PeriodKey = 'thisMonth' | 'lastMonth' | '3m' | 'all' | 'custom' | 'month'
-export type ThemeMode = 'light' | 'dark'
+export type ThemeMode = 'light' | 'dark' | 'system'
 
-function systemTheme(): ThemeMode {
-  if (typeof window === 'undefined') return 'light'
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
+/** Порядок циклического переключения темы: светлая → тёмная → системная → светлая. */
+export const THEME_CYCLE: ThemeMode[] = ['light', 'dark', 'system']
 
 interface UiState {
   themeMode: ThemeMode
@@ -61,7 +59,7 @@ interface UiState {
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
-      themeMode: systemTheme(),
+      themeMode: 'system',
       periodKey: 'all',
       customFrom: null,
       customTo: null,
@@ -76,7 +74,10 @@ export const useUiStore = create<UiState>()(
       sidebarCollapsed: false,
 
       setThemeMode: (themeMode) => set({ themeMode }),
-      toggleThemeMode: () => set((s) => ({ themeMode: s.themeMode === 'light' ? 'dark' : 'light' })),
+      toggleThemeMode: () =>
+        set((s) => ({
+          themeMode: THEME_CYCLE[(THEME_CYCLE.indexOf(s.themeMode) + 1) % THEME_CYCLE.length],
+        })),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setPeriodKey: (periodKey) => set({ periodKey }),
       setCustomRange: (customFrom, customTo) => set({ customFrom, customTo, periodKey: 'custom' }),

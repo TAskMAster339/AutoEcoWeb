@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useMemo } from 'react'
+import { StrictMode, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from '@mui/material/styles'
@@ -22,14 +22,28 @@ const queryClient = new QueryClient({
   },
 })
 
-/** Picks light/dark theme from the UI store and keeps color-scheme in sync. */
+/** Подписка на системное предпочтение темы — для режима «системная». */
+function subscribePrefersDark(onChange: () => void) {
+  const mq = window.matchMedia('(prefers-color-scheme: dark)')
+  mq.addEventListener('change', onChange)
+  return () => mq.removeEventListener('change', onChange)
+}
+
+function getPrefersDark(): boolean {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
+/** Picks light/dark from the UI store ('system' follows the OS live) and keeps color-scheme in sync. */
 function ThemedApp() {
   const themeMode = useUiStore((s) => s.themeMode)
-  const theme = useMemo(() => buildTheme(themeMode), [themeMode])
+  const systemDark = useSyncExternalStore(subscribePrefersDark, getPrefersDark)
+  const effective: 'light' | 'dark' =
+    themeMode === 'system' ? (systemDark ? 'dark' : 'light') : themeMode
+  const theme = useMemo(() => buildTheme(effective), [effective])
 
   useEffect(() => {
-    document.documentElement.style.colorScheme = themeMode
-  }, [themeMode])
+    document.documentElement.style.colorScheme = effective
+  }, [effective])
 
   return (
     <ThemeProvider theme={theme}>
