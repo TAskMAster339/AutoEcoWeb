@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -16,10 +17,11 @@ import { NumericField } from '../common/NumericField'
 import { parseNum } from '../../lib/numbers'
 import { useUiStore } from '../../store/uiStore'
 import { useTags } from '../../hooks/useTags'
-import { useCreateTransaction } from '../../hooks/useTransactions'
+import { useCreateTransaction, useStores } from '../../hooks/useTransactions'
 import { messageFromError } from '../../api/client'
 import { todayIso } from '../../lib/format'
 import { colors } from '../../theme'
+import type { Store } from '../../api/types'
 
 /**
  * Bottom sheet: ручная транзакция БЕЗ чека — минимальная единица учёта.
@@ -30,25 +32,30 @@ export function AddTransactionSheet() {
   const open = useUiStore((s) => s.transactionSheetOpen)
   const close = useUiStore((s) => s.closeTransactionSheet)
   const { data: tags } = useTags()
+  const { data: stores } = useStores()
   const createTx = useCreateTransaction()
 
   const [type, setType] = useState<'expense' | 'income'>('expense')
   const [date, setDate] = useState(todayIso())
   const [name, setName] = useState('')
   const [store, setStore] = useState('')
+  const [selectedStore, setSelectedStore] = useState<Store | null>(null)
   const [comment, setComment] = useState('')
   const [price, setPrice] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
+  const [tagSearch, setTagSearch] = useState('')
 
   const resetForm = () => {
     setName('')
     setStore('')
+    setSelectedStore(null)
     setComment('')
     setPrice('')
     setQuantity('1')
     setSelectedTag(null)
+    setTagSearch('')
     setType('expense')
     setFormError(null)
   }
@@ -66,6 +73,11 @@ export function AddTransactionSheet() {
       : null
   const amountText =
     computedAmount !== null ? computedAmount.toFixed(2).replace('.', ',') : ''
+  const storeOptions = useMemo(() => stores ?? [], [stores])
+  const visibleTags = useMemo(() => {
+    const query = tagSearch.trim().toLocaleLowerCase()
+    return (tags ?? []).filter((tag) => !query || tag.name.toLocaleLowerCase().includes(query))
+  }, [tagSearch, tags])
 
   const submit = async () => {
     setFormError(null)
@@ -86,7 +98,7 @@ export function AddTransactionSheet() {
     try {
       await createTx.mutateAsync({
         name: name.trim(),
-        seller_name: store.trim() || null,
+        seller_name: selectedStore ? selectedStore.seller_name : store.trim() || null,
         amount: computedAmount!,
         quantity: qtyNum,
         price: priceNum,
@@ -133,12 +145,49 @@ export function AddTransactionSheet() {
           placeholder="Например: Кофе, проезд, зарплата"
         />
 
-        <TextField
-          label="Магазин (необязательно)"
-          value={store}
-          onChange={(e) => setStore(e.target.value)}
-          fullWidth
-          placeholder="Например: Пятёрочка, Дикси, Метро"
+        <Autocomplete
+          freeSolo
+          openOnFocus
+          autoHighlight
+          autoSelect
+          selectOnFocus
+          options={storeOptions}
+          value={selectedStore}
+          inputValue={store}
+          onChange={(_, value) => {
+            if (typeof value === 'string') {
+              setSelectedStore(null)
+              setStore(value)
+            } else {
+              setSelectedStore(value)
+              setStore(value ? value.alias_name || value.normalized_seller_name || value.seller_name : '')
+            }
+          }}
+          onInputChange={(_, value, reason) => {
+            if (reason === 'input' || reason === 'clear') {
+              setSelectedStore(null)
+              setStore(value)
+            }
+          }}
+          getOptionLabel={(option) => typeof option === 'string' ? option : option.alias_name || option.normalized_seller_name || option.seller_name}
+          isOptionEqualToValue={(option, value) => option.seller_id === value.seller_id}
+          noOptionsText="Магазин не найден — Enter создаст новое имя"
+          renderOption={(props, option) => (
+            <li {...props} key={option.seller_id}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <span>{option.alias_name || option.normalized_seller_name || option.seller_name}</span>
+                {option.alias_name && <Chip label="алиас" size="small" color="primary" />}
+              </Stack>
+            </li>
+          )}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Магазин (необязательно)"
+              placeholder="Выберите или введите новый"
+              helperText={selectedStore?.alias_name ? `Алиас: оригинал «${selectedStore.seller_name}»` : 'Можно выбрать существующий или ввести новый'}
+            />
+          )}
         />
 
         <TextField
@@ -192,8 +241,17 @@ export function AddTransactionSheet() {
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
             Тег
           </Typography>
+          <TextField
+            value={tagSearch}
+            onChange={(event) => setTagSearch(event.target.value)}
+            placeholder="Найти тег по названию"
+            size="small"
+            fullWidth
+            sx={{ mb: 1 }}
+            inputProps={{ 'aria-label': 'Поиск тега по названию' }}
+          />
           <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-            {(tags ?? []).map((t) => (
+            {visibleTags.map((t) => (
               <Chip
                 key={t.id}
                 label={t.name}
