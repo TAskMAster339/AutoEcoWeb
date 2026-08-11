@@ -1,0 +1,65 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Проверки
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend - npm ci + build (tsc -b + vite)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Backend - pytest (sqlite in-memory, БД не нужна)
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt pytest
+          python -m pytest tests/ -q
+
+  deploy:
+    name: Деплой на сервер
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Обновление и пересборка на autoeco.mooo.com
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: autoeco.mooo.com
+          username: deploy
+          key: ${{ secrets.SSH_DEPLOY_KEY }}
+          script: |
+            set -e
+            cd /home/deploy/AutoEcoWeb
+            # Сбрасываем случайные правки отслеживаемых файлов (сервер — деплой-таргет, не рабочая копия)
+            git checkout -- .
+            git pull --ff-only origin main
+            docker compose -f docker-compose.deploy.yml up -d --build
+            # nginx.conf монтируется по пути, а git при pull заменяет inode —
+            if ! git diff --quiet HEAD@{1} HEAD -- deploy/nginx.conf; then
+              docker compose -f docker-compose.deploy.yml up -d --force-recreate nginx
+            fi
+            sleep 5
+            curl -sf https://autoeco.mooo.com/health >/dev/null
+            curl -sf -o /dev/null https://autoeco.mooo.com/
