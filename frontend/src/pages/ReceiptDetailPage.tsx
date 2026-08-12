@@ -21,7 +21,7 @@ import { LoadingState, ErrorState, OfflineState } from '../components/common/Sta
 import { TagChip } from '../components/common/TagChip'
 import { isIncomeOperation } from '../api/transactions'
 import { displayAlias } from '../lib/aliases'
-import { formatCurrency, formatLongDate, pluralRu } from '../lib/format'
+import { formatCurrency, pluralRu } from '../lib/format'
 import { colors } from '../theme'
 
 const OPERATION_LABEL: Record<number, string> = {
