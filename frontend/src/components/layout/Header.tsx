@@ -25,6 +25,7 @@ import { useUiStore } from '../../store/uiStore'
 import type { ThemeMode } from '../../store/uiStore'
 import { Logo } from '../common/Logo'
 import { alpha } from '@mui/material/styles'
+import { useAuthStore } from '../../store/authStore'
 
 const TITLES: Record<string, string> = {
   '/transactions': 'Таблица',
@@ -35,6 +36,7 @@ const TITLES: Record<string, string> = {
   '/profile': 'Профиль',
   '/admin': 'Администрирование',
   '/about': 'О приложении',
+  '/feedback': 'Обратная связь',
 }
 
 /** Пауза ввода, после которой поиск применяется (иначе каждый символ
@@ -58,6 +60,7 @@ export function Header() {
   const openReceiptSheet = useUiStore((s) => s.openReceiptSheet)
   const openTransactionSheet = useUiStore((s) => s.openTransactionSheet)
   const themeMode = useUiStore((s) => s.themeMode)
+  const isVerifiedOnly = useAuthStore((s) => s.user?.status === 'verified')
   const toggleThemeMode = useUiStore((s) => s.toggleThemeMode)
 
   const [addAnchor, setAddAnchor] = useState<null | HTMLElement>(null)
@@ -81,7 +84,7 @@ export function Header() {
   }
 
   const title = TITLES[location.pathname] ?? 'AutoEco'
-  const showAdd = location.pathname === '/transactions' || location.pathname === '/dashboard'
+  const showAdd = !isVerifiedOnly && (location.pathname === '/transactions' || location.pathname === '/dashboard')
 
   const searchField = (
     <TextField

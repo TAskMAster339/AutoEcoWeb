@@ -217,7 +217,7 @@ class AuthService:
         code: str,
     ) -> EmailCode:
         code = code.strip()
-        if not code.isdigit() or len(code) != 6:
+        if not code.isdigit() or len(code) != 6:  # noqa: PLR2004
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Код должен состоять из 6 цифр",
@@ -279,10 +279,4 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Аккаунт не подтверждён",
-            )
-        if user.status == UserStatus.VERIFIED:
-            # Как и неактивный: вход закрыт до активации администратором
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Аккаунт не активирован администратором",
             )

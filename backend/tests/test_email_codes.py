@@ -25,7 +25,9 @@ class CapturingEmailService(EmailService):
     def __init__(self) -> None:
         self.sent: list[tuple[str, EmailCodePurpose, str]] = []
 
-    async def send_code(self, to_email: str, purpose: EmailCodePurpose, code: str) -> bool:
+    async def send_code(
+        self, to_email: str, purpose: EmailCodePurpose, code: str
+    ) -> bool:
         self.sent.append((to_email, purpose, code))
         return False
 
@@ -33,7 +35,9 @@ class CapturingEmailService(EmailService):
 class FailingEmailService(EmailService):
     """Имитирует недоступный SMTP: отправка письма падает с 502."""
 
-    async def send_code(self, to_email: str, purpose: EmailCodePurpose, code: str) -> bool:
+    async def send_code(
+        self, to_email: str, purpose: EmailCodePurpose, code: str
+    ) -> bool:
         raise HTTPException(
             status_code=502,
             detail="Не удалось отправить письмо — проверьте SMTP-настройки",  # noqa: RUF001
@@ -61,7 +65,9 @@ def _last_code(email_service: CapturingEmailService) -> str:
 
 
 async def test_register_sends_verification_code_and_keeps_pending(auth, email_service):
-    user = await auth.register(UserCreate(email="User@Example.com", password="password123"))
+    user = await auth.register(
+        UserCreate(email="User@Example.com", password="password123")
+    )
 
     assert user.email == "user@example.com"
     assert user.status == UserStatus.PENDING
@@ -91,7 +97,9 @@ async def test_register_rolls_back_user_when_email_send_fails(session):
         failing,
     )
     with pytest.raises(HTTPException) as exc:
-        await auth.register(UserCreate(email="rollback@example.com", password="password123"))
+        await auth.register(
+            UserCreate(email="rollback@example.com", password="password123")
+        )
     assert exc.value.status_code == 502
 
     repo = UserRepository(session)
@@ -104,12 +112,16 @@ async def test_register_rolls_back_user_when_email_send_fails(session):
         EmailCodeRepository(session),
         CapturingEmailService(),
     )
-    user = await ok.register(UserCreate(email="rollback@example.com", password="password123"))
+    user = await ok.register(
+        UserCreate(email="rollback@example.com", password="password123")
+    )
     assert user.email == "rollback@example.com"
 
 
 async def test_verify_email_with_wrong_code(auth, email_service):
-    user = await auth.register(UserCreate(email="v@example.com", password="password123"))
+    user = await auth.register(
+        UserCreate(email="v@example.com", password="password123")
+    )
 
     with pytest.raises(HTTPException) as exc:
         await auth.verify_email(user.email, "000000")
@@ -117,8 +129,12 @@ async def test_verify_email_with_wrong_code(auth, email_service):
     assert "Неверный код" in exc.value.detail
 
 
-async def test_verify_email_sets_verified_and_consumes_code(auth, email_service, session):
-    user = await auth.register(UserCreate(email="v@example.com", password="password123"))
+async def test_verify_email_sets_verified_and_consumes_code(
+    auth, email_service, session
+):
+    user = await auth.register(
+        UserCreate(email="v@example.com", password="password123")
+    )
     code = _last_code(email_service)
 
     updated = await auth.verify_email(user.email, code)
@@ -137,7 +153,9 @@ async def test_verify_email_sets_verified_and_consumes_code(auth, email_service,
 
 
 async def test_verify_email_twice_conflicts(auth, email_service):
-    user = await auth.register(UserCreate(email="v2@example.com", password="password123"))
+    user = await auth.register(
+        UserCreate(email="v2@example.com", password="password123")
+    )
     code = _last_code(email_service)
     await auth.verify_email(user.email, code)
 
@@ -151,7 +169,9 @@ async def test_verify_email_twice_conflicts(auth, email_service):
 
 
 async def test_resend_verification_invalidates_old_code(auth, email_service):
-    user = await auth.register(UserCreate(email="r@example.com", password="password123"))
+    user = await auth.register(
+        UserCreate(email="r@example.com", password="password123")
+    )
     old_code = _last_code(email_service)
 
     await auth.resend_verification(user.email)
@@ -169,7 +189,9 @@ async def test_resend_verification_silent_for_unknown_email(auth, email_service)
 
 
 async def test_request_password_reset_creates_reset_code(auth, email_service):
-    user = await auth.register(UserCreate(email="p@example.com", password="password123"))
+    user = await auth.register(
+        UserCreate(email="p@example.com", password="password123")
+    )
     email_service.sent.clear()
 
     await auth.request_password_reset(user.email)
@@ -185,7 +207,9 @@ async def test_request_password_reset_silent_for_unknown_email(auth, email_servi
 
 
 async def test_verify_reset_code(auth, email_service):
-    user = await auth.register(UserCreate(email="p2@example.com", password="password123"))
+    user = await auth.register(
+        UserCreate(email="p2@example.com", password="password123")
+    )
     await auth.request_password_reset(user.email)
     code = _last_code(email_service)
 
@@ -201,7 +225,9 @@ async def test_reset_password_changes_password_revokes_sessions_and_consumes_cod
     email_service,
     session,
 ):
-    user = await auth.register(UserCreate(email="p3@example.com", password="old-pass-123"))
+    user = await auth.register(
+        UserCreate(email="p3@example.com", password="old-pass-123")
+    )
     token_repo = RefreshTokenRepository(session)
     await token_repo.create(
         user.id,
@@ -225,7 +251,9 @@ async def test_reset_password_changes_password_revokes_sessions_and_consumes_cod
 
 
 async def test_wrong_code_exhausts_attempts(auth, email_service):
-    user = await auth.register(UserCreate(email="a@example.com", password="password123"))
+    user = await auth.register(
+        UserCreate(email="a@example.com", password="password123")
+    )
     await auth.request_password_reset(user.email)
     code = _last_code(email_service)
 
@@ -249,7 +277,9 @@ async def test_wrong_code_exhausts_attempts(auth, email_service):
 async def test_login_blocked_for_pending_and_verified(auth, email_service, session):
     from src.schemas.user import UserLogin
 
-    user = await auth.register(UserCreate(email="block@example.com", password="password123"))
+    user = await auth.register(
+        UserCreate(email="block@example.com", password="password123")
+    )
 
     with pytest.raises(HTTPException) as exc:
         await auth.login(UserLogin(email=user.email, password="password123"))
@@ -258,9 +288,8 @@ async def test_login_blocked_for_pending_and_verified(auth, email_service, sessi
     code = _last_code(email_service)
     await auth.verify_email(user.email, code)
 
-    with pytest.raises(HTTPException) as exc:
-        await auth.login(UserLogin(email=user.email, password="password123"))
-    assert exc.value.status_code == 403  # verified тоже не пускает до активации
+    login = await auth.login(UserLogin(email=user.email, password="password123"))
+    assert login.user.status == UserStatus.VERIFIED
 
 
 async def test_admin_can_activate_verified_user(auth, email_service, session):
@@ -268,7 +297,9 @@ async def test_admin_can_activate_verified_user(auth, email_service, session):
     from src.schemas.user import AdminUserUpdate, UserLogin
     from src.services.user import AdminUserService
 
-    user = await auth.register(UserCreate(email="act@example.com", password="password123"))
+    user = await auth.register(
+        UserCreate(email="act@example.com", password="password123")
+    )
     code = _last_code(email_service)
     await auth.verify_email(user.email, code)
     await session.refresh(user)

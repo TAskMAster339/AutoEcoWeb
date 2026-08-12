@@ -35,6 +35,16 @@ export function ProtectedRoute() {
   return <Outlet />
 }
 
+/** Email-confirmed, not-yet-approved users can use profile, about and support. */
+export function VerifiedAccessRoute() {
+  const user = useAuthStore((s) => s.user)
+  const location = useLocation()
+  if (user?.status === 'verified' && !['/profile', '/about', '/feedback'].includes(location.pathname)) {
+    return <Navigate to="/feedback" replace />
+  }
+  return <Outlet />
+}
+
 /** /login — redirects signed-in users to the app. */
 export function PublicOnlyRoute({ children }: { children: React.ReactNode }) {
   const status = useAuthStore((s) => s.status)

@@ -12,14 +12,15 @@ from src.core.security import decode_access_token
 from src.models.user import User
 from src.repositories.alias import AliasRepository
 from src.repositories.email_code import EmailCodeRepository
+from src.repositories.feedback import FeedbackRepository
 from src.repositories.receipt import ReceiptRepository
 from src.repositories.refresh_token import RefreshTokenRepository
 from src.repositories.tag import TagRepository
 from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
 from src.services.aliases import AliasService
-from src.services.import_export import ImportExportService
 from src.services.email import EmailService
+from src.services.import_export import ImportExportService
 from src.services.proverkacheka import ProverkachekaClient
 from src.services.sellers import SellerService
 from src.services.transaction import TransactionService
@@ -53,6 +54,13 @@ def get_email_service() -> EmailService:
 
 
 EmailSvc = Annotated[EmailService, Depends(get_email_service)]
+
+
+async def get_feedback_repo(session: DBSession) -> FeedbackRepository:
+    return FeedbackRepository(session)
+
+
+FeedbackRepo = Annotated[FeedbackRepository, Depends(get_feedback_repo)]
 
 
 async def get_receipt_repo(session: DBSession) -> ReceiptRepository:
@@ -184,7 +192,7 @@ async def get_current_user(
     if user is None:
         raise credentials_error
 
-    if user.status != UserStatus.ACTIVE:
+    if user.status == UserStatus.BLOCKED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Аккаунт неактивен или заблокирован",

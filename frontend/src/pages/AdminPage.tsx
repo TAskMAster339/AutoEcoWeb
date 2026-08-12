@@ -33,6 +33,7 @@ import { useAdminUsers, useDeleteUser, useUpdateUser } from '../hooks/useAdminUs
 import { formatLongDate } from '../lib/format'
 import { useAuthStore } from '../store/authStore'
 import { colors } from '../theme'
+import { FeedbackAdminPanel } from './FeedbackPage'
 
 const STATUS_COLORS: Record<UserStatus, string> = {
   active: colors.green,
@@ -230,6 +231,10 @@ export function AdminPage() {
           ) : undefined
         }
       />
+
+      <Card sx={{ p: 2 }}>
+        <FeedbackAdminPanel />
+      </Card>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
         <TextField

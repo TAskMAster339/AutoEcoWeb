@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
-import { ProtectedRoute, PublicOnlyRoute, FullPageSplash } from './components/common/RouteGuards'
+import { ProtectedRoute, PublicOnlyRoute, FullPageSplash, VerifiedAccessRoute } from './components/common/RouteGuards'
 import { useAuthStore } from './store/authStore'
 import { LoginPage } from './pages/LoginPage'
 import { RecoveryPage } from './pages/RecoveryPage'
@@ -22,6 +22,7 @@ const DataPage = page(() => import('./pages/DataPage'), 'DataPage')
 const ProfilePage = page(() => import('./pages/ProfilePage'), 'ProfilePage')
 const AdminPage = page(() => import('./pages/AdminPage'), 'AdminPage')
 const AboutPage = page(() => import('./pages/AboutPage'), 'AboutPage')
+const FeedbackPage = page(() => import('./pages/FeedbackPage'), 'FeedbackPage')
 
 function suspense(element: React.ReactNode) {
   return <Suspense fallback={<FullPageSplash />}>{element}</Suspense>
@@ -58,6 +59,9 @@ const router = createBrowserRouter([
       {
         element: <AppShell />,
         children: [
+          {
+            element: <VerifiedAccessRoute />,
+            children: [
           { path: '/', element: <Navigate to="/transactions" replace /> },
           { path: '/transactions', element: suspense(<TransactionsPage />) },
           { path: '/dashboard', element: suspense(<DashboardPage />) },
@@ -71,6 +75,9 @@ const router = createBrowserRouter([
           { path: '/settings', element: <Navigate to="/profile" replace /> },
           { path: '/admin', element: suspense(<AdminPage />) },
           { path: '/about', element: suspense(<AboutPage />) },
+          { path: '/feedback', element: suspense(<FeedbackPage />) },
+            ],
+          },
         ],
       },
     ],

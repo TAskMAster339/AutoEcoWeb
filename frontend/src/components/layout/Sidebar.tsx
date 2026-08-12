@@ -21,6 +21,7 @@ import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined'
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import SupportAgentOutlinedIcon from '@mui/icons-material/SupportAgentOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
 import MenuOpenIcon from '@mui/icons-material/MenuOpen'
 import { Logo } from '../common/Logo'
@@ -37,6 +38,7 @@ const NAV_ITEMS = [
   { to: '/rules', label: 'Правила', icon: LinkOutlinedIcon },
   { to: '/data', label: 'Данные', icon: StorageOutlinedIcon },
   { to: '/about', label: 'О приложении', icon: InfoOutlinedIcon },
+  { to: '/feedback', label: 'Обратная связь', icon: SupportAgentOutlinedIcon },
 ] as const
 
 const ROLE_LABELS: Record<string, string> = { user: 'Базовый план', admin: 'Администратор' }
@@ -58,6 +60,7 @@ export function Sidebar() {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const role = useAuthStore((s) => s.user?.role)
   const user = useAuthStore((s) => s.user)
+  const isVerifiedOnly = user?.status === 'verified'
   const isDark = theme.palette.mode === 'dark'
   const sidebarBg = theme.palette.background.paper
   const hoverBg = isDark ? 'rgba(255,255,255,0.05)' : '#F1F0FB'
@@ -110,7 +113,7 @@ export function Sidebar() {
       <Divider sx={{ mx: collapsed ? 0.5 : 1, mb: 1.5 }} />
 
       <List component="nav" sx={{ flex: 1, px: 0 }} aria-label="Основная навигация">
-        {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+        {NAV_ITEMS.filter(({ to }) => !isVerifiedOnly || ['/about', '/feedback'].includes(to)).map(({ to, label, icon: Icon }) => (
           <Tooltip key={to} title={collapsed ? label : ''} placement="right" arrow>
             <ListItemButton
               component={NavLink}
@@ -139,7 +142,7 @@ export function Sidebar() {
             </ListItemButton>
           </Tooltip>
         ))}
-        {role === 'admin' && (
+        {!isVerifiedOnly && role === 'admin' && (
           <Tooltip title={collapsed ? 'Администрирование' : ''} placement="right" arrow>
             <ListItemButton
               component={NavLink}

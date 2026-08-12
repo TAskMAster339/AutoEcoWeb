@@ -9,6 +9,22 @@
 export type UserRole = 'user' | 'admin'
 export type UserStatus = 'pending' | 'verified' | 'active' | 'blocked'
 
+export type FeedbackStatus = 'open' | 'answered' | 'closed'
+export interface Feedback {
+  id: string
+  user_id: string
+  email: string
+  subject: string
+  message: string
+  status: FeedbackStatus
+  admin_reply: string | null
+  replied_at: string | null
+  created_at: string
+  updated_at: string
+}
+export interface FeedbackCreate { subject: string; message: string }
+export interface FeedbackAnswer { reply: string }
+
 export interface User {
   id: string
   email: string

@@ -64,6 +64,80 @@ class EmailService:
             ) from exc
         return True
 
+    async def send_feedback_received(self, to_email: str, subject: str) -> bool:
+        return await self._send_feedback_message(
+            to_email,
+            "Обращение получено — AutoEco",
+            "Обращение получено",
+            f"Мы получили ваше обращение «{subject}». Оно очень важно для нас. Администратор ответит вам по возможности скоро.",  # noqa: E501
+        )
+
+    async def send_feedback_answer(
+        self,
+        to_email: str,
+        subject: str,
+        reply: str,
+    ) -> bool:
+        return await self._send_feedback_message(
+            to_email,
+            "Ответ на обращение — AutoEco",
+            "Ответ администратора",
+            f"Администратор ответил на ваше обращение «{subject}».",
+            reply,
+        )
+
+    async def _send_feedback_message(
+        self,
+        to_email: str,
+        subject: str,
+        heading: str,
+        text: str,
+        reply: str | None = None,
+    ) -> bool:
+        if not settings.smtp_host or not settings.smtp_username:
+            logger.warning(
+                "SMTP не настроен: письмо '%s' для %s не отправлено",
+                subject,
+                to_email,
+            )
+            return False
+        sender = settings.smtp_from or settings.smtp_username or _APP_NAME
+        safe_email = escape(to_email)
+        reply_block = (
+            f'<div style="margin:26px 0 0;padding:18px;background:#f3f2fb;border:1px solid #e5e2ff;border-radius:8px;font-size:16px;line-height:1.6;text-align:left;color:#303044;white-space:pre-wrap;">{escape(reply)}</div>'  # noqa: E501
+            if reply
+            else ""
+        )
+        html = f"""
+<html><body style="margin:0;padding:0;background:#f4f5f8;font-family:Arial,Helvetica,sans-serif;color:#17171c;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f8;"><tr><td align="center" style="padding:40px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#fff;border:1px solid #e2e3e8;border-radius:12px;">
+<tr><td style="padding:36px 40px 32px;text-align:center;">
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 28px;"><tr><td style="width:38px;height:38px;background:#6c5ce7;border-radius:8px;text-align:center;vertical-align:middle;color:#fff;font-size:22px;font-weight:700;">A</td><td style="padding-left:10px;font-size:22px;font-weight:700;color:#17171c;">{_APP_NAME}</td></tr></table>
+<div style="font-size:28px;line-height:1.2;font-weight:700;color:#17171c;margin-bottom:14px;">{escape(heading)}</div>
+<div style="font-size:16px;color:#4b4d57;line-height:1.6;">{escape(text)}</div>
+{reply_block}
+<div style="margin-top:26px;font-size:14px;color:#6f7280;line-height:1.55;">Если вы не ожидали это письмо, просто проигнорируйте его.</div>
+</td></tr><tr><td style="padding:20px 40px;border-top:1px solid #ececf0;background:#fafafd;border-radius:0 0 12px 12px;text-align:center;font-size:12px;line-height:1.6;color:#858895;">Это автоматическое письмо, отвечать на него не нужно.<br />AutoEco · Помогаем держать расходы под контролем</td></tr>
+</table><div style="max-width:560px;padding:18px 16px 0;text-align:center;font-size:11px;line-height:1.5;color:#9a9ca6;">Письмо отправлено на {safe_email}.</div>
+</td></tr></table></body></html>
+"""  # noqa: E501, RUF001
+        message = EmailMessage()
+        message["From"] = sender
+        message["To"] = to_email
+        message["Subject"] = subject
+        message.set_content(f"{text}\n\n{reply or ''}".strip())
+        message.add_alternative(html, subtype="html")
+        try:
+            await self._send(message)
+        except Exception as exc:
+            logger.exception("Ошибка отправки письма на %s: %s", to_email, exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Не удалось отправить письмо",  # noqa: RUF001
+            ) from exc
+        return True
+
     def _build_message(
         self,
         to_email: str,

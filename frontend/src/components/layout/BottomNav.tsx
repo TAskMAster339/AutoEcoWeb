@@ -12,6 +12,7 @@ import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined'
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline'
 import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettingsOutlined'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import SupportAgentOutlinedIcon from '@mui/icons-material/SupportAgentOutlined'
 import { useAuthStore } from '../../store/authStore'
 import { alpha } from '@mui/material/styles'
 import { softBg, softFg } from '../../theme'
@@ -59,15 +60,19 @@ function NavButton({
 export function BottomNav() {
   const theme = useTheme()
   const role = useAuthStore((s) => s.user?.role)
+  const isVerifiedOnly = useAuthStore((s) => s.user?.status === 'verified')
   const [moreAnchor, setMoreAnchor] = useState<null | HTMLElement>(null)
 
   const moreItems = [
-    { to: '/rules', label: 'Правила', icon: LinkOutlinedIcon },
-    { to: '/sellers', label: 'Магазины', icon: StorefrontOutlinedIcon },
-    { to: '/data', label: 'Данные', icon: StorageOutlinedIcon },
+    ...(!isVerifiedOnly ? [
+      { to: '/rules', label: 'Правила', icon: LinkOutlinedIcon },
+      { to: '/sellers', label: 'Магазины', icon: StorefrontOutlinedIcon },
+      { to: '/data', label: 'Данные', icon: StorageOutlinedIcon },
+    ] : []),
     { to: '/profile', label: 'Профиль', icon: PersonOutlineIcon },
     { to: '/about', label: 'О приложении', icon: InfoOutlinedIcon },
-    ...(role === 'admin' ? [{ to: '/admin', label: 'Администрирование', icon: AdminPanelSettingsOutlinedIcon }] : []),
+    { to: '/feedback', label: 'Обратная связь', icon: SupportAgentOutlinedIcon },
+    ...(!isVerifiedOnly && role === 'admin' ? [{ to: '/admin', label: 'Администрирование', icon: AdminPanelSettingsOutlinedIcon }] : []),
   ]
 
   return (
@@ -94,10 +99,10 @@ export function BottomNav() {
       }}
       aria-label="Мобильная навигация"
     >
-      {MAIN_ITEMS.map((item) => (
+      {!isVerifiedOnly && MAIN_ITEMS.map((item) => (
         <NavButton key={item.to} {...item} />
       ))}
-      <Box
+      {!isVerifiedOnly && <Box
         component="button"
         type="button"
         onClick={(e) => setMoreAnchor(e.currentTarget)}
@@ -119,8 +124,8 @@ export function BottomNav() {
       >
         <MoreHorizIcon sx={{ fontSize: 22 }} />
         <Typography sx={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1.2 }}>Ещё</Typography>
-      </Box>
-      <Menu anchorEl={moreAnchor} open={Boolean(moreAnchor)} onClose={() => setMoreAnchor(null)}>
+      </Box>}
+      {!isVerifiedOnly && <Menu anchorEl={moreAnchor} open={Boolean(moreAnchor)} onClose={() => setMoreAnchor(null)}>
         {moreItems.map(({ to, label, icon: Icon }) => (
           <MenuItem
             key={to}
@@ -131,7 +136,7 @@ export function BottomNav() {
             <Icon sx={{ mr: 1.5, fontSize: 20 }} /> {label}
           </MenuItem>
         ))}
-      </Menu>
+      </Menu>}
     </Paper>
   )
 }

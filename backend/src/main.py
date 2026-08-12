@@ -4,6 +4,7 @@ from src.api.v1.admin import router as admin_router
 from src.api.v1.aliases import router as aliases_router
 from src.api.v1.analytics import router as analytics_router
 from src.api.v1.auth import router as auth_router
+from src.api.v1.feedback import router as feedback_router
 from src.api.v1.import_export import router as import_export_router
 from src.api.v1.receipts import router as receipts_router
 from src.api.v1.sellers import router as sellers_router
@@ -31,6 +32,7 @@ app.include_router(analytics_router)
 app.include_router(tags_router)
 app.include_router(aliases_router)
 app.include_router(import_export_router)
+app.include_router(feedback_router)
 
 
 @app.get("/")
