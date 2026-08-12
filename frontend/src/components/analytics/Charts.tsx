@@ -1,635 +1,531 @@
-import { memo, useCallback, useState } from 'react'
+import { useState } from 'react'
 import { Box, Card, Stack, Typography, useTheme } from '@mui/material'
+import {
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Cell,
+    Pie,
+    PieChart,
+    ReferenceLine,
+    ResponsiveContainer,
+    Tooltip as RechartsTooltip,
+    XAxis,
+    YAxis,
+    Line as RechartsLine,
+    LineChart as RechartsLineChart,
+} from 'recharts'
+
+/** Параметры рендера контента тултипа Recharts (payload — массив записей). */
+type TipProps = {
+    active?: boolean
+    payload?: Array<{ payload?: unknown }>
+}
+/** Лениво разбираем первую запись тултипа Recharts в объект с полями. */
+function firstTipPayload(props: TipProps): { [k: string]: unknown } | undefined {
+    const entry = props.active && props.payload?.length ? props.payload[0] : undefined
+    const p = entry?.payload
+    return p && typeof p === 'object' ? (p as { [k: string]: unknown }) : undefined
+}
 import { formatShortDate } from '../../lib/format'
 
 export function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <Card sx={{ p: 2.5, height: '100%' }}>
-      <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 700 }}>
-        {title}
-      </Typography>
-      {children}
-    </Card>
-  )
+    return (
+        <Card sx={{ p: 2.5, height: '100%' }}>
+            <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 700 }}>
+                {title}
+            </Typography>
+            {children}
+        </Card>
+    )
 }
 
 /* ------------------------------------------------------------------ */
-/*  Analytics v2: line / donut / weekday charts + shared tooltip       */
+/*  Analytics charts, built on Recharts (v3)                          */
 /* ------------------------------------------------------------------ */
 
 export interface TooltipRow {
-  label: string
-  value: string
-  color?: string
+    label: string
+    value: string
+    color?: string
 }
 
-interface ChartTooltipProps {
-  anchor: { x: number; y: number } | null
-  title: string
-  rows: TooltipRow[]
-}
-
-/** Тултип-карточка за курсором (viewport-координаты из событий мыши). */
-export function ChartTooltip({ anchor, title, rows }: ChartTooltipProps) {
-  if (!anchor) return null
-  return (
-    <Box
-      sx={{
-        position: 'fixed',
-        left: anchor.x + 14,
-        top: anchor.y + 14,
-        zIndex: 1300,
-        bgcolor: 'background.paper',
-        border: 1,
-        borderColor: 'divider',
-        borderRadius: '6px',
-        boxShadow: 3,
-        px: 1.5,
-        py: 1,
-        pointerEvents: 'none',
-        maxWidth: 260,
-      }}
-    >
-      <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.25 }}>
-        {title}
-      </Typography>
-      {rows.map((r) => (
-        <Box key={r.label} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-          {r.color && <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: r.color, flexShrink: 0 }} />}
-          <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
-            {r.label}
-          </Typography>
-          <Typography variant="caption" className="tnum" sx={{ fontWeight: 600 }}>
-            {r.value}
-          </Typography>
+/** Тема-aware карточка тултипа (общая для всех графиков). */
+function TooltipCard({
+    title,
+    rows,
+    style,
+}: {
+    title: string
+    rows: TooltipRow[]
+    style?: React.CSSProperties
+}) {
+    return (
+        <Box
+            sx={{
+                bgcolor: 'background.paper',
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: '6px',
+                boxShadow: 3,
+                px: 1.5,
+                py: 1,
+                maxWidth: 260,
+                ...style,
+            }}
+        >
+            <Typography variant="caption" sx={{ fontWeight: 700, display: 'block', mb: 0.25 }}>
+                {title}
+            </Typography>
+            {rows.map((r) => (
+                <Box key={r.label} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    {r.color && <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: r.color, flexShrink: 0 }} />}
+                    <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+                        {r.label}
+                    </Typography>
+                    <Typography variant="caption" className="tnum" sx={{ fontWeight: 600 }}>
+                        {r.value}
+                    </Typography>
+                </Box>
+            ))}
         </Box>
-      ))}
-    </Box>
-  )
+    )
+}
+
+/** Компактная подпись значений оси Y («5 тыс», «1,2 М»). */
+function compactAxisValue(v: number): string {
+    const abs = Math.abs(v)
+    if (abs >= 1_000_000) return `${(v / 1_000_000).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} М`
+    if (abs >= 1000) return `${(v / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} тыс`
+    return String(Math.round(v))
 }
 
 export interface LinePoint {
-  /** индекс точки (0..n-1) — ось X */
-  x: number
-  /** подпись (например, день) */
-  label: string
-  value: number
-  color?: string
-  /** доп. строки тултипа */
-  meta?: TooltipRow[]
+    /** индекс точки (0..n-1) — ось X */
+    x: number
+    /** подпись (например, день) */
+    label: string
+    value: number
+    color?: string
+    /** доп. строки тултипа */
+    meta?: TooltipRow[]
 }
 
 interface LineChartProps {
-  points: LinePoint[]
-  /** значения тренда (МНК), выровнены с points; null — пропуск */
-  trend?: Array<number | null>
-  /** горизонтальная линия медианы */
-  median?: number | null
-  medianLabel?: string
-  formatValue: (v: number) => string
-  /** подпись значения в тултипе */
-  valueLabel?: string
-  /** от 0 (расходы) или по данным (цены) */
-  zeroBased?: boolean
-  ariaLabel?: string
+    points: LinePoint[]
+    /** значения тренда (МНК), выровнены с points; null — пропуск */
+    trend?: Array<number | null>
+    /** горизонтальная линия медианы */
+    median?: number | null
+    medianLabel?: string
+    formatValue: (v: number) => string
+    /** подпись значения в тултипе */
+    valueLabel?: string
+    /** от 0 (расходы) или по данным (цены) */
+    zeroBased?: boolean
+    ariaLabel?: string
 }
 
-/** Кривая с точками, трендом, медианой и тултипом (Catmull-Rom → bezier). */
+/** Кривая с точками, трендом, медианой и тултипом (Recharts). */
 export function LineChart({
-  points,
-  trend,
-  median,
-  medianLabel,
-  formatValue,
-  valueLabel = 'Значение',
-  zeroBased = true,
-  ariaLabel = 'График',
+    points,
+    trend,
+    median,
+    medianLabel,
+    formatValue,
+    valueLabel = 'Значение',
+    zeroBased = true,
+    ariaLabel = 'График',
 }: LineChartProps) {
-  const [tip, setTip] = useState<{ anchor: { x: number; y: number }; title: string; rows: TooltipRow[] } | null>(null)
+    const theme = useTheme()
+    const grid = theme.palette.divider
+    const textSecondary = theme.palette.text.secondary
+    const paper = theme.palette.background.paper
 
-  // Стабильные обработчики: тело графика мемоизировано, при движении мыши
-  // перерисовывается только тултип (без этого React перерисовывал весь SVG
-  // на каждое событие mousemove — отсюда микролаги при наведении на точки).
-  const handlePointEnter = useCallback(
-    (e: React.MouseEvent<SVGElement>, p: LinePoint) => {
-      setTip({ anchor: { x: e.clientX, y: e.clientY }, title: p.label, rows: buildTipRows(p, formatValue, valueLabel) })
-    },
-    [formatValue, valueLabel],
-  )
-  const handlePointMove = useCallback((e: React.MouseEvent<SVGElement>) => {
-    setTip((t) => (t ? { ...t, anchor: { x: e.clientX, y: e.clientY } } : t))
-  }, [])
-  const handleLeave = useCallback(() => setTip(null), [])
+    const data = points.map((p, i) => ({ ...p, trend: trend?.[i] ?? null }))
+    const rawMax = points.length ? Math.max(...points.map((p) => p.value)) : 0
+    const rawMin = points.length ? Math.min(...points.map((p) => p.value)) : 0
+    const pad = Math.max((rawMax - rawMin) * 0.1, 1)
+    const labelEvery = Math.max(1, Math.ceil(points.length / 8))
 
-  return (
-    <Box sx={{ position: 'relative' }}>
-      <LineChartBody
-        points={points}
-        trend={trend}
-        median={median}
-        medianLabel={medianLabel}
-        formatValue={formatValue}
-        zeroBased={zeroBased}
-        ariaLabel={ariaLabel}
-        onPointEnter={handlePointEnter}
-        onPointMove={handlePointMove}
-        onLeave={handleLeave}
-      />
-      <ChartTooltip anchor={tip?.anchor ?? null} title={tip?.title ?? ''} rows={tip?.rows ?? []} />
-    </Box>
-  )
-}
+    if (points.length === 0) {
+        return <EmptyChart text="Нет данных за период" ariaLabel={ariaLabel} />
+    }
 
-interface LineChartBodyProps {
-  points: LinePoint[]
-  /** значения тренда (МНК), выровнены с points; null — пропуск */
-  trend?: Array<number | null>
-  /** горизонтальная линия медианы */
-  median?: number | null
-  medianLabel?: string
-  formatValue: (v: number) => string
-  /** от 0 (расходы) или по данным (цены) */
-  zeroBased?: boolean
-  ariaLabel?: string
-  onPointEnter: (e: React.MouseEvent<SVGElement>, p: LinePoint) => void
-  onPointMove: (e: React.MouseEvent<SVGElement>) => void
-  onLeave: () => void
-}
-
-/** Статичная часть графика — мемоизирована, чтобы hover не перерисовывал SVG. */
-const LineChartBody = memo(function LineChartBody({
-  points,
-  trend,
-  median,
-  medianLabel,
-  formatValue,
-  zeroBased = true,
-  ariaLabel = 'График',
-  onPointEnter,
-  onPointMove,
-  onLeave,
-}: LineChartBodyProps) {
-  const theme = useTheme()
-
-  const w = 640
-  const h = 220
-  const pad = { top: 14, right: 64, bottom: 26, left: 8 }
-  const innerW = w - pad.left - pad.right
-  const innerH = h - pad.top - pad.bottom
-
-  const values = points.map((p) => p.value)
-  if (values.length === 0) {
-    return <EmptyChart text="Нет данных за период" ariaLabel={ariaLabel} />
-  }
-  const rawMax = Math.max(...values)
-  const rawMin = Math.min(...values)
-  const min = zeroBased ? 0 : Math.min(0, rawMin) === rawMin ? rawMin - Math.max((rawMax - rawMin) * 0.1, 1) : rawMin
-  const max = zeroBased ? Math.max(rawMax, 1) : rawMax + Math.max((rawMax - rawMin) * 0.1, 1)
-  const span = max - min || 1
-  const step = points.length > 1 ? innerW / (points.length - 1) : 0
-
-  const xOf = (i: number) => (points.length > 1 ? pad.left + i * step : pad.left + innerW / 2)
-  const yOf = (v: number) => pad.top + innerH * (1 - (v - min) / span)
-
-  const pts = points.map((p, i) => ({ x: xOf(i), y: yOf(p.value) }))
-  const path = smoothPath(pts)
-
-  const labelEvery = Math.max(1, Math.ceil(points.length / 8))
-  const grid = theme.palette.divider
-
-  const medianY = median !== null && median !== undefined ? yOf(median) : null
-
-  return (
-    <svg
-      viewBox={`0 0 ${w} ${h}`}
-      style={{ width: '100%', height: 'auto', display: 'block' }}
-      role="img"
-      aria-label={ariaLabel}
-      onMouseLeave={onLeave}
-    >
-      {[0.25, 0.5, 0.75, 1].map((f) => (
-        <line
-          key={f}
-          x1={pad.left}
-          x2={w - pad.right}
-          y1={pad.top + innerH * (1 - f)}
-          y2={pad.top + innerH * (1 - f)}
-          stroke={grid}
-          strokeWidth={1}
-        />
-      ))}
-
-      {medianY !== null && (
-        <g>
-          <line
-            x1={pad.left}
-            x2={w - pad.right - 2}
-            y1={medianY}
-            y2={medianY}
-            stroke={theme.palette.text.secondary}
-            strokeWidth={1.5}
-            strokeDasharray="4 4"
-          />
-          {medianLabel && (
-            <text x={w - pad.right + 4} y={medianY + 3} fontSize={10} fill={theme.palette.text.secondary}>
-              {medianLabel}
-            </text>
-          )}
-        </g>
-      )}
-
-      {trend && trend.length === points.length && (
-        <path
-          d={smoothPath(
-            trend.map((t, i) => {
-              const pt = points[i]!
-              return { x: xOf(i), y: t === null ? yOf(pt.value) : yOf(t) }
-            }),
-          )}
-          fill="none"
-          stroke={theme.palette.primary.main}
-          strokeWidth={1.5}
-          strokeDasharray="5 4"
-          opacity={0.85}
-        />
-      )}
-
-      <path d={path} fill="none" stroke={theme.palette.primary.main} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-
-      {points.map((p, i) => {
-        const color = p.color ?? theme.palette.primary.main
-        const cx = xOf(i)
-        const cy = yOf(p.value)
+    const renderDot = (props: { cx?: number; cy?: number; payload?: { color?: string } }) => {
+        if (props.cx === undefined || props.cy === undefined) return null
         return (
-          <g key={`${p.label}-${i}`}>
-            <circle cx={cx} cy={cy} r={3.5} fill={color} stroke={theme.palette.background.paper} strokeWidth={1.5} />
             <circle
-              cx={cx}
-              cy={cy}
-              r={11}
-              fill="transparent"
-              style={{ cursor: 'pointer' }}
-              onMouseEnter={(e) => onPointEnter(e, p)}
-              onMouseMove={onPointMove}
+                cx={props.cx}
+                cy={props.cy}
+                r={3.5}
+                fill={props.payload?.color ?? theme.palette.primary.main}
+                stroke={paper}
+                strokeWidth={1.5}
             />
-          </g>
         )
-      })}
+    }
 
-      {points.map((p, i) =>
-        i % labelEvery === 0 ? (
-          <text key={`lbl-${i}`} x={xOf(i)} y={h - 8} textAnchor="middle" fontSize={10} fill={theme.palette.text.secondary}>
-            {formatShortDate(p.label)}
-          </text>
-        ) : null,
-      )}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lineTooltip = (props: any) => {
+        const point = firstTipPayload(props)
+        if (!point) return null
+        return (
+            <TooltipCard
+                title={String(point.label ?? '')}
+                rows={[
+                    { label: valueLabel, value: formatValue(Number(point.value ?? 0)), color: point.color as string | undefined },
+                    ...((point.meta as TooltipRow[] | undefined) ?? []),
+                ]}
+            />
+        )
+    }
 
-      <text x={pad.left} y={pad.top - 4} fontSize={10} fill={theme.palette.text.secondary}>
-        макс {formatValue(max)}
-      </text>
-    </svg>
-  )
-})
-
-function buildTipRows(p: LinePoint, formatValue: (v: number) => string, valueLabel: string): TooltipRow[] {
-  return [
-    { label: valueLabel, value: formatValue(p.value), color: p.color },
-    ...(p.meta ?? []),
-  ]
-}
-
-/** Catmull-Rom → кубические безье: плавная кривая через точки. */
-function smoothPath(pts: Array<{ x: number; y: number }>): string {
-  if (pts.length === 0) return ''
-  if (pts.length === 1) return `M${pts[0]!.x.toFixed(1)},${pts[0]!.y.toFixed(1)}`
-  let d = `M${pts[0]!.x.toFixed(1)},${pts[0]!.y.toFixed(1)}`
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[Math.max(0, i - 1)]!
-    const p1 = pts[i]!
-    const p2 = pts[i + 1]!
-    const p3 = pts[Math.min(pts.length - 1, i + 2)]!
-    const c1x = p1.x + (p2.x - p0.x) / 6
-    const c1y = p1.y + (p2.y - p0.y) / 6
-    const c2x = p2.x - (p3.x - p1.x) / 6
-    const c2y = p2.y - (p3.y - p1.y) / 6
-    d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`
-  }
-  return d
+    return (
+        <Box sx={{ position: 'relative', width: '100%', height: 220 }} role="img" aria-label={ariaLabel}>
+            <ResponsiveContainer width="100%" height="100%">
+                <RechartsLineChart data={data} margin={{ top: 16, right: 8, bottom: 4, left: 4 }}>
+                    <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                        dataKey="label"
+                        tickFormatter={(v: string, i: number) => (i % labelEvery === 0 ? formatShortDate(v) : '')}
+                        tick={{ fontSize: 10, fill: textSecondary }}
+                        tickLine={false}
+                        axisLine={false}
+                        interval={0}
+                        height={24}
+                    />
+                    <YAxis
+                        domain={zeroBased ? [0, 'auto'] : [rawMin - pad, rawMax + pad]}
+                        allowDataOverflow
+                        tickFormatter={compactAxisValue}
+                        tick={{ fontSize: 10, fill: textSecondary }}
+                        tickLine={false}
+                        axisLine={false}
+                        width={52}
+                    />
+                    {median !== null && median !== undefined && (
+                        <ReferenceLine
+                            y={median}
+                            stroke={textSecondary}
+                            strokeDasharray="4 4"
+                            label={{
+                                value: medianLabel,
+                                position: 'right',
+                                fill: textSecondary,
+                                fontSize: 10,
+                                offset: 2,
+                            }}
+                        />
+                    )}
+                    <RechartsTooltip
+                        content={lineTooltip}
+                        cursor={{ stroke: textSecondary, strokeDasharray: '3 3' }}
+                        offset={10}
+                    />
+                    {trend && trend.length === points.length && (
+                        <RechartsLine
+                            type="monotone"
+                            dataKey="trend"
+                            stroke={theme.palette.primary.main}
+                            strokeWidth={1.5}
+                            strokeDasharray="5 4"
+                            dot={false}
+                            activeDot={false}
+                            connectNulls
+                        />
+                    )}
+                    <RechartsLine
+                        type="monotone"
+                        dataKey="value"
+                        stroke={theme.palette.primary.main}
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        dot={renderDot}
+                        activeDot={{ r: 5, stroke: paper, strokeWidth: 1.5, fill: theme.palette.primary.main }}
+                        connectNulls
+                    />
+                </RechartsLineChart>
+            </ResponsiveContainer>
+        </Box>
+    )
 }
 
 export interface DonutItem {
-  label: string
-  value: number
-  color: string
-  /** id для клика-перехода (например, id тега категории) */
-  id?: string
-  /** слитые в «Другое» элементы — клик по секции выбирает все оставшиеся */
-  others?: DonutItem[]
+    label: string
+    value: number
+    color: string
+    /** id для клика-перехода (например, id тега категории) */
+    id?: string
+    /** слитые в «Другое» элементы — клик по секции выбирает все оставшиеся */
+    others?: DonutItem[]
 }
 
 interface DonutChartProps {
-  items: DonutItem[]
-  formatValue: (v: number) => string
-  /** подпись под суммой в центре */
-  centerLabel?: string
-  /** скрыть сектора с нулевым значением (по умолчанию да) */
-  dropZeros?: boolean
-  /** обработчик клика по элементу; null/undefined — некликабельный элемент */
-  getItemClick?: (item: DonutItem) => (() => void) | null | undefined
+    items: DonutItem[]
+    formatValue: (v: number) => string
+    /** подпись под суммой в центре */
+    centerLabel?: string
+    /** скрыть сектора с нулевым значением (по умолчанию да) */
+    dropZeros?: boolean
+    /** обработчик клика по элементу; null/undefined — некликабельный элемент */
+    getItemClick?: (item: DonutItem) => (() => void) | null | undefined
 }
 
-/** Кольцевая диаграмма: %, точные суммы в легенде, тултип на секторе. */
+/** Кольцевая диаграмма: %, точные суммы в легенде, тултип за курсором (Recharts). */
 export function DonutChart({ items, formatValue, centerLabel = 'всего', dropZeros = true, getItemClick }: DonutChartProps) {
-  const [active, setActive] = useState<number | null>(null)
-  const [tip, setTip] = useState<{ anchor: { x: number; y: number }; title: string; rows: TooltipRow[] } | null>(null)
+    const [active, setActive] = useState<number | null>(null)
+    const [tip, setTip] = useState<{ x: number; y: number; item: DonutItem } | null>(null)
 
-  const data = dropZeros ? items.filter((i) => i.value > 0) : items
-  const total = data.reduce((s, i) => s + i.value, 0)
-  if (total <= 0) {
-    return <EmptyChart text="Нет данных за период" ariaLabel="Круговая диаграмма" />
-  }
+    const data = dropZeros ? items.filter((i) => i.value > 0) : items
+    const total = data.reduce((s, i) => s + i.value, 0)
+    if (total <= 0) {
+        return <EmptyChart text="Нет данных за период" ariaLabel="Круговая диаграмма" />
+    }
 
-  const size = 168
-  const rOuter = size / 2 - 4
-  const rInner = rOuter * 0.62
-  const cx = size / 2
-  const cy = size / 2
-  const gap = data.length > 1 ? 0.025 : 0
-  let angle = -Math.PI / 2
+    // Recharts' Tooltip ставит карточку в центре сектора (= центр кольца),
+    // где лежит сумма — перекрывает её. Поэтому рисуем свой тултип,
+    // следующий за курсором (viewport-координаты из события мыши).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tipRows = (item: DonutItem): TooltipRow[] => {
+        const pct = ((item.value / total) * 100).toFixed(1)
+        return [
+            { label: 'Сумма', value: formatValue(item.value), color: item.color },
+            { label: 'Доля', value: `${pct}%` },
+        ]
+    }
 
-  const segments = data.map((item) => {
-    const sweep = (item.value / total) * Math.PI * 2
-    const seg = { item, a0: angle + gap / 2, a1: angle + sweep - gap / 2 }
-    angle += sweep
-    return seg
-  })
+    const showTip = (i: number, clientX: number, clientY: number) => {
+        const item = data[i]!
+        setActive(i)
+        setTip({ x: clientX, y: clientY, item })
+    }
 
-  const showTip = (e: React.MouseEvent<SVGElement>, i: number) => {
-    const item = segments[i]!.item
-    const pct = ((item.value / total) * 100).toFixed(1)
-    setActive(i)
-    setTip({
-      anchor: { x: e.clientX, y: e.clientY },
-      title: item.label,
-      rows: [
-        { label: 'Сумма', value: formatValue(item.value), color: item.color },
-        { label: 'Доля', value: `${pct}%` },
-      ],
-    })
-  }
+    const handleSegmentClick = (item?: DonutItem) => {
+        const onClick = item ? getItemClick?.(item) : undefined
+        onClick?.()
+    }
 
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }} onMouseLeave={() => { setActive(null); setTip(null) }}>
-      <Box sx={{ position: 'relative', flexShrink: 0 }}>
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Круговая диаграмма">
-          {segments.length === 1 ? (
-            // Один сегмент: дуга полного круга (a0 == a1) не рендерится в SVG —
-            // рисуем кольцо целиком как окружность со штрихом.
-            <circle
-              cx={cx}
-              cy={cy}
-              r={(rOuter + rInner) / 2}
-              fill="none"
-              stroke={segments[0]!.item.color}
-              strokeWidth={rOuter - rInner}
-              style={{ cursor: getItemClick?.(segments[0]!.item) ? 'pointer' : 'default' }}
-              onClick={getItemClick?.(segments[0]!.item) ?? undefined}
-              onMouseEnter={(e) => showTip(e, 0)}
-              onMouseMove={(e) => setTip((t) => (t ? { ...t, anchor: { x: e.clientX, y: e.clientY } } : t))}
-            />
-          ) : (
-            segments.map(({ item, a0, a1 }, i) => {
-              const onClick = getItemClick?.(item)
-              return (
-                <path
-                  key={item.label}
-                  d={arcPath(cx, cy, rInner, rOuter, a0, a1)}
-                  fill={item.color}
-                  opacity={active === null || active === i ? 1 : 0.3}
-                  style={{ cursor: onClick ? 'pointer' : 'default', transition: 'opacity 0.15s' }}
-                  onClick={onClick ?? undefined}
-                  onMouseEnter={(e) => showTip(e, i)}
-                  onMouseMove={(e) => setTip((t) => (t ? { ...t, anchor: { x: e.clientX, y: e.clientY } } : t))}
-                />
-              )
-            })
-          )}
-        </svg>
-        <Box sx={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-          <Typography className="tnum" sx={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em' }}>
-            {formatValue(total)}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {centerLabel}
-          </Typography>
-        </Box>
-      </Box>
-
-      <Stack spacing={0.5} sx={{ width: '100%', maxWidth: 300 }}>
-        {segments.map(({ item }, i) => {
-          const pct = ((item.value / total) * 100).toFixed(1)
-          const onClick = getItemClick?.(item)
-          return (
-            <Box
-              key={item.label}
-              role={onClick ? 'button' : undefined}
-              tabIndex={onClick ? 0 : undefined}
-              onClick={onClick ?? undefined}
-              onKeyDown={
-                onClick
-                  ? (e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        onClick()
-                      }
-                    }
-                  : undefined
-              }
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.75,
-                opacity: active === null || active === i ? 1 : 0.45,
-                cursor: onClick ? 'pointer' : 'default',
-                borderRadius: '6px',
-                px: 0.75,
-                mx: -0.75,
-                '&:hover': onClick ? { bgcolor: 'action.hover' } : undefined,
-              }}
-              onMouseEnter={(e) => {
-                setActive(i)
-                setTip({
-                  anchor: { x: e.clientX, y: e.clientY },
-                  title: item.label,
-                  rows: [
-                    { label: 'Сумма', value: formatValue(item.value), color: item.color },
-                    { label: 'Доля', value: `${pct}%` },
-                  ],
-                })
-              }}
-            >
-              <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: item.color, flexShrink: 0 }} />
-              <Typography variant="body2" sx={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {item.label}
-              </Typography>
-              <Typography variant="caption" className="tnum" color="text.secondary" sx={{ fontWeight: 600 }}>
-                {pct}%
-              </Typography>
+    return (
+        <Box
+            sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}
+            onMouseLeave={() => { setActive(null); setTip(null) }}
+        >
+            <Box sx={{ position: 'relative', width: 168, height: 168, flexShrink: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                            data={data}
+                            dataKey="value"
+                            nameKey="label"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={62}
+                            outerRadius={82}
+                            paddingAngle={data.length > 1 ? 2 : 0}
+                            stroke="none"
+                            isAnimationActive={false}
+                            onMouseEnter={(_, i, e) => showTip(i, e.clientX, e.clientY)}
+                            onMouseMove={(_, i, e) => showTip(i, e.clientX, e.clientY)}
+                            onClick={(_, i) => handleSegmentClick(data[i])}
+                        >
+                            {data.map((item, i) => (
+                                <Cell
+                                    key={item.label}
+                                    fill={item.color}
+                                    opacity={active === null || active === i ? 1 : 0.3}
+                                    cursor={getItemClick?.(item) ? 'pointer' : 'default'}
+                                />
+                            ))}
+                        </Pie>
+                    </PieChart>
+                </ResponsiveContainer>
+                <Box
+                    sx={{
+                        position: 'absolute',
+                        inset: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        pointerEvents: 'none',
+                    }}
+                >
+                    <Typography className="tnum" sx={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.02em' }}>
+                        {formatValue(total)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        {centerLabel}
+                    </Typography>
+                </Box>
             </Box>
-          )
-        })}
-      </Stack>
-      <ChartTooltip anchor={tip?.anchor ?? null} title={tip?.title ?? ''} rows={tip?.rows ?? []} />
-    </Box>
-  )
-}
 
-/** Сектор кольца от a0 до a1 (радианы, 0 = 3 часа). */
-function arcPath(cx: number, cy: number, r1: number, r2: number, a0: number, a1: number): string {
-  const large = a1 - a0 > Math.PI ? 1 : 0
-  const p0x = cx + r1 * Math.cos(a0)
-  const p0y = cy + r1 * Math.sin(a0)
-  const p1x = cx + r2 * Math.cos(a1)
-  const p1y = cy + r2 * Math.sin(a1)
-  const p2x = cx + r1 * Math.cos(a1)
-  const p2y = cy + r1 * Math.sin(a1)
-  const p3x = cx + r2 * Math.cos(a0)
-  const p3y = cy + r2 * Math.sin(a0)
-  return (
-    `M${p0x.toFixed(2)},${p0y.toFixed(2)} ` +
-    `L${p3x.toFixed(2)},${p3y.toFixed(2)} ` +
-    `A${r2.toFixed(2)},${r2.toFixed(2)} 0 ${large} 1 ${p1x.toFixed(2)},${p1y.toFixed(2)} ` +
-    `L${p2x.toFixed(2)},${p2y.toFixed(2)} ` +
-    `A${r1.toFixed(2)},${r1.toFixed(2)} 0 ${large} 0 ${p0x.toFixed(2)},${p0y.toFixed(2)} Z`
-  )
+            {tip && (
+                <TooltipCard
+                    title={tip.item.label}
+                    rows={tipRows(tip.item)}
+                    style={{ position: 'fixed', left: tip.x + 14, top: tip.y + 14, zIndex: 1300, pointerEvents: 'none' }}
+                />
+            )}
+
+            <Stack spacing={0.5} sx={{ width: '100%', maxWidth: 300 }}>
+                {data.map((item, i) => {
+                    const pct = ((item.value / total) * 100).toFixed(1)
+                    const onClick = getItemClick?.(item)
+                    return (
+                        <Box
+                            key={item.label}
+                            role={onClick ? 'button' : undefined}
+                            tabIndex={onClick ? 0 : undefined}
+                            onClick={onClick ?? undefined}
+                            onKeyDown={
+                                onClick
+                                    ? (e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault()
+                                            onClick()
+                                        }
+                                    }
+                                    : undefined
+                            }
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 0.75,
+                                opacity: active === null || active === i ? 1 : 0.45,
+                                cursor: onClick ? 'pointer' : 'default',
+                                borderRadius: '6px',
+                                px: 0.75,
+                                mx: -0.75,
+                                '&:hover': onClick ? { bgcolor: 'action.hover' } : undefined,
+                            }}
+                        >
+                            <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: item.color, flexShrink: 0 }} />
+                            <Typography variant="body2" sx={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {item.label}
+                            </Typography>
+                            <Typography variant="caption" className="tnum" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                {pct}%
+                            </Typography>
+                        </Box>
+                    )
+                })}
+            </Stack>
+        </Box>
+    )
 }
 
 export interface WeekdayBar {
-  /** 1..7, ISO (1 = Пн) */
-  weekday: number
-  value: number
-  count: number
+    /** 1..7, ISO (1 = Пн) */
+    weekday: number
+    value: number
+    count: number
 }
 
 interface WeekdayBarsProps {
-  data: WeekdayBar[]
-  formatValue: (v: number) => string
+    data: WeekdayBar[]
+    formatValue: (v: number) => string
 }
 
 const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 
+/** Палитра дней недели — без фиолетового (не сливается с акцентом). */
+const WEEKDAY_COLORS = ['#2563EB', '#0EA5E9', '#14B8A6', '#10B981', '#84CC16', '#F59E0B', '#EF4444']
+
 export function weekdayLabel(weekday: number): string {
-  return WEEKDAY_LABELS[weekday - 1] ?? '—'
+    return WEEKDAY_LABELS[weekday - 1] ?? '—'
 }
 
-/** Столбчатая диаграмма трат по дням недели (всегда 7 столбцов). */
+/** Столбчатая диаграмма трат по дням недели (всегда 7 столбцов, Recharts). */
 export function WeekdayBars({ data, formatValue }: WeekdayBarsProps) {
-  const theme = useTheme()
-  const [tip, setTip] = useState<{ anchor: { x: number; y: number }; title: string; rows: TooltipRow[] } | null>(null)
+    const theme = useTheme()
+    const grid = theme.palette.divider
+    const textSecondary = theme.palette.text.secondary
 
-  const w = 640
-  const h = 200
-  const pad = { top: 14, right: 8, bottom: 30, left: 8 }
-  const innerW = w - pad.left - pad.right
-  const innerH = h - pad.top - pad.bottom
+    const bars = WEEKDAY_LABELS.map((label, i) => {
+        const d = data.find((x) => x.weekday === i + 1)
+        // Цвет дня — свой, даже при нулевых тратах (но нейтральный, не акцентный)
+        return { label, value: d?.value ?? 0, count: d?.count ?? 0, weekday: i + 1, fill: WEEKDAY_COLORS[i]! }
+    })
 
-  const bars = WEEKDAY_LABELS.map((label, i) => {
-    const d = data.find((x) => x.weekday === i + 1)
-    return { label, value: d?.value ?? 0, count: d?.count ?? 0 }
-  })
-  const max = Math.max(...bars.map((b) => b.value), 1)
-  const step = innerW / 7
-  const barW = Math.min(34, step * 0.5)
-  const grid = theme.palette.divider
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const barTooltip = (props: any) => {
+        const b = firstTipPayload(props)
+        if (!b || typeof b.value !== 'number' || b.value <= 0) return null
+        return (
+            <TooltipCard
+                title={String(b.label ?? '')}
+                rows={[
+                    { label: 'Сумма', value: formatValue(b.value) },
+                    { label: 'Операций', value: String(b.count ?? '') },
+                ]}
+            />
+        )
+    }
 
-  return (
-    <Box sx={{ position: 'relative' }} onMouseLeave={() => setTip(null)}>
-      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="Траты по дням недели">
-        {[0.25, 0.5, 0.75, 1].map((f) => (
-          <line
-            key={f}
-            x1={pad.left}
-            x2={w - pad.right}
-            y1={pad.top + innerH * (1 - f)}
-            y2={pad.top + innerH * (1 - f)}
-            stroke={grid}
-            strokeWidth={1}
-          />
-        ))}
-        {bars.map((b, i) => {
-          const x = pad.left + i * step + (step - barW) / 2
-          const barH = (b.value / max) * innerH
-          const y = pad.top + innerH - barH
-          return (
-            <g key={b.label}>
-              <rect
-                x={x}
-                y={y}
-                width={barW}
-                height={Math.max(barH, b.value > 0 ? 2 : 0)}
-                rx={4}
-                fill={b.value > 0 ? theme.palette.primary.main : '#EDEDF4'}
-                style={{ cursor: b.value > 0 ? 'pointer' : 'default' }}
-                onMouseEnter={(e) => {
-                  if (b.value <= 0) return
-                  setTip({
-                    anchor: { x: e.clientX, y: e.clientY },
-                    title: b.label,
-                    rows: [
-                      { label: 'Сумма', value: formatValue(b.value) },
-                      { label: 'Операций', value: String(b.count) },
-                    ],
-                  })
-                }}
-                onMouseMove={(e) => setTip((t) => (t ? { ...t, anchor: { x: e.clientX, y: e.clientY } } : t))}
-              />
-              <text x={x + barW / 2} y={h - 8} textAnchor="middle" fontSize={10} fill={theme.palette.text.secondary}>
-                {b.label}
-              </text>
-            </g>
-          )
-        })}
-        <text x={pad.left} y={pad.top - 4} fontSize={10} fill={theme.palette.text.secondary}>
-          макс {formatValue(max)}
-        </text>
-      </svg>
-      <ChartTooltip anchor={tip?.anchor ?? null} title={tip?.title ?? ''} rows={tip?.rows ?? []} />
-    </Box>
-  )
+    return (
+        <Box sx={{ position: 'relative', width: '100%', height: 200 }} role="img" aria-label="Траты по дням недели">
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={bars} margin={{ top: 16, right: 8, bottom: 0, left: 4 }}>
+                    <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 10, fill: textSecondary }}
+                        tickLine={false}
+                        axisLine={false}
+                        interval={0}
+                    />
+                    <YAxis
+                        tickFormatter={compactAxisValue}
+                        tick={{ fontSize: 10, fill: textSecondary }}
+                        tickLine={false}
+                        axisLine={false}
+                        width={52}
+                    />
+                    <RechartsTooltip content={barTooltip} cursor={{ fill: 'transparent' }} />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={34} isAnimationActive={false}>
+                        {bars.map((b) => (
+                            <Cell key={b.label} fill={b.value > 0 ? b.fill : '#EDEDF4'} />
+                        ))}
+                    </Bar>
+                </BarChart>
+            </ResponsiveContainer>
+        </Box>
+    )
 }
 
 /** Пустой график-заглушка. */
 export function EmptyChart({ text, ariaLabel }: { text: string; ariaLabel: string }) {
-  return (
-    <Box
-      role="img"
-      aria-label={ariaLabel}
-      sx={{
-        height: 180,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        border: '1px dashed',
-        borderColor: 'divider',
-        borderRadius: '8px',
-      }}
-    >
-      <Typography variant="body2" color="text.secondary">
-        {text}
-      </Typography>
-    </Box>
-  )
+    return (
+        <Box
+            role="img"
+            aria-label={ariaLabel}
+            sx={{
+                height: 180,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px dashed',
+                borderColor: 'divider',
+                borderRadius: '8px',
+            }}
+        >
+            <Typography variant="body2" color="text.secondary">
+                {text}
+            </Typography>
+        </Box>
+    )
 }
 
 /** Детерминированная палитра для магазинов (индекс в массиве stores).
  *  Без фиолетовых — они сливаются с акцентным цветом приложения. */
 export const STORE_COLORS = [
-  '#2563EB', '#0EA5E9', '#10B981', '#84CC16', '#F59E0B',
-  '#F97316', '#EF4444', '#14B8A6', '#EC4899', '#64748B',
+    '#2563EB', '#0EA5E9', '#10B981', '#84CC16', '#F59E0B',
+    '#F97316', '#EF4444', '#14B8A6', '#EC4899', '#64748B',
 ] as const
 
 export function storeColor(index: number): string {
-  return STORE_COLORS[index % STORE_COLORS.length]!
+    return STORE_COLORS[index % STORE_COLORS.length]!
 }
 
 /** Нейтральный цвет секции «Другое» (слитые доли < 1 %). */
@@ -640,19 +536,19 @@ export const OTHER_SLICE_COLOR = '#64748B'
  *  доля остаётся отдельной, чтобы пирог не вырождался в одно кольцо.
  *  Слитая секция несёт исходные элементы в `others` — для мульти-фильтра. */
 export function mergeSmallSlices<T extends { label: string; value: number }>(
-  items: readonly T[],
-  minFraction = 0.01,
+    items: readonly T[],
+    minFraction = 0.01,
 ): (T & { others?: T[] })[] {
-  if (items.length <= 1) return [...items]
-  const total = items.reduce((s, i) => s + i.value, 0)
-  if (total <= 0) return [...items]
-  const sorted = [...items].sort((a, b) => b.value - a.value)
-  const big = sorted.filter((i) => i.value / total >= minFraction)
-  const small = sorted.filter((i) => i.value / total < minFraction)
-  if (small.length === 0) return sorted
-  const keep = big.length > 0 ? big : [sorted[0]!]
-  const rest = big.length > 0 ? small : sorted.slice(1)
-  const otherSum = rest.reduce((s, i) => s + i.value, 0)
-  if (otherSum <= 0) return sorted
-  return [...keep, { ...(rest[0] ?? sorted[0]!), label: 'Другое', value: otherSum, others: rest }]
+    if (items.length <= 1) return [...items]
+    const total = items.reduce((s, i) => s + i.value, 0)
+    if (total <= 0) return [...items]
+    const sorted = [...items].sort((a, b) => b.value - a.value)
+    const big = sorted.filter((i) => i.value / total >= minFraction)
+    const small = sorted.filter((i) => i.value / total < minFraction)
+    if (small.length === 0) return sorted
+    const keep = big.length > 0 ? big : [sorted[0]!]
+    const rest = big.length > 0 ? small : sorted.slice(1)
+    const otherSum = rest.reduce((s, i) => s + i.value, 0)
+    if (otherSum <= 0) return sorted
+    return [...keep, { ...(rest[0] ?? sorted[0]!), label: 'Другое', value: otherSum, others: rest }]
 }

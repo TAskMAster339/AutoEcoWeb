@@ -144,21 +144,42 @@ async def list_receipts(  # noqa: PLR0913
 
 
 @router.get("/{receipt_id}", response_model=ReceiptResponse)
-async def get_receipt(
+async def get_receipt(  # noqa: PLR0913
     receipt_id: UUID,
     _current_user: CurrentUser,
     receipt_repo: ReceiptRepo,
     tx_repo: TransactionRepo,
     transaction_service: TransactionSvc,
     seller_service: SellerSvc,
+    alias_repo: AliasRepo,
 ) -> ReceiptResponse:
     receipt = await ReceiptService(
         receipt_repo,
         transaction_service,
+        alias_repo,
         seller_service=seller_service,
     ).get(_current_user, receipt_id)
     transactions = await tx_repo.list_by_receipt(receipt.id)
     return ReceiptResponse.from_model(receipt, transactions=transactions)
+
+
+@router.get("/{receipt_id}/raw")
+async def get_receipt_raw(
+    receipt_id: UUID,
+    _current_user: CurrentUser,
+    receipt_repo: ReceiptRepo,
+    transaction_service: TransactionSvc,
+    seller_service: SellerSvc,
+    alias_repo: AliasRepo,
+) -> dict:
+    """Сырые данные чека (raw_json из proverkacheka). Пусто для ручных чеков."""
+    receipt = await ReceiptService(
+        receipt_repo,
+        transaction_service,
+        alias_repo,
+        seller_service=seller_service,
+    ).get(_current_user, receipt_id)
+    return receipt.raw_json or {}
 
 
 @router.post(
@@ -190,10 +211,12 @@ async def update_receipt(  # noqa: PLR0913
     tx_repo: TransactionRepo,
     transaction_service: TransactionSvc,
     seller_service: SellerSvc,
+    alias_repo: AliasRepo,
 ) -> ReceiptResponse:
     receipt = await ReceiptService(
         receipt_repo,
         transaction_service,
+        alias_repo,
         seller_service=seller_service,
     ).update(_current_user, receipt_id, data)
     transactions = await tx_repo.list_by_receipt(receipt.id)
@@ -207,9 +230,11 @@ async def delete_receipt(
     receipt_repo: ReceiptRepo,
     seller_service: SellerSvc,
     transaction_service: TransactionSvc,
+    alias_repo: AliasRepo,
 ) -> None:
     await ReceiptService(
         receipt_repo,
         transaction_service,
+        alias_repo,
         seller_service=seller_service,
     ).delete(_current_user, receipt_id)
