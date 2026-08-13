@@ -10,10 +10,10 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
-  Typography,
 } from '@mui/material'
 import { BottomSheet } from '../common/BottomSheet'
 import { NumericField } from '../common/NumericField'
+import { TagAutocomplete } from '../common/TagAutocomplete'
 import { parseNum } from '../../lib/numbers'
 import { useUiStore } from '../../store/uiStore'
 import { useTags } from '../../hooks/useTags'
@@ -45,7 +45,6 @@ export function AddTransactionSheet() {
   const [quantity, setQuantity] = useState('1')
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
-  const [tagSearch, setTagSearch] = useState('')
 
   const resetForm = () => {
     setName('')
@@ -55,7 +54,6 @@ export function AddTransactionSheet() {
     setPrice('')
     setQuantity('1')
     setSelectedTag(null)
-    setTagSearch('')
     setType('expense')
     setFormError(null)
   }
@@ -74,10 +72,6 @@ export function AddTransactionSheet() {
   const amountText =
     computedAmount !== null ? computedAmount.toFixed(2).replace('.', ',') : ''
   const storeOptions = useMemo(() => stores ?? [], [stores])
-  const visibleTags = useMemo(() => {
-    const query = tagSearch.trim().toLocaleLowerCase()
-    return (tags ?? []).filter((tag) => !query || tag.name.toLocaleLowerCase().includes(query))
-  }, [tagSearch, tags])
 
   const submit = async () => {
     setFormError(null)
@@ -201,7 +195,7 @@ export function AddTransactionSheet() {
           placeholder="Заметка к транзакции"
         />
 
-        <Stack direction="row" spacing={1.5}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
           <NumericField
             label="Цена, ₽"
             value={price}
@@ -225,7 +219,7 @@ export function AddTransactionSheet() {
           />
         </Stack>
 
-        <Stack direction="row" spacing={1.5}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
           <TextField label="Дата" type="date" value={date} onChange={(e) => setDate(e.target.value)} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
           <TextField
             label="Сумма, ₽"
@@ -237,36 +231,13 @@ export function AddTransactionSheet() {
           />
         </Stack>
 
-        <Box>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-            Тег
-          </Typography>
-          <TextField
-            value={tagSearch}
-            onChange={(event) => setTagSearch(event.target.value)}
-            placeholder="Найти тег по названию"
-            size="small"
-            fullWidth
-            sx={{ mb: 1 }}
-            inputProps={{ 'aria-label': 'Поиск тега по названию' }}
-          />
-          <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-            {visibleTags.map((t) => (
-              <Chip
-                key={t.id}
-                label={t.name}
-                clickable
-                color={selectedTag === t.id ? 'primary' : 'default'}
-                variant={selectedTag === t.id ? 'filled' : 'outlined'}
-                onClick={() => setSelectedTag((prev) => (prev === t.id ? null : t.id))}
-              />
-            ))}
-          </Box>
-        </Box>
+        <TagAutocomplete tags={tags ?? []} value={selectedTag} onChange={setSelectedTag} />
 
-        <Button variant="contained" onClick={submit} disabled={createTx.isPending} size="large" fullWidth>
-          {createTx.isPending ? <CircularProgress size={20} color="inherit" /> : 'Сохранить'}
-        </Button>
+        <Box sx={{ position: 'sticky', bottom: 0, zIndex: 1, pt: 1, pb: 'env(safe-area-inset-bottom)', bgcolor: 'background.paper' }}>
+          <Button variant="contained" onClick={submit} disabled={createTx.isPending} size="large" fullWidth>
+            {createTx.isPending ? <CircularProgress size={20} color="inherit" /> : 'Сохранить транзакцию'}
+          </Button>
+        </Box>
       </Stack>
     </BottomSheet>
   )

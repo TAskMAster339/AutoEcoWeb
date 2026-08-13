@@ -1,12 +1,15 @@
+import { useState } from 'react'
 import { Alert, Box, Button, useMediaQuery, useTheme } from '@mui/material'
 import { Link as RouterLink, Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { BottomNav } from './BottomNav'
-import { FloatingAddButton } from './FloatingAddButton'
 import { AddMenu } from '../common/AddMenu'
+import { AddReceiptSheet } from '../transactions/AddReceiptSheet'
+import { AddTransactionSheet } from '../transactions/AddTransactionSheet'
 import { OfflineBanner } from './OfflineBanner'
 import { Footer } from './Footer'
+import { ScrollToTopButton } from './ScrollToTopButton'
 import { useOnline } from '../../hooks/useOnline'
 import { useAuthStore } from '../../store/authStore'
 
@@ -21,6 +24,7 @@ export function AppShell() {
   const online = useOnline()
   const user = useAuthStore((s) => s.user)
   const isVerifiedOnly = user?.status === 'verified'
+  const [mainElement, setMainElement] = useState<HTMLElement | null>(null)
 
   return (
     <Box
@@ -55,6 +59,7 @@ export function AppShell() {
             overflow never shifts the layout. */}
         <Box
           component="main"
+          ref={setMainElement}
           sx={{
             flex: 1,
             minHeight: 0,
@@ -63,8 +68,10 @@ export function AppShell() {
             width: '100%',
             minWidth: 0,
             px: { xs: 1.5, sm: 2.5, md: 3 },
-            py: { xs: 1.5, md: 3 },
-            pb: isMobile ? 12 : 4,
+            pt: { xs: 1.5, md: 3 },
+            pb: isMobile && !isVerifiedOnly ? 'calc(112px + env(safe-area-inset-bottom))' : 4,
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
           }}
         >
           <Outlet />
@@ -74,10 +81,16 @@ export function AppShell() {
       </Box>
 
       {isMobile && <BottomNav />}
-      {isMobile && !isVerifiedOnly && <FloatingAddButton />}
+      <ScrollToTopButton scrollContainer={mainElement} hidden={!isMobile || isVerifiedOnly} />
 
-      {/* Global «Добавить» menu — открывается из пустых состояний страниц */}
-      {!isVerifiedOnly && <AddMenu />}
+      {/* Global add flow is mounted once, so the central mobile + works on every page. */}
+      {!isVerifiedOnly && (
+        <>
+          <AddMenu />
+          <AddTransactionSheet />
+          <AddReceiptSheet />
+        </>
+      )}
     </Box>
   )
 }

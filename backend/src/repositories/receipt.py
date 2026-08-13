@@ -64,6 +64,7 @@ class ReceiptRepository:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         seller: str | None = None,
+        search: str | None = None,
     ) -> list[Receipt]:
         conditions: list[object] = [Receipt.user_id == user_id]
         if date_from is not None:
@@ -72,6 +73,14 @@ class ReceiptRepository:
             conditions.append(Receipt.check_datetime <= date_to)
         if seller:
             conditions.append(Seller.normalized_name.ilike(f"%{seller}%"))
+        if search:
+            q = f"%{search}%"
+            conditions.append(
+                or_(
+                    Receipt.receipt_number.ilike(q),
+                    Seller.normalized_name.ilike(q),
+                ),
+            )
         if cursor is not None:
             created, receipt_id = cursor
             conditions.append(

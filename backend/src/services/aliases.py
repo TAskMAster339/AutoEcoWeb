@@ -52,6 +52,7 @@ class AliasService:
         scope: str | None,
         limit: int,
         offset: int = 0,
+        search: str | None = None,
     ) -> tuple[list[Alias], int]:
         """Страница алиасов (offset) + total — для CursorPage."""
         return await self._repo.list_page(
@@ -59,6 +60,7 @@ class AliasService:
             scope=scope,
             limit=limit,
             offset=offset,
+            search=search,
         )
 
     async def create(self, user: User, data: AliasCreate) -> Alias:

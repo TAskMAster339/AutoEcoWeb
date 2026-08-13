@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Autocomplete,
@@ -6,48 +6,35 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
+  IconButton,
   Stack,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
-  Typography,
-  IconButton,
   Tooltip,
-  useMediaQuery,
 } from '@mui/material'
-import { alpha, useTheme } from '@mui/material/styles'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import AddLinkOutlinedIcon from '@mui/icons-material/AddLinkOutlined'
+import { BottomSheet } from '../common/BottomSheet'
 import { NumericField } from '../common/NumericField'
 import { ConfirmDialog } from '../common/ConfirmDialog'
+import { CreateAliasDialog } from '../common/CreateAliasDialog'
+import { TagAutocomplete } from '../common/TagAutocomplete'
 import { useTags } from '../../hooks/useTags'
 import { useDeleteTransaction, useStores, useUpdateTransaction } from '../../hooks/useTransactions'
 import { messageFromError } from '../../api/client'
 import { todayIso } from '../../lib/format'
 import { parseNum } from '../../lib/numbers'
 import { colors } from '../../theme'
-import type { Store, TransactionUpdatePatch, TransactionView } from '../../api/types'
-import { CreateAliasDialog } from '../common/CreateAliasDialog'
+import type { AliasScope, Store, TransactionUpdatePatch, TransactionView } from '../../api/types'
 
 interface EditTransactionDialogProps {
-  /** Транзакция для редактирования; null — диалог закрыт. */
   tx: TransactionView | null
   onClose: () => void
 }
 
-/**
- * Модальное окно изменения транзакции: форма (тип, название, магазин,
- * дата, цена × кол-во = сумма, тег) + кнопка «Удалить» с подтверждением.
- * PATCH /api/v1/transactions/{id} — применяются только изменённые поля.
- */
+/** Редактирование повторяет форму добавления, но отправляет PATCH и позволяет удалить транзакцию. */
 export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProps) {
-  const theme = useTheme()
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
-  const titleId = useId()
-
   const { data: tags } = useTags()
   const { data: stores } = useStores()
   const updateTx = useUpdateTransaction()
@@ -59,52 +46,40 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
   const [store, setStore] = useState('')
   const [selectedStore, setSelectedStore] = useState<Store | null>(null)
   const [storeEdited, setStoreEdited] = useState(false)
-  const [storePopupOpen, setStorePopupOpen] = useState(false)
   const [comment, setComment] = useState('')
   const [price, setPrice] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
-  const [tagSearch, setTagSearch] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [aliasScope, setAliasScope] = useState<'seller' | 'product' | null>(null)
+  const [aliasScope, setAliasScope] = useState<AliasScope | null>(null)
 
   const open = tx !== null
 
-  // Заполняем форму при открытии/смене транзакции
   useEffect(() => {
     if (!tx) return
     const amount = tx.income ?? tx.expense ?? null
-    setType(tx.income !== null && tx.income !== undefined ? 'income' : 'expense')
-    setDate(tx.date || todayIso())
-    setName(tx.name)
     const matchingStore = (stores ?? []).find((candidate) => {
       const label = candidate.alias_name || candidate.normalized_seller_name || candidate.seller_name
       return candidate.seller_id === tx.sellerId || (tx.sellerId === null && label === tx.store)
     }) ?? null
+
+    setType(tx.income !== null && tx.income !== undefined ? 'income' : 'expense')
+    setDate(tx.date || todayIso())
+    setName(tx.name)
     setSelectedStore(matchingStore)
-    setStore(matchingStore ? (matchingStore.alias_name || matchingStore.normalized_seller_name || matchingStore.seller_name) : tx.store ?? '')
+    setStore(matchingStore ? matchingStore.alias_name || matchingStore.normalized_seller_name || matchingStore.seller_name : tx.store ?? '')
     setStoreEdited(false)
     setComment(tx.comment ?? '')
     setPrice(tx.price !== null && tx.price !== undefined ? String(tx.price) : amount !== null ? String(amount) : '')
     setQuantity(tx.quantity !== null && tx.quantity !== undefined ? String(tx.quantity) : '1')
     setSelectedTag(tx.tagId)
-    setTagSearch('')
     setFormError(null)
+    setDeleteError(null)
     setConfirmOpen(false)
+    setAliasScope(null)
   }, [stores, tx])
-
-  // Блокируем скролл приложения (скроллится только <main>)
-  useEffect(() => {
-    if (!open) return
-    const main = document.querySelector('main')
-    if (!main) return
-    const prev = main.style.overflowY
-    main.style.overflowY = 'hidden'
-    return () => {
-      main.style.overflowY = prev
-    }
-  }, [open])
 
   const priceNum = price ? parseNum(price) : NaN
   const qtyNum = quantity ? parseNum(quantity) : NaN
@@ -119,32 +94,21 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
 
   const submit = async () => {
     setFormError(null)
-
-    if (!name.trim()) {
-      setFormError('Укажите название транзакции')
-      return
-    }
-    if (!Number.isFinite(priceNum) || priceNum <= 0) {
-      setFormError('Укажите цену больше нуля')
-      return
-    }
-    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
-      setFormError('Количество должно быть больше нуля')
-      return
-    }
+    if (!name.trim()) return setFormError('Укажите название транзакции')
+    if (!Number.isFinite(priceNum) || priceNum <= 0) return setFormError('Укажите цену больше нуля')
+    if (!Number.isFinite(qtyNum) || qtyNum <= 0) return setFormError('Количество должно быть больше нуля')
 
     const patch: TransactionUpdatePatch = {}
     const newName = name.trim()
     const newStore = selectedStore ? selectedStore.seller_name : store.trim() || null
     const newType = type === 'income' ? 2 : 1
     if (newName !== tx.name) patch.name = newName
-    const currentStore = tx.sellerNameSource ?? null
-    if (storeEdited && newStore !== currentStore) patch.seller_name = newStore
+    if (storeEdited && newStore !== (tx.sellerNameSource ?? null)) patch.seller_name = newStore
     if (newType !== (tx.income !== null && tx.income !== undefined ? 2 : 1)) patch.operation_type = newType
+
     const newDate = `${date}T12:00:00Z`
-    const oldDate = `${tx.date}T12:00:00Z`
-    if (newDate !== oldDate) patch.datetime = newDate
-    // цена/кол-во меняют сумму — отправляем все три только если что-то изменилось
+    if (newDate !== `${tx.date}T12:00:00Z`) patch.datetime = newDate
+
     const oldQty = tx.quantity !== null && tx.quantity !== undefined ? Number(tx.quantity) : 1
     const oldPrice = tx.price !== null && tx.price !== undefined ? Number(tx.price) : tx.income ?? tx.expense ?? computedAmount
     if (qtyNum !== oldQty || priceNum !== oldPrice) {
@@ -152,7 +116,6 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
       patch.quantity = qtyNum
       patch.amount = computedAmount!
     } else if (computedAmount !== null && computedAmount !== (tx.income ?? tx.expense)) {
-      // сумма могла измениться без изменения цены/кол-ва (несоответствие в данных)
       patch.amount = computedAmount
     }
     if (selectedTag !== tx.tagId) patch.tag_id = selectedTag
@@ -162,165 +125,90 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
     try {
       await updateTx.mutateAsync({ id: tx.id, patch })
       onClose()
-    } catch (e) {
-      setFormError(messageFromError(e))
+    } catch (error) {
+      setFormError(messageFromError(error))
     }
   }
 
   const handleDelete = async () => {
-    setFormError(null)
+    setDeleteError(null)
     try {
       await deleteTx.mutateAsync(tx.id)
       setConfirmOpen(false)
       onClose()
-    } catch (e) {
-      setFormError(messageFromError(e))
-      setConfirmOpen(false)
+    } catch (error) {
+      setDeleteError(messageFromError(error))
     }
+  }
+
+  const close = () => {
+    if (!updateTx.isPending && !deleteTx.isPending) onClose()
   }
 
   return (
     <>
-      <Dialog
-        open={open}
-        onClose={updateTx.isPending || deleteTx.isPending ? undefined : onClose}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            if (!updateTx.isPending && !deleteTx.isPending) {
-              event.preventDefault()
-              event.stopPropagation()
-              onClose()
-            }
-            return
-          }
-          if (
-            event.key === 'Enter' &&
-            !event.shiftKey &&
-            !event.ctrlKey &&
-            !event.metaKey &&
-            !event.altKey &&
-            !updateTx.isPending &&
-            !deleteTx.isPending &&
-            !confirmOpen &&
-            !aliasScope &&
-            !(event.target instanceof HTMLTextAreaElement)
-          ) {
-            event.preventDefault()
-            event.stopPropagation()
-            void submit()
-          }
-        }}
-        fullWidth
-        maxWidth="sm"
-        aria-labelledby={titleId}
-        slotProps={{
-          backdrop: {
-            sx: {
-              backgroundColor: 'rgba(12, 12, 16, 0.62)',
-              backdropFilter: 'blur(2px)',
-            },
-          },
-          paper: { sx: { borderRadius: '10px', p: { xs: 1.5, sm: 2 } } },
-        }}
-      >
-        <DialogContent sx={{ p: 0, pb: 1.5 }}>
-          <Typography id={titleId} sx={{ fontSize: 17, fontWeight: 700, mb: 2 }}>
-            Изменить транзакцию
-          </Typography>
+      <BottomSheet open={open} onClose={close} title="Изменить транзакцию">
+        <Stack spacing={2}>
+          {formError && <Alert severity="error">{formError}</Alert>}
 
-          {formError && (
-            <Alert severity="error" sx={{ mb: 1.5, borderRadius: '8px' }}>
-              {formError}
-            </Alert>
-          )}
+          <ToggleButtonGroup
+            value={type}
+            exclusive
+            onChange={(_, value) => value && setType(value)}
+            size="small"
+            fullWidth
+            aria-label="Тип операции"
+          >
+            <ToggleButton value="expense" sx={{ flex: 1, color: colors.red }}>Расход</ToggleButton>
+            <ToggleButton value="income" sx={{ flex: 1, color: colors.green }}>Доход</ToggleButton>
+          </ToggleButtonGroup>
 
-          <Stack spacing={2}>
-            <ToggleButtonGroup
-              value={type}
-              exclusive
-              onChange={(_, v) => v && setType(v)}
-              size="small"
+          <Stack direction="row" spacing={1} alignItems="flex-start">
+            <TextField
+              label="Название"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
               fullWidth
-              aria-label="Тип операции"
-            >
-              <ToggleButton value="expense" sx={{ flex: 1, color: colors.red }}>
-                Расход
-              </ToggleButton>
-              <ToggleButton value="income" sx={{ flex: 1, color: colors.green }}>
-                Доход
-              </ToggleButton>
-            </ToggleButtonGroup>
+              required
+              autoFocus
+              placeholder="Например: Кофе, проезд, зарплата"
+              sx={{ '& .MuiInputBase-root': { height: 56 } }}
+            />
+            <Tooltip title="Создать алиас названия">
+              <span>
+                <IconButton
+                  aria-label="Создать алиас названия"
+                  color="primary"
+                  onClick={() => setAliasScope('product')}
+                  disabled={!name.trim()}
+                  sx={{ width: 56, minWidth: 56, height: 56, minHeight: 56, p: 0, mt: 0, borderRadius: '6px', border: '1px solid', borderColor: 'divider', flexShrink: 0 }}
+                >
+                  <AddLinkOutlinedIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Stack>
 
-            <Stack direction="row" spacing={1} alignItems="flex-start">
-              <TextField
-                label="Название"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                fullWidth
-                required
-                autoFocus
-                placeholder="Например: Кофе, проезд, зарплата"
-                helperText={tx.nameAliasName ? `Алиас: оригинал «${tx.nameSource}»` : ' '}
-                sx={{ '& .MuiInputBase-root': { minHeight: 56 } }}
-              />
-              <Tooltip title="Создать алиас названия">
-                <span>
-                  <IconButton
-                    aria-label="Создать алиас названия"
-                    color="primary"
-                    onClick={() => setAliasScope('product')}
-                    disabled={!name.trim()}
-                    sx={{ width: 56, height: 56, mt: 0, borderRadius: '6px', border: `1px solid ${theme.palette.divider}`, flexShrink: 0 }}
-                  >
-                    <AddLinkOutlinedIcon />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </Stack>
-
-            <Stack direction="row" spacing={1} alignItems="flex-start">
-              <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Stack direction="row" spacing={1} alignItems="flex-start">
+            <Box sx={{ flex: 1, minWidth: 0 }}>
               <Autocomplete
                 freeSolo
                 openOnFocus
-                clearOnEscape
                 autoHighlight
                 autoSelect
                 selectOnFocus
                 options={storeOptions}
                 value={selectedStore}
                 inputValue={store}
-                open={storePopupOpen}
-                onOpen={() => setStorePopupOpen(true)}
-                onClose={() => setStorePopupOpen(false)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    const query = store.trim().toLocaleLowerCase()
-                    const firstMatch = storeOptions.find((option) => {
-                      const label = option.alias_name || option.normalized_seller_name || option.seller_name
-                      return !query || label.toLocaleLowerCase().includes(query)
-                    })
-                    if (storePopupOpen && firstMatch) {
-                      event.preventDefault()
-                      setSelectedStore(firstMatch)
-                      setStore(firstMatch.alias_name || firstMatch.normalized_seller_name || firstMatch.seller_name)
-                      setStoreEdited(true)
-                      setStorePopupOpen(false)
-                    }
-                    // Never let the dialog treat Enter in this field as submit.
-                    event.stopPropagation()
-                  }
-                }}
                 onChange={(_, value) => {
                   if (typeof value === 'string') {
                     setSelectedStore(null)
                     setStore(value)
-                    setStoreEdited(true)
                   } else {
                     setSelectedStore(value)
                     setStore(value ? value.alias_name || value.normalized_seller_name || value.seller_name : '')
-                    setStoreEdited(true)
                   }
+                  setStoreEdited(true)
                 }}
                 onInputChange={(_, value, reason) => {
                   if (reason === 'input' || reason === 'clear') {
@@ -346,161 +234,99 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
                     label="Магазин (необязательно)"
                     placeholder="Выберите или введите новый"
                     helperText={selectedStore?.alias_name ? `Алиас: оригинал «${selectedStore.seller_name}»` : 'Можно выбрать существующий или ввести новый'}
-                    sx={{ '& .MuiInputBase-root': { minHeight: 56 } }}
-                    slotProps={{
-                      input: {
-                        ...params.InputProps,
-                        endAdornment: (
-                          <>
-                            {selectedStore?.alias_name && <Chip label="алиас" size="small" color="primary" sx={{ mr: 0.5 }} />}
-                            {params.InputProps.endAdornment}
-                          </>
-                        ),
-                      },
-                    }}
+                    sx={{ '& .MuiInputBase-root': { height: 56 } }}
                   />
                 )}
               />
-              </Box>
-              <Tooltip title="Создать алиас магазина">
-                <span>
-                  <IconButton
-                    aria-label="Создать алиас магазина"
-                    color="primary"
-                    onClick={() => setAliasScope('seller')}
-                    disabled={!store.trim()}
-                    sx={{ width: 56, height: 56, mt: 0, borderRadius: '6px', border: `1px solid ${theme.palette.divider}`, flexShrink: 0 }}
-                  >
-                    <AddLinkOutlinedIcon />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </Stack>
-
-            <TextField
-              label="Комментарий (необязательно)"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              fullWidth
-              multiline
-              minRows={2}
-              maxRows={4}
-              placeholder="Заметка к транзакции"
-            />
-
-            <Stack direction="row" spacing={1.5}>
-              <NumericField
-                label="Цена, ₽"
-                value={price}
-                onChange={setPrice}
-                required
-                min={0.01}
-                step={1}
-                placeholder="139,90"
-                error={price !== '' && (!Number.isFinite(priceNum) || priceNum <= 0)}
-                helperText={price !== '' && (!Number.isFinite(priceNum) || priceNum <= 0) ? 'Цена должна быть больше 0' : ' '}
-              />
-              <NumericField
-                label="Кол-во"
-                value={quantity}
-                onChange={setQuantity}
-                min={1}
-                step={1}
-                placeholder="1"
-                error={quantity !== '' && (!Number.isFinite(qtyNum) || qtyNum <= 0)}
-                helperText={quantity !== '' && (!Number.isFinite(qtyNum) || qtyNum <= 0) ? 'Кол-во должно быть больше 0' : ' '}
-              />
-            </Stack>
-
-            <Stack direction="row" spacing={1.5}>
-              <TextField label="Дата" type="date" value={date} onChange={(e) => setDate(e.target.value)} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-              <TextField
-                label="Сумма, ₽"
-                value={amountText}
-                fullWidth
-                slotProps={{ input: { readOnly: true } }}
-                placeholder="—"
-                helperText="Считается автоматически"
-              />
-            </Stack>
-
-            <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-                Тег
-              </Typography>
-              <TextField
-                value={tagSearch}
-                onChange={(event) => setTagSearch(event.target.value)}
-                placeholder="Найти тег по названию"
-                size="small"
-                fullWidth
-                sx={{ mb: 1 }}
-                inputProps={{ 'aria-label': 'Поиск тега по названию' }}
-              />
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-                {tagSearch.trim() ? 'Результаты поиска' : 'Недавние теги'}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', minHeight: 34 }}>
-                {(tags ?? [])
-                  .filter((tag) => !tagSearch.trim() || tag.name.toLocaleLowerCase().includes(tagSearch.trim().toLocaleLowerCase()))
-                  .slice(0, tagSearch.trim() ? undefined : 8)
-                  .map((tag) => (
-                    <Chip
-                      key={tag.id}
-                      label={tag.name}
-                      clickable
-                      onClick={() => setSelectedTag((prev) => (prev === tag.id ? null : tag.id))}
-                      sx={{
-                        bgcolor: `${tag.color}1A`,
-                        color: theme.palette.text.primary,
-                        border: `1px solid ${tag.color}66`,
-                        borderRadius: '6px',
-                        '&:hover': { bgcolor: `${tag.color}33` },
-                        ...(selectedTag === tag.id && {
-                          bgcolor: `${tag.color}40`,
-                          borderColor: tag.color,
-                          boxShadow: `0 0 0 1px ${tag.color}`,
-                        }),
-                        '& .MuiChip-label': { px: 1.25 },
-                      }}
-                    />
-                  ))}
-              </Box>
             </Box>
+            <Tooltip title="Создать алиас магазина">
+              <span>
+                <IconButton
+                  aria-label="Создать алиас магазина"
+                  color="primary"
+                  onClick={() => setAliasScope('seller')}
+                  disabled={!store.trim()}
+                  sx={{ width: 56, minWidth: 56, height: 56, minHeight: 56, p: 0, mt: 0, borderRadius: '6px', border: '1px solid', borderColor: 'divider', flexShrink: 0 }}
+                >
+                  <AddLinkOutlinedIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
           </Stack>
-        </DialogContent>
 
-        <DialogActions sx={{ px: 0, pb: 0.5, justifyContent: 'space-between', gap: 1 }}>
-          <Button
-            variant="text"
-            color="error"
-            startIcon={<DeleteOutlineIcon />}
-            onClick={() => setConfirmOpen(true)}
-            disabled={deleteTx.isPending}
-            sx={{
-              borderRadius: '8px',
-              color: colors.red,
-              '&:hover': { bgcolor: alpha(colors.red, theme.palette.mode === 'dark' ? 0.15 : 0.08) },
-            }}
-          >
-            Удалить
-          </Button>
-          <Stack direction="row" spacing={1} sx={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Button variant="text" onClick={onClose} disabled={updateTx.isPending || deleteTx.isPending} sx={{ borderRadius: '8px' }}>
-              Отмена
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => void submit()}
-              disabled={updateTx.isPending || deleteTx.isPending}
-              size={isMobile ? 'medium' : 'small'}
-              sx={{ borderRadius: '8px', minWidth: 110 }}
-            >
-              {updateTx.isPending ? <CircularProgress size={20} color="inherit" /> : 'Сохранить'}
-            </Button>
+          <TextField
+            label="Комментарий (необязательно)"
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            fullWidth
+            multiline
+            minRows={2}
+            maxRows={4}
+            placeholder="Заметка к транзакции"
+          />
+
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+            <NumericField
+              label="Цена, ₽"
+              value={price}
+              onChange={setPrice}
+              required
+              min={0.01}
+              step={1}
+              placeholder="139,90"
+              error={price !== '' && (!Number.isFinite(priceNum) || priceNum <= 0)}
+              helperText={price !== '' && (!Number.isFinite(priceNum) || priceNum <= 0) ? 'Цена должна быть больше 0' : ' '}
+            />
+            <NumericField
+              label="Кол-во"
+              value={quantity}
+              onChange={setQuantity}
+              min={1}
+              step={1}
+              placeholder="1"
+              error={quantity !== '' && (!Number.isFinite(qtyNum) || qtyNum <= 0)}
+              helperText={quantity !== '' && (!Number.isFinite(qtyNum) || qtyNum <= 0) ? 'Кол-во должно быть больше 0' : ' '}
+            />
           </Stack>
-        </DialogActions>
-      </Dialog>
+
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+            <TextField label="Дата" type="date" value={date} onChange={(event) => setDate(event.target.value)} fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+            <TextField
+              label="Сумма, ₽"
+              value={amountText}
+              fullWidth
+              slotProps={{ input: { readOnly: true } }}
+              placeholder="—"
+              helperText="Считается автоматически"
+            />
+          </Stack>
+
+          <TagAutocomplete tags={tags ?? []} value={selectedTag} onChange={setSelectedTag} />
+
+          <Box sx={{ position: 'sticky', bottom: 0, zIndex: 1, pt: 1, pb: 'env(safe-area-inset-bottom)', bgcolor: 'background.paper' }}>
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteOutlineIcon />}
+                onClick={() => { setDeleteError(null); setConfirmOpen(true) }}
+                disabled={updateTx.isPending || deleteTx.isPending}
+                sx={{ flex: 1, minWidth: 0, minHeight: 48 }}
+              >
+                Удалить
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => void submit()}
+                disabled={updateTx.isPending || deleteTx.isPending}
+                sx={{ flex: 1, minWidth: 0, minHeight: 48 }}
+              >
+                {updateTx.isPending ? <CircularProgress size={20} color="inherit" /> : 'Сохранить'}
+              </Button>
+            </Stack>
+          </Box>
+        </Stack>
+      </BottomSheet>
 
       <ConfirmDialog
         open={confirmOpen}
@@ -508,18 +334,16 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
         message={`«${tx.name}» будет удалена безвозвратно.`}
         confirmLabel="Удалить"
         pending={deleteTx.isPending}
-        error={formError}
+        error={deleteError}
         onConfirm={() => void handleDelete()}
         onClose={() => setConfirmOpen(false)}
       />
-      {aliasScope && (
-        <CreateAliasDialog
-          open
-          scope={aliasScope}
-          originalName={aliasScope === 'seller' ? store : name}
-          onClose={() => setAliasScope(null)}
-        />
-      )}
+      <CreateAliasDialog
+        open={aliasScope !== null}
+        scope={aliasScope ?? 'product'}
+        originalName={aliasScope === 'seller' ? store : name}
+        onClose={() => setAliasScope(null)}
+      />
     </>
   )
 }

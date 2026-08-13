@@ -6,19 +6,12 @@ import {
   Chip,
   Stack,
   TextField,
-  ToggleButton,
-  ToggleButtonGroup,
   Typography,
 } from '@mui/material'
 import { BottomSheet } from '../common/BottomSheet'
-import { useUiStore, type PeriodKey } from '../../store/uiStore'
+import { useUiStore } from '../../store/uiStore'
 import type { Store, Tag } from '../../api/types'
 
-const PERIODS: Array<{ key: PeriodKey; label: string }> = [
-  { key: 'thisMonth', label: 'Месяц' },
-  { key: '3m', label: '3 мес' },
-  { key: 'all', label: 'Всё' },
-]
 
 interface FilterSheetProps {
   tags: Tag[] | undefined
@@ -31,14 +24,13 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
   const search = useUiStore((s) => s.search)
   const tagFilterIds = useUiStore((s) => s.tagFilterIds)
   const storeFilters = useUiStore((s) => s.storeFilters)
-  const periodKey = useUiStore((s) => s.periodKey)
   const applyFilters = useUiStore((s) => s.applyFilters)
   const resetFilters = useUiStore((s) => s.resetFilters)
 
   const [localSearch, setLocalSearch] = useState(search)
   const [localTagFilterIds, setLocalTagFilterIds] = useState<string[]>(tagFilterIds)
   const [localStoreFilters, setLocalStoreFilters] = useState<string[]>(storeFilters)
-  const [localPeriodKey, setLocalPeriodKey] = useState(periodKey)
+
   const uniqueStores = useMemo(() => {
     const byDisplayName = new Map<string, Store>()
     for (const store of stores) {
@@ -60,15 +52,14 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
     setLocalSearch(search)
     setLocalTagFilterIds(tagFilterIds)
     setLocalStoreFilters(storeFilters)
-    setLocalPeriodKey(periodKey)
-  }, [open, search, tagFilterIds, storeFilters, periodKey])
+  }, [open, search, tagFilterIds, storeFilters])
 
   const apply = () => {
     applyFilters({
       search: localSearch,
       tagFilterIds: localTagFilterIds,
       storeFilters: localStoreFilters,
-      periodKey: localPeriodKey,
+      periodKey: useUiStore.getState().periodKey,
     })
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
     close()
@@ -99,18 +90,6 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
           placeholder="Магазин, описание…"
         />
 
-        <Box>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-            Период
-          </Typography>
-          <ToggleButtonGroup value={localPeriodKey} exclusive onChange={(_, v) => v && setLocalPeriodKey(v)} size="small" fullWidth>
-            {PERIODS.map((p) => (
-              <ToggleButton key={p.key} value={p.key} sx={{ flex: 1 }}>
-                {p.label}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        </Box>
 
         <Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>

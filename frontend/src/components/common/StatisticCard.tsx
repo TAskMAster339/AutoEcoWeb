@@ -37,7 +37,7 @@ export function StatisticCard({ label, value, delta, sparkline, icon, hint }: St
   const deltaColor = delta === null || delta === undefined ? colors.textSecondary : delta >= 0 ? colors.green : colors.red
 
   return (
-    <Card sx={{ p: 2.25, minWidth: 0, height: '100%' }}>
+    <Card sx={{ p: { xs: 1.5, sm: 2.25 }, minWidth: 0, height: '100%', overflow: 'hidden' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
         <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
           {label}
@@ -64,7 +64,7 @@ export function StatisticCard({ label, value, delta, sparkline, icon, hint }: St
             </Box>
           )}
           {hint && (
-            <Typography variant="caption" color="text.secondary" noWrap>
+            <Typography variant="caption" color="text.secondary" sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>
               {hint}
             </Typography>
           )}

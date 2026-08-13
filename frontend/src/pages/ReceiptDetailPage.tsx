@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
     Box,
     Button,
@@ -12,13 +12,17 @@ import {
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import DownloadIcon from '@mui/icons-material/Download'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getReceipt, fetchReceiptRaw } from '../api/receipts'
+import { messageFromError } from '../api/client'
 import { useTags } from '../hooks/useTags'
+import { useDeleteReceipt } from '../hooks/useReceipts'
 import { useOnline } from '../hooks/useOnline'
 import { LoadingState, ErrorState, OfflineState } from '../components/common/States'
 import { TagChip } from '../components/common/TagChip'
+import { ConfirmDialog } from '../components/common/ConfirmDialog'
 import { isIncomeOperation } from '../api/transactions'
 import { displayAlias } from '../lib/aliases'
 import { formatCurrency, pluralRu } from '../lib/format'
@@ -64,6 +68,8 @@ export function ReceiptDetailPage() {
     const { id } = useParams<{ id: string }>()
     const online = useOnline()
     const { data: tags } = useTags()
+    const deleteReceipt = useDeleteReceipt()
+    const [deleteOpen, setDeleteOpen] = useState(false)
 
     const tagsMap = useMemo(() => new Map((tags ?? []).map((t) => [t.id, t])), [tags])
 
@@ -86,6 +92,13 @@ export function ReceiptDetailPage() {
         const raw = rawQuery.data
         if (!raw) return
         downloadJson(`receipt-${receipt?.receipt_number ?? receipt?.id ?? 'raw'}.json`, raw)
+    }
+
+    const confirmDelete = () => {
+        if (!id) return
+        deleteReceipt.mutate(id, {
+            onSuccess: () => navigate('/dashboard', { replace: true }),
+        })
     }
 
     if (!online) return <OfflineState />
@@ -113,23 +126,37 @@ export function ReceiptDetailPage() {
 
     return (
         <Stack spacing={2} sx={{ maxWidth: 720, mx: 'auto', width: '100%' }}>
-            {/* Верх: назад + заголовок + скачать raw */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {/* Верх: назад + заголовок + действия с чеком */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'auto minmax(0, 1fr)', sm: 'auto minmax(0, 1fr) auto' }, alignItems: 'center', gap: 1 }}>
                 <IconButton aria-label="Назад" onClick={() => navigate(-1)}>
                     <ArrowBackIcon />
                 </IconButton>
-                <Typography variant="h5" sx={{ fontWeight: 700, flex: 1 }}>
+                <Typography variant="h5" sx={{ fontWeight: 700, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {store}
                 </Typography>
-                <Button
-                    variant="outlined"
-                    startIcon={<DownloadIcon />}
-                    onClick={downloadRaw}
-                    disabled={rawQuery.isLoading}
-                    sx={{ borderRadius: '8px', flexShrink: 0 }}
-                >
-                    {rawQuery.isLoading ? 'Загрузка…' : 'Скачать raw'}
-                </Button>
+                <Stack direction="row" spacing={1} sx={{ gridColumn: { xs: '1 / -1', sm: 'auto' }, width: { xs: '100%', sm: 'auto' } }}>
+                    <Button
+                        fullWidth
+                        variant="outlined"
+                        startIcon={<DownloadIcon />}
+                        onClick={downloadRaw}
+                        disabled={rawQuery.isLoading || deleteReceipt.isPending}
+                        sx={{ borderRadius: '8px', whiteSpace: 'nowrap' }}
+                    >
+                        {rawQuery.isLoading ? 'Загрузка…' : 'Скачать raw'}
+                    </Button>
+                    <Button
+                        fullWidth
+                        variant="outlined"
+                        color="error"
+                        startIcon={<DeleteOutlineIcon />}
+                        onClick={() => setDeleteOpen(true)}
+                        disabled={deleteReceipt.isPending}
+                        sx={{ borderRadius: '8px', whiteSpace: 'nowrap' }}
+                    >
+                        Удалить чек
+                    </Button>
+                </Stack>
             </Box>
 
             {/* Сводка */}
@@ -295,6 +322,21 @@ export function ReceiptDetailPage() {
                     </Stack>
                 )}
             </Card>
+
+            <ConfirmDialog
+                open={deleteOpen}
+                title="Удалить чек?"
+                message={
+                    <>
+                        Чек магазина <strong>{store}</strong> и все его {pluralRu(totalPositions, ['транзакция', 'транзакции', 'транзакций'])} будут удалены безвозвратно.
+                    </>
+                }
+                confirmLabel="Удалить чек"
+                pending={deleteReceipt.isPending}
+                error={deleteReceipt.isError ? messageFromError(deleteReceipt.error) : null}
+                onConfirm={confirmDelete}
+                onClose={() => setDeleteOpen(false)}
+            />
         </Stack>
     )
 }

@@ -67,7 +67,8 @@ const router = createBrowserRouter([
                         children: [
                             { path: '/', element: <Navigate to="/transactions" replace /> },
                             { path: '/transactions', element: suspense(<TransactionsPage />) },
-                            { path: '/dashboard', element: suspense(<DashboardPage />) },
+                            { path: '/receipt', element: suspense(<DashboardPage />) },
+                            { path: '/dashboard', element: <Navigate to="/receipt" replace /> },
                             { path: '/analytics', element: suspense(<AnalyticsPage />) },
                             { path: '/tags', element: suspense(<TagsPage />) },
                             { path: '/sellers', element: suspense(<SellersPage />) },

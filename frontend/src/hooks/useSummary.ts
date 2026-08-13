@@ -1,21 +1,23 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchAnalytics, fetchPriceChart, fetchSummary } from '../api/summary'
-import { useFilterParams } from '../lib/filters'
+import { useFilterParams, usePeriodParams } from '../lib/filters'
+import type { TransactionsPageParams } from '../api/transactions'
 
-/** Сводка за выбранный период — параметры из стора, считает бэкенд. */
-export function useSummary() {
-  const params = useFilterParams()
+/** Сводка: по умолчанию учитывает фильтры таблицы; другая страница передаёт свои. */
+export function useSummary(params?: TransactionsPageParams) {
+  const tableParams = useFilterParams()
+  const queryParams = params ?? tableParams
   return useQuery({
-    queryKey: ['summary', params],
-    queryFn: () => fetchSummary(params),
+    queryKey: ['summary', queryParams],
+    queryFn: () => fetchSummary(queryParams),
     staleTime: 30_000,
   })
 }
 
-/** Аналитика за выбранный период — параметры из стора, считает бэкенд. */
+/** Аналитика использует только глобальный период, без фильтров таблицы. */
 export function useAnalytics() {
-  const params = useFilterParams()
+  const params = usePeriodParams()
   return useQuery({
     queryKey: ['analytics', params],
     queryFn: () => fetchAnalytics(params),
@@ -23,9 +25,9 @@ export function useAnalytics() {
   })
 }
 
-/** Ценовой график товара — только период из стора (поиск/тег/магазин не применяются). */
+/** Ценовой график товара — только глобальный период. */
 export function usePriceChart(name: string, isRegex: boolean) {
-  const { date_from, date_to } = useFilterParams()
+  const { date_from, date_to } = usePeriodParams()
   const period = useMemo(() => ({ date_from, date_to }), [date_from, date_to])
   const query = name.trim()
   const enabled = query.length > 0

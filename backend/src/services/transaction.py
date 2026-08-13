@@ -594,6 +594,11 @@ class TransactionService:
             name, alias_id = await self._resolve_name(user.id, fields["name"])
             fields["normalized_name"] = normalize_product_name(name)
             fields["name_alias_id"] = alias_id
+        # В API поле называется datetime, а ORM-атрибут — check_datetime
+        # (колонка БД также называется datetime). Без маппинга setattr создаёт
+        # обычный transient-атрибут, поэтому дата после перезагрузки возвращалась прежней.
+        if "datetime" in fields:
+            fields["check_datetime"] = fields.pop("datetime")
         previous_seller_id = tx.seller_id
         if "seller_name" in fields:
             seller_name = fields.pop("seller_name")
