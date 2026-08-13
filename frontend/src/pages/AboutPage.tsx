@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { ReactNode } from 'react'
 import {
     Alert,
@@ -361,6 +362,10 @@ export function AboutPage() {
     const theme = useTheme()
     const { topic = 'quick-start' } = useParams<{ topic?: string }>()
     const current = GUIDE_PAGES.find((page) => page.slug === topic)
+
+    useEffect(() => {
+        document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' })
+    }, [topic])
 
     if (!current) return <Navigate to="/about/quick-start" replace />
 
