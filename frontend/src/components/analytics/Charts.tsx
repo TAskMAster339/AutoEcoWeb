@@ -184,7 +184,7 @@ export function LineChart({
     return (
         <Box sx={{ position: 'relative', width: '100%', height: 220 }} role="img" aria-label={ariaLabel}>
             <ResponsiveContainer width="100%" height="100%">
-                <RechartsLineChart data={data} margin={{ top: 16, right: 8, bottom: 4, left: 4 }}>
+                <RechartsLineChart data={data} margin={{ top: 16, right: 8, bottom: 4, left: 4 }} accessibilityLayer={false}>
                     <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false} />
                     <XAxis
                         dataKey="label"
@@ -313,7 +313,7 @@ export function DonutChart({ items, formatValue, centerLabel = 'всего', dro
         >
             <Box sx={{ position: 'relative', width: 168, height: 168, flexShrink: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                    <PieChart accessibilityLayer={false}>
                         <Pie
                             data={data}
                             dataKey="value"
@@ -466,7 +466,7 @@ export function WeekdayBars({ data, formatValue }: WeekdayBarsProps) {
     return (
         <Box sx={{ position: 'relative', width: '100%', height: 200 }} role="img" aria-label="Траты по дням недели">
             <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={bars} margin={{ top: 16, right: 8, bottom: 0, left: 4 }}>
+                <BarChart data={bars} margin={{ top: 16, right: 8, bottom: 0, left: 4 }} accessibilityLayer={false}>
                     <CartesianGrid stroke={grid} strokeDasharray="3 3" vertical={false} />
                     <XAxis
                         dataKey="label"

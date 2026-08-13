@@ -101,15 +101,19 @@ export function TagsPage() {
     const error = infiniteTags.error
     const refetch = infiniteTags.refetch
     const handleEditorKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-        if (event.key !== 'Enter' && event.key !== 'Escape') return
-        event.preventDefault()
-        event.stopPropagation()
-        if (event.key === 'Enter') void submit()
-        else {
+        if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            if (createTag.isPending || updateTag.isPending) return
             setSheetOpen(false)
             setEditingTag(null)
             setFormError(null)
+            return
         }
+        if (event.key !== 'Enter' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return
+        event.preventDefault()
+        event.stopPropagation()
+        if (!createTag.isPending && !updateTag.isPending) void submit()
     }
 
     if (isLoading) return <LoadingState label="Загружаем теги…" />

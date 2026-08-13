@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import type { KeyboardEvent } from 'react'
 import { Alert, Box, Button, Card, Stack, TextField, Typography } from '@mui/material'
 
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined'
@@ -28,6 +29,18 @@ export function SellersPage() {
         if (!editing || !name.trim()) return setError('Укажите название магазина')
         try { await update.mutateAsync({ id: editing.seller_id, name: name.trim() }); setEditing(null) }
         catch (e) { setError(e instanceof Error ? e.message : 'Не удалось изменить магазин') }
+    }
+    const handleEditorKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+        if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            if (!update.isPending) setEditing(null)
+            return
+        }
+        if (event.key !== 'Enter' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return
+        event.preventDefault()
+        event.stopPropagation()
+        if (!update.isPending) void save()
     }
     const rows = useMemo(() => (sellers.data ?? []).filter((seller) => {
         const label = seller.alias_name || seller.normalized_seller_name || seller.seller_name
@@ -77,15 +90,15 @@ export function SellersPage() {
                 })}
             </Box>}
         <BottomSheet open={editing !== null} onClose={() => { if (!update.isPending) setEditing(null) }} title="Изменить магазин" maxWidth={480} maxHeight="55dvh" height="50dvh">
-          <Stack spacing={2}>
-            <Typography variant="body2" color="text.secondary">Новое название будет использоваться во всём приложении.</Typography>
-            {error && <Alert severity="error">{error}</Alert>}
-            <TextField label="Название" value={name} onChange={(e) => setName(e.target.value)} autoFocus fullWidth />
-            <Stack direction="row" spacing={1}>
-              <Button fullWidth variant="outlined" onClick={() => setEditing(null)} disabled={update.isPending}>Отмена</Button>
-              <Button fullWidth variant="contained" onClick={() => void save()} disabled={update.isPending}>{update.isPending ? 'Сохраняем…' : 'Сохранить'}</Button>
+            <Stack spacing={2} onKeyDown={handleEditorKeyDown}>
+                <Typography variant="body2" color="text.secondary">Новое название будет использоваться во всём приложении.</Typography>
+                {error && <Alert severity="error">{error}</Alert>}
+                <TextField label="Название" value={name} onChange={(e) => setName(e.target.value)} autoFocus fullWidth />
+                <Stack direction="row" spacing={1}>
+                    <Button fullWidth variant="outlined" onClick={() => setEditing(null)} disabled={update.isPending}>Отмена</Button>
+                    <Button fullWidth variant="contained" onClick={() => void save()} disabled={update.isPending}>{update.isPending ? 'Сохраняем…' : 'Сохранить'}</Button>
+                </Stack>
             </Stack>
-          </Stack>
         </BottomSheet>
         <ConfirmDialog
             open={deleteTarget !== null}

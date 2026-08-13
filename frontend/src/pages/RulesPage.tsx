@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { KeyboardEvent } from 'react'
 import type { ReactNode } from 'react'
 import {
     Alert,
@@ -173,6 +174,19 @@ export function RulesPage() {
         }
     }
 
+    const handleEditorKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+        if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            if (!createAlias.isPending && !updateAlias.isPending) closeSheet()
+            return
+        }
+        if (event.key !== 'Enter' || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return
+        event.preventDefault()
+        event.stopPropagation()
+        if (!createAlias.isPending && !updateAlias.isPending) void submit()
+    }
+
     const runApplyAll = async () => {
         setConfirmOpen(false)
         try {
@@ -239,7 +253,7 @@ export function RulesPage() {
             </Box>
 
             <BottomSheet open={sheetOpen} onClose={closeSheet} title={editingAlias ? `Редактировать правило ${SCOPE_LABEL[scope]}` : `Новое правило ${SCOPE_LABEL[scope]}`}>
-                <Stack spacing={2}>
+                <Stack spacing={2} onKeyDown={handleEditorKeyDown}>
                     {formError && <Alert severity="error">{formError}</Alert>}
                     <TextField label="Шаблон" value={original} onChange={(e) => setOriginal(e.target.value)} fullWidth placeholder={scope === 'seller' ? 'например: перекресток|перекрёсток' : 'например: РАЭ Сырок тв.гл.с вар.сг.15%45г'} autoFocus />
                     <TextField label="Название по правилу" value={alias} onChange={(e) => setAlias(e.target.value)} fullWidth placeholder={scope === 'seller' ? 'например: Перекрёсток' : 'например: Глазированный сырок'} />
