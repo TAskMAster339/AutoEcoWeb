@@ -371,8 +371,6 @@ export function AboutPage() {
 
     return (
         <Stack spacing={2.5} sx={{ maxWidth: 1080, mx: 'auto', width: '100%', pb: 2 }}>
-            <PageHeader title="Справка AutoEco" subtitle="Короткие инструкции о чеках, расчётах и организации данных" />
-
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 260px' }, gap: { xs: 1.5, md: 2.5 }, alignItems: 'start' }}>
                 <Card component="article" sx={{ order: { xs: 1, md: 1 }, p: { xs: 2, sm: 3.5 } }}>
                     <Stack spacing={{ xs: 2.25, sm: 3 }}>
