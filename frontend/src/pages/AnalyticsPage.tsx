@@ -19,6 +19,7 @@ import { PriceChartCard } from '../components/analytics/PriceChartCard'
 import { StatisticCard } from '../components/common/StatisticCard'
 import { LoadingState, ErrorState, OfflineState } from '../components/common/States'
 import { useAnalytics, useSummary } from '../hooks/useSummary'
+import { useTags } from '../hooks/useTags'
 import { useOnline } from '../hooks/useOnline'
 import { formatCurrency, plural } from '../lib/format'
 import { useUiStore } from '../store/uiStore'
@@ -35,7 +36,9 @@ export function AnalyticsPage() {
     const periodParams = usePeriodParams()
 
     const { data, isLoading, isError, error, refetch } = useAnalytics()
+    const { data: tags, isLoading: tagsLoading } = useTags()
     const summary = useSummary(periodParams)
+    const tagsMap = useMemo(() => new Map((tags ?? []).map((tag) => [tag.id, tag])), [tags])
 
     // Переход на транзакции с фильтром магазина(ов): «Другое» выбирает все
     // слитые магазины сразу (мульти-фильтр ?store=A&store=B). Сброс поиска и
@@ -88,17 +91,18 @@ export function AnalyticsPage() {
             value: c.value,
             color: c.tag.color,
             id: c.tag.id,
+            icon: tagsMap.get(c.tag.id)?.icon ?? null,
         }))
         return mergeSmallSlices(colored).map((s) =>
             s.label === 'Другое' ? { ...s, color: OTHER_SLICE_COLOR, id: undefined } : s,
         )
-    }, [data])
+    }, [data, tagsMap])
 
     // Разность доходов и расходов за период — как на странице транзакций:
     // зелёная при >= 0, красная при < 0.
     const net = summary.data ? summary.data.income - summary.data.expenses : undefined
 
-    if (isLoading) {
+    if (isLoading || tagsLoading) {
         return (
             <Stack spacing={2}>
                 <Skeleton variant="rounded" height={96} sx={{ borderRadius: '8px' }} />
@@ -111,6 +115,7 @@ export function AnalyticsPage() {
     if (!data) return <LoadingState />
 
     const ind = data.indicators
+    const topCategoryIcon = ind.topCategory ? tagsMap.get(ind.topCategory.tag.id)?.icon : null
 
     return (
         <Stack spacing={2.25}>
@@ -143,10 +148,25 @@ export function AnalyticsPage() {
                     <StatisticCard
                         label="Самая частая категория"
                         value={ind.topCategory ? String(ind.topCategory.count) : '—'}
-                        hint={ind.topCategory ? ind.topCategory.tag.name : 'нет трат'}
+                        hint={ind.topCategory ? `${ind.topCategory.tag.name}${topCategoryIcon ? ` ${topCategoryIcon}` : ''}` : 'нет трат'}
                         icon={
                             ind.topCategory ? (
-                                <Box sx={{ width: 20, height: 20, borderRadius: '6px', bgcolor: ind.topCategory.tag.color }} />
+                                <Box
+                                    sx={{
+                                        width: 28,
+                                        height: 28,
+                                        display: 'grid',
+                                        placeItems: 'center',
+                                        borderRadius: '6px',
+                                        bgcolor: ind.topCategory.tag.color,
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        boxShadow: 1,
+                                        fontSize: 17,
+                                    }}
+                                >
+                                    {topCategoryIcon}
+                                </Box>
                             ) : (
                                 <CategoryIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                             )

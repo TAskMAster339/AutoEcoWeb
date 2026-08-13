@@ -1,7 +1,6 @@
 /**
  * Tags domain API — real endpoints, mirrors backend OpenAPI
- * (backend/src/api/v1/tags.py). Счётчик `count` бэкенд не отдаёт —
- * вычисляется на клиенте из чеков (TagsPage через useTransactions).
+ * (backend/src/api/v1/tags.py). Счётчик `count` считает backend.
  */
 import { api } from './client'
 import type { CursorPage, Tag } from './types'
@@ -12,11 +11,12 @@ interface TagResponse {
   name: string
   color: string
   icon: string | null
+  count: number
   created_at: string
 }
 
 function toTag(t: TagResponse): Tag {
-  return { id: t.id, name: t.name, color: t.color, count: 0 }
+  return { id: t.id, name: t.name, color: t.color, icon: t.icon, count: t.count }
 }
 
 export async function fetchTags(): Promise<Tag[]> {
@@ -41,11 +41,13 @@ export async function fetchTagsPage(limit: number, offset: number): Promise<Curs
 export interface TagDraft {
   name: string
   color: string
+  icon: string | null
 }
 
 export interface TagUpdatePatch {
   name?: string
   color?: string
+  icon?: string | null
 }
 
 export async function createTag(draft: TagDraft): Promise<Tag> {

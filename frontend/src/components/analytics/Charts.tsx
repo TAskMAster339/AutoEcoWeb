@@ -255,6 +255,8 @@ export interface DonutItem {
     label: string
     value: number
     color: string
+    /** Необязательная иконка категории рядом с подписью. */
+    icon?: string | null
     /** id для клика-перехода (например, id тега категории) */
     id?: string
     /** слитые в «Другое» элементы — клик по секции выбирает все оставшиеся */
@@ -362,7 +364,7 @@ export function DonutChart({ items, formatValue, centerLabel = 'всего', dro
 
             {tip && (
                 <TooltipCard
-                    title={tip.item.label}
+                    title={tip.item.icon ? `${tip.item.icon} ${tip.item.label}` : tip.item.label}
                     rows={tipRows(tip.item)}
                     style={{ position: 'fixed', left: tip.x + 14, top: tip.y + 14, zIndex: 1300, pointerEvents: 'none' }}
                 />
@@ -402,7 +404,7 @@ export function DonutChart({ items, formatValue, centerLabel = 'всего', dro
                         >
                             <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: item.color, flexShrink: 0 }} />
                             <Typography variant="body2" sx={{ flex: 1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {item.label}
+                                {item.label}{item.icon ? ` ${item.icon}` : ''}
                             </Typography>
                             <Typography variant="caption" className="tnum" color="text.secondary" sx={{ fontWeight: 600 }}>
                                 {pct}%

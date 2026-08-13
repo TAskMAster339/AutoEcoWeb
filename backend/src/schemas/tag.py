@@ -22,6 +22,7 @@ class TagResponse(BaseModel):
     name: str
     color: str
     icon: str | None
+    count: int
     created_at: datetime
 
     model_config = {

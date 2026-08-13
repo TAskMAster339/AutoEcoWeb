@@ -119,7 +119,8 @@ export function AddTransactionSheet() {
         if (
             event.key !== 'Enter' ||
             event.shiftKey || event.altKey || event.ctrlKey || event.metaKey ||
-            event.target instanceof HTMLTextAreaElement
+            event.target instanceof HTMLTextAreaElement ||
+            (event.target instanceof HTMLElement && event.target.getAttribute('role') === 'combobox')
         ) return
         event.preventDefault()
         event.stopPropagation()

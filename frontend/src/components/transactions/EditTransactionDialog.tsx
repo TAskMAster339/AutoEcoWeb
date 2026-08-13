@@ -155,8 +155,8 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
         }
         if (
             event.key !== 'Enter' ||
-            event.shiftKey || event.altKey || event.ctrlKey || event.metaKey ||
-            event.target instanceof HTMLTextAreaElement || confirmOpen || aliasScope !== null
+            !event.shiftKey || event.altKey || event.ctrlKey || event.metaKey ||
+            confirmOpen || aliasScope !== null
         ) return
         event.preventDefault()
         event.stopPropagation()

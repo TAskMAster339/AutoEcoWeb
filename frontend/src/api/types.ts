@@ -193,7 +193,9 @@ export interface Tag {
   name: string
   /** hex color for the chip */
   color: string
-  /** number of transactions with this tag — computed client-side from transactions */
+  /** Optional user-selected icon stored by the backend. */
+  icon: string | null
+  /** Number of transactions with this tag, computed by the backend. */
   count: number
 }
 

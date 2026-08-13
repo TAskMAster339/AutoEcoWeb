@@ -38,6 +38,7 @@ function invalidateAfterMutation(queryClient: ReturnType<typeof useQueryClient>)
   void queryClient.invalidateQueries({ queryKey: ['analytics'] })
   void queryClient.invalidateQueries({ queryKey: ['stores'] })
   void queryClient.invalidateQueries({ queryKey: ['tags'] })
+  void queryClient.invalidateQueries({ queryKey: ['tags-page'] })
   void queryClient.invalidateQueries({ queryKey: ['receipts'] })
 }
 

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
+import EmojiPicker, { EmojiStyle, Theme } from 'emoji-picker-react'
 import type { ChangeEvent, KeyboardEvent } from 'react'
 
 import {
@@ -9,6 +10,7 @@ import {
     Stack,
     TextField,
     Typography,
+    useTheme,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import CheckIcon from '@mui/icons-material/Check'
@@ -17,37 +19,30 @@ import { BottomSheet } from '../components/common/BottomSheet'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
 import { LoadingState, EmptyState, ErrorState, OfflineState } from '../components/common/States'
 import { useInfiniteTags, useCreateTag, useDeleteTag, useUpdateTag } from '../hooks/useTags'
-import { useTransactions } from '../hooks/useTransactions'
 import { useOnline } from '../hooks/useOnline'
 import { PageSearch } from '../components/common/PageSearch'
 import { useNavigate } from 'react-router-dom'
 import type { Tag } from '../api/types'
 
 const PALETTE = ['#16A34A', '#3B82F6', '#8B5CF6', '#F97316', '#06B6D4', '#F59E0B', '#EF4444', '#65A30D']
+const ICONS = ['🛒', '🍽️', '☕', '🚗', '🏠', '💊', '🎁', '✈️', '🎓', '💼', '🎮', '🐾', '❤️']
 
-/** Теги — manage category tags (реальный API; счётчики — из чеков). */
+/** Теги — manage category tags (реальный API, включая счётчики транзакций). */
 export function TagsPage() {
     const online = useOnline()
+    const theme = useTheme()
     const navigate = useNavigate()
     const infiniteTags = useInfiniteTags()
-    const { data: transactions } = useTransactions()
 
     const createTag = useCreateTag()
     const deleteTag = useDeleteTag()
     const updateTag = useUpdateTag()
 
-    // счётчик операций по тегу — из транзакций (бэкенд его не отдаёт)
-    const counts = useMemo(() => {
-        const m = new Map<string, number>()
-        for (const tx of transactions ?? []) {
-            if (tx.tag_id) m.set(tx.tag_id, (m.get(tx.tag_id) ?? 0) + 1)
-        }
-        return m
-    }, [transactions])
-
     const [sheetOpen, setSheetOpen] = useState(false)
     const [name, setName] = useState('')
     const [color, setColor] = useState(PALETTE[0] ?? '#16A34A')
+    const [icon, setIcon] = useState<string | null>(null)
+    const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
     const [formError, setFormError] = useState<string | null>(null)
     const [editingTag, setEditingTag] = useState<Tag | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<Tag | null>(null)
@@ -56,6 +51,8 @@ export function TagsPage() {
         setEditingTag(null)
         setName('')
         setColor(PALETTE[0] ?? '#16A34A')
+        setIcon(null)
+        setEmojiPickerOpen(false)
         setFormError(null)
         setSheetOpen(true)
     }
@@ -64,6 +61,8 @@ export function TagsPage() {
         setEditingTag(tag)
         setName(tag.name)
         setColor(tag.color)
+        setIcon(tag.icon)
+        setEmojiPickerOpen(false)
         setFormError(null)
         setSheetOpen(true)
     }
@@ -80,12 +79,13 @@ export function TagsPage() {
         }
         try {
             if (editingTag) {
-                await updateTag.mutateAsync({ id: editingTag.id, patch: { name: name.trim(), color } })
+                await updateTag.mutateAsync({ id: editingTag.id, patch: { name: name.trim(), color, icon } })
             } else {
-                await createTag.mutateAsync({ name: name.trim(), color })
+                await createTag.mutateAsync({ name: name.trim(), color, icon })
             }
             setName('')
             setColor(PALETTE[0] ?? '#16A34A')
+            setIcon(null)
             setEditingTag(null)
             setSheetOpen(false)
         } catch (error) {
@@ -149,17 +149,44 @@ export function TagsPage() {
                 >
                     {visibleTags.map((tag) => (
                         <Card key={tag.id} sx={{ aspectRatio: '1 / 1', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                            <Box
-                                component="button"
-                                type="button"
-                                onClick={() => navigate(`/transactions?tag=${encodeURIComponent(tag.id)}`)}
-                                title={`Открыть таблицу с тегом «${tag.name}»`}
-                                aria-label={`Открыть таблицу с фильтром по тегу ${tag.name}`}
-                                sx={{ flex: 1, minHeight: 0, border: 0, p: 0, bgcolor: tag.color, cursor: 'pointer' }}
-                            />
+                            <Box sx={{ position: 'relative', flex: 1, minHeight: 0, bgcolor: tag.color }}>
+                                <Box
+                                    component="button"
+                                    type="button"
+                                    onClick={() => navigate(`/transactions?tag=${encodeURIComponent(tag.id)}`)}
+                                    title={`Открыть таблицу с тегом «${tag.name}»`}
+                                    aria-label={`Открыть таблицу с фильтром по тегу ${tag.name}`}
+                                    sx={{ position: 'absolute', inset: 0, border: 0, p: 0, bgcolor: 'transparent', cursor: 'pointer' }}
+                                />
+                                {tag.icon && (
+                                    <Box
+                                        aria-label={`Иконка тега ${tag.name}`}
+                                        sx={{
+                                            position: 'absolute',
+                                            top: 12,
+                                            left: 12,
+                                            display: 'grid',
+                                            placeItems: 'center',
+                                            width: 42,
+                                            height: 42,
+                                            borderRadius: '8px',
+                                            bgcolor: 'rgba(255,255,255,0.9)',
+                                            border: '1px solid rgba(255,255,255,0.72)',
+                                            boxShadow: '0 5px 16px rgba(0,0,0,0.2)',
+                                            fontSize: 24,
+                                            lineHeight: 1,
+                                            pointerEvents: 'none',
+                                        }}
+                                    >
+                                        {tag.icon}
+                                    </Box>
+                                )}
+                            </Box>
                             <Box sx={{ bgcolor: 'background.paper', p: 1.5 }}>
                                 <Typography sx={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tag.name}</Typography>
-                                <Typography variant="caption" color="text.secondary">{counts.get(tag.id) ?? 0} операций</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    Транзакции: {tag.count > 0 ? tag.count : '—'}
+                                </Typography>
                                 <Stack direction="row" spacing={0.75} sx={{ mt: 1.25, justifyContent: 'space-between' }}>
                                     <Button
                                         size="small"
@@ -206,6 +233,7 @@ export function TagsPage() {
                 onClose={() => {
                     setSheetOpen(false)
                     setEditingTag(null)
+                    setEmojiPickerOpen(false)
                     setFormError(null)
                 }}
                 title={editingTag ? 'Редактировать тег' : 'Новый тег'}
@@ -220,6 +248,92 @@ export function TagsPage() {
                         placeholder="Например: Кафе"
                         autoFocus
                     />
+                    <Box>
+                        <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 0.75 }}>
+                            Шаблонные иконки
+                        </Typography>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 1 }}>
+                            <Box
+                                component="button"
+                                type="button"
+                                onClick={() => setIcon(null)}
+                                aria-label="Без иконки"
+                                aria-pressed={icon === null}
+                                sx={{
+                                    height: 40,
+                                    borderRadius: '8px',
+                                    border: '1px solid',
+                                    borderColor: icon === null ? 'primary.main' : 'divider',
+                                    bgcolor: icon === null ? 'action.selected' : 'background.paper',
+                                    color: 'text.secondary',
+                                    boxShadow: icon === null ? '0 0 0 1px currentColor' : 'none',
+                                    cursor: 'pointer',
+                                    fontSize: 18,
+                                }}
+                            >
+                                —
+                            </Box>
+                            {ICONS.map((item) => (
+                                <Box
+                                    key={item}
+                                    component="button"
+                                    type="button"
+                                    onClick={() => setIcon(item)}
+                                    aria-label={`Выбрать иконку ${item}`}
+                                    aria-pressed={icon === item}
+                                    sx={{
+                                        height: 40,
+                                        borderRadius: '8px',
+                                        border: '1px solid',
+                                        borderColor: icon === item ? 'primary.main' : 'divider',
+                                        bgcolor: icon === item ? 'action.selected' : 'background.paper',
+                                        boxShadow: icon === item ? '0 0 0 1px currentColor' : 'none',
+                                        cursor: 'pointer',
+                                        fontSize: 21,
+                                        lineHeight: 1,
+                                    }}
+                                >
+                                    {item}
+                                </Box>
+                            ))}
+                        </Box>
+
+                        <Typography sx={{ fontSize: 13, fontWeight: 700, mt: 2, mb: 0.75 }}>
+                            Свой эмодзи
+                        </Typography>
+                        <Button
+                            variant="outlined"
+                            fullWidth
+                            onClick={() => setEmojiPickerOpen((open) => !open)}
+                            aria-expanded={emojiPickerOpen}
+                            sx={{ justifyContent: 'flex-start', minHeight: 44, borderRadius: '8px', textTransform: 'none' }}
+                        >
+                            <Box component="span" sx={{ width: 30, mr: 1, fontSize: 22, lineHeight: 1, textAlign: 'center' }}>
+                                {icon && !ICONS.includes(icon) ? icon : '😀'}
+                            </Box>
+                            {icon && !ICONS.includes(icon) ? 'Выбрать другой эмодзи' : 'Выбрать любой эмодзи'}
+                        </Button>
+                        {emojiPickerOpen && (
+                            <Box
+                                onKeyDown={(event) => event.stopPropagation()}
+                                sx={{ mt: 1, width: '100%', overflow: 'hidden', borderRadius: '8px' }}
+                            >
+                                <EmojiPicker
+                                    width="100%"
+                                    height={340}
+                                    theme={theme.palette.mode === 'dark' ? Theme.DARK : Theme.LIGHT}
+                                    emojiStyle={EmojiStyle.NATIVE}
+                                    lazyLoadEmojis
+                                    searchPlaceholder="Поиск эмодзи"
+                                    previewConfig={{ showPreview: false }}
+                                    onEmojiClick={(emoji) => {
+                                        setIcon(emoji.emoji)
+                                        setEmojiPickerOpen(false)
+                                    }}
+                                />
+                            </Box>
+                        )}
+                    </Box>
                     <Box>
                         <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 0.75 }}>
                             Дефолтные цвета

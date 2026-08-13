@@ -80,6 +80,28 @@ def _item(name: str, price: str, quantity: str = "1") -> ReceiptItemData:
     )
 
 
+async def test_tag_lists_include_user_transaction_counts(session):
+    user = await _make_user(session)
+    tag_service = TagService(TagRepository(session))
+    food = await tag_service.create(user, TagCreate(name="Еда", color="#3B82F6"))
+    empty = await tag_service.create(user, TagCreate(name="Без операций", color="#16A34A"))
+    tx_service = _tx_service(session)
+
+    for name in ("Хлеб", "Молоко"):
+        await tx_service.create_standalone(
+            user,
+            TransactionCreate(name=name, amount=Decimal("10.00"), tag_id=food.id),
+        )
+
+    all_tags = await tag_service.list_all(user)
+    assert {tag.id: count for tag, count in all_tags} == {food.id: 2, empty.id: 0}
+
+    page, total = await tag_service.list_page(user, limit=1, offset=0)
+    assert total == 2  # noqa: PLR2004
+    assert len(page) == 1
+    assert page[0][1] == {food.id: 2, empty.id: 0}[page[0][0].id]
+
+
 # ---------- поиск с учётом товарных алиасов ----------
 
 

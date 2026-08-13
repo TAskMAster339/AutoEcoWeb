@@ -53,6 +53,7 @@ export function AddReceiptSheet() {
         void queryClient.invalidateQueries({ queryKey: ['summary'] })
         void queryClient.invalidateQueries({ queryKey: ['analytics'] })
         void queryClient.invalidateQueries({ queryKey: ['tags'] })
+        void queryClient.invalidateQueries({ queryKey: ['tags-page'] })
     }
 
     const stopScanner = () => {

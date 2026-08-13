@@ -9,6 +9,7 @@ import {
   Typography,
 } from '@mui/material'
 import { BottomSheet } from '../common/BottomSheet'
+import { TagChip } from '../common/TagChip'
 import { useUiStore } from '../../store/uiStore'
 import type { Store, Tag } from '../../api/types'
 
@@ -122,12 +123,10 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
           </Typography>
           <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
             {(tags ?? []).map((t) => (
-              <Chip
+              <TagChip
                 key={t.id}
-                label={t.name}
-                clickable
-                color={localTagFilterIds.includes(t.id) ? 'primary' : 'default'}
-                variant={localTagFilterIds.includes(t.id) ? 'filled' : 'outlined'}
+                tag={t}
+                selected={localTagFilterIds.includes(t.id)}
                 onClick={() => setLocalTagFilterIds((prev) => toggleInList(prev, t.id))}
               />
             ))}

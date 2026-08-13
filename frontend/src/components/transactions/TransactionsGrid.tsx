@@ -4,7 +4,6 @@ import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-quartz.css'
 import type { ColDef, IDatasource, IGetRowsParams } from 'ag-grid-community'
 import { Box, MenuItem, Select, Typography, useTheme } from '@mui/material'
-import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { TagChip } from '../common/TagChip'
 import { formatCurrency, formatNumber, formatShortDate } from '../../lib/format'
@@ -32,7 +31,7 @@ function TagsCell(props: CustomCellRendererProps<TransactionView, string | null>
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, height: '100%' }}>
       {tag ? (
-        <TagChip key={tag.id} tag={tag} size="compact" icon={<ReceiptLongOutlinedIcon sx={{ fontSize: 13 }} />} />
+        <TagChip key={tag.id} tag={tag} size="compact" />
       ) : (
         <Typography component="span" sx={{ color: 'text.secondary' }}>
           –

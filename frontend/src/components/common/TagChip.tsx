@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import { Chip, Box, useTheme } from '@mui/material'
 import { lighten } from '@mui/material/styles'
 import { colors } from '../../theme'
@@ -9,13 +8,11 @@ interface TagChipProps {
   onClick?: () => void
   selected?: boolean
   size?: 'small' | 'compact' | 'medium'
-  /** Optional leading icon (table mockup shows an icon instead of the dot). */
-  icon?: ReactNode
 }
 
 /** Colored pill for a tag (Продукты, Био, Молочка…), theme-aware:
  *  light — translucent tag color on white; dark — stronger tint + light text. */
-export function TagChip({ tag, onClick, selected, size = 'medium', icon }: TagChipProps) {
+export function TagChip({ tag, onClick, selected, size = 'medium' }: TagChipProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const compact = size === 'compact'
@@ -35,7 +32,15 @@ export function TagChip({ tag, onClick, selected, size = 'medium', icon }: TagCh
     <Chip
       label={
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
-          {icon ?? (
+          {tag.icon ? (
+            <Box
+              component="span"
+              aria-label={`Иконка тега ${tag.name}`}
+              sx={{ fontSize: compact ? 13 : 15, lineHeight: 1, flexShrink: 0 }}
+            >
+              {tag.icon}
+            </Box>
+          ) : (
             <Box
               sx={{
                 width: 8,

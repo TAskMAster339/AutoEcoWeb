@@ -79,7 +79,7 @@ interface RawAnalytics {
 
 function mapCategory(c: RawAnalytics['by_category'][number]): AnalyticsByCategory {
   return {
-    tag: { id: c.tag_id, name: c.tag_name, color: c.tag_color, count: 0 },
+    tag: { id: c.tag_id, name: c.tag_name, color: c.tag_color, icon: null, count: 0 },
     value: num(c.value),
     count: c.count,
   }

@@ -12,6 +12,7 @@ import { Footer } from './Footer'
 import { ScrollToTopButton } from './ScrollToTopButton'
 import { useOnline } from '../../hooks/useOnline'
 import { useAuthStore } from '../../store/authStore'
+import { useUiStore } from '../../store/uiStore'
 
 /**
  * Responsive app shell:
@@ -24,6 +25,9 @@ export function AppShell() {
   const online = useOnline()
   const user = useAuthStore((s) => s.user)
   const isVerifiedOnly = user?.status === 'verified'
+  const addMenuOpen = useUiStore((s) => s.addMenuOpen)
+  const transactionSheetOpen = useUiStore((s) => s.transactionSheetOpen)
+  const receiptSheetOpen = useUiStore((s) => s.receiptSheetOpen)
   const [mainElement, setMainElement] = useState<HTMLElement | null>(null)
 
   return (
@@ -86,9 +90,9 @@ export function AppShell() {
       {/* Global add flow is mounted once, so the central mobile + works on every page. */}
       {!isVerifiedOnly && (
         <>
-          <AddMenu />
-          <AddTransactionSheet />
-          <AddReceiptSheet />
+          {addMenuOpen && <AddMenu />}
+          {transactionSheetOpen && <AddTransactionSheet />}
+          {receiptSheetOpen && <AddReceiptSheet />}
         </>
       )}
     </Box>

@@ -11,13 +11,13 @@ class TagService:
     def __init__(self, repo: TagRepository) -> None:
         self._repo = repo
 
-    async def list_all(self, user: User) -> list[Tag]:
-        return await self._repo.list_all(user.id)
+    async def list_all(self, user: User) -> list[tuple[Tag, int]]:
+        return await self._repo.list_all_with_counts(user.id)
 
     async def list_page(
         self, user: User, *, limit: int, offset: int
-    ) -> tuple[list[Tag], int]:
-        return await self._repo.list_page(user.id, limit=limit, offset=offset)
+    ) -> tuple[list[tuple[Tag, int]], int]:
+        return await self._repo.list_page_with_counts(user.id, limit=limit, offset=offset)
 
     async def create(self, user: User, data: TagCreate) -> Tag:
         name = data.name.strip()

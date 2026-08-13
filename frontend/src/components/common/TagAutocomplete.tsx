@@ -38,19 +38,29 @@ export function TagAutocomplete({ tags, value, onChange }: TagAutocompleteProps)
           }}
         >
           <Typography component="span" noWrap>{tag.name}</Typography>
-          <Box
-            aria-label={`Цвет тега ${tag.name}`}
-            sx={{
-              width: 20,
-              height: 20,
-              borderRadius: '4px',
-              bgcolor: tag.color,
-              border: '1px solid',
-              borderColor: 'divider',
-              flexShrink: 0,
-              ml: 'auto',
-            }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto', flexShrink: 0 }}>
+            {tag.icon && (
+              <Typography
+                component="span"
+                aria-label={`Иконка тега ${tag.name}`}
+                sx={{ fontSize: 20, lineHeight: 1 }}
+              >
+                {tag.icon}
+              </Typography>
+            )}
+            <Box
+              aria-label={`Цвет тега ${tag.name}`}
+              sx={{
+                width: 20,
+                height: 20,
+                borderRadius: '4px',
+                bgcolor: tag.color,
+                border: '1px solid',
+                borderColor: 'divider',
+                flexShrink: 0,
+              }}
+            />
+          </Box>
         </Box>
       )}
       renderInput={(params) => (
@@ -65,19 +75,29 @@ export function TagAutocomplete({ tags, value, onChange }: TagAutocompleteProps)
               endAdornment: (
                 <>
                   {selectedTag && (
-                    <Box
-                      aria-label={`Цвет выбранного тега ${selectedTag.name}`}
-                      sx={{
-                        width: 20,
-                        height: 20,
-                        mr: 0.5,
-                        borderRadius: '4px',
-                        bgcolor: selectedTag.color,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        flexShrink: 0,
-                      }}
-                    />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mr: 0.5, flexShrink: 0 }}>
+                      {selectedTag.icon && (
+                        <Typography
+                          component="span"
+                          aria-label={`Иконка выбранного тега ${selectedTag.name}`}
+                          sx={{ fontSize: 19, lineHeight: 1 }}
+                        >
+                          {selectedTag.icon}
+                        </Typography>
+                      )}
+                      <Box
+                        aria-label={`Цвет выбранного тега ${selectedTag.name}`}
+                        sx={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: '4px',
+                          bgcolor: selectedTag.color,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          flexShrink: 0,
+                        }}
+                      />
+                    </Box>
                   )}
                   {params.InputProps.endAdornment}
                 </>

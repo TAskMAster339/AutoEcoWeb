@@ -2,6 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 from src.core.dependencies import CurrentUser, TagRepo
+from src.models.tag import Tag
 from src.schemas.pagination import CursorPage
 from src.schemas.tag import TagCreate, TagResponse, TagUpdate
 from src.services.tags import TagService
@@ -9,10 +10,21 @@ from src.services.tags import TagService
 router = APIRouter(prefix="/api/v1/tags", tags=["tags"])
 
 
+def _response(tag: Tag, count: int = 0) -> TagResponse:
+    return TagResponse(
+        id=tag.id,
+        name=tag.name,
+        color=tag.color,
+        icon=tag.icon,
+        count=count,
+        created_at=tag.created_at,
+    )
+
+
 @router.get("", response_model=list[TagResponse])
 async def list_tags(_current_user: CurrentUser, repo: TagRepo) -> list[TagResponse]:
     tags = await TagService(repo).list_all(_current_user)
-    return [TagResponse.model_validate(t) for t in tags]
+    return [_response(tag, count) for tag, count in tags]
 
 
 @router.get("/page", response_model=CursorPage[TagResponse])
@@ -28,7 +40,7 @@ async def list_tags_page(
         offset=offset,
     )
     return CursorPage[TagResponse](
-        items=[TagResponse.model_validate(t) for t in tags],
+        items=[_response(tag, count) for tag, count in tags],
         total=total,
     )
 
@@ -40,7 +52,7 @@ async def create_tag(
     repo: TagRepo,
 ) -> TagResponse:
     tag = await TagService(repo).create(current_user, data)
-    return TagResponse.model_validate(tag)
+    return _response(tag)
 
 
 @router.patch("/{tag_id}", response_model=TagResponse)
@@ -51,7 +63,7 @@ async def update_tag(
     repo: TagRepo,
 ) -> TagResponse:
     tag = await TagService(repo).update(current_user, tag_id, data)
-    return TagResponse.model_validate(tag)
+    return _response(tag)
 
 
 @router.delete("/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -30,12 +30,13 @@ interface AuthState {
   resetError: () => void
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   status: 'idle',
   error: null,
 
   bootstrap: async () => {
+    if (get().status === 'loading' || get().status === 'authenticated') return
     set({ status: 'loading', error: null })
     try {
       const user = await authApi.fetchMe()
