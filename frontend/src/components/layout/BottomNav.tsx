@@ -70,7 +70,7 @@ export function BottomNav() {
       { to: '/data', label: 'Данные', icon: StorageOutlinedIcon },
     ] : []),
     { to: '/profile', label: 'Профиль', icon: PersonOutlineIcon },
-    { to: '/about', label: 'О приложении', icon: InfoOutlinedIcon },
+    { to: '/about', label: 'Справка', icon: InfoOutlinedIcon },
     { to: '/feedback', label: 'Обратная связь', icon: SupportAgentOutlinedIcon },
     ...(!isVerifiedOnly && role === 'admin' ? [{ to: '/admin', label: 'Администрирование', icon: AdminPanelSettingsOutlinedIcon }] : []),
   ]

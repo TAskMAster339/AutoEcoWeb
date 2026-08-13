@@ -35,7 +35,8 @@ const TITLES: Record<string, string> = {
   '/rules': 'Правила',
   '/profile': 'Профиль',
   '/admin': 'Администрирование',
-  '/about': 'О приложении',
+  '/about': 'Справка',
+  '/privacy': 'Конфиденциальность',
   '/feedback': 'Обратная связь',
 }
 
@@ -83,7 +84,7 @@ export function Header() {
     searchTimer.current = setTimeout(() => setSearch(value), SEARCH_DEBOUNCE_MS)
   }
 
-  const title = TITLES[location.pathname] ?? 'AutoEco'
+  const title = location.pathname.startsWith('/about/') ? 'Справка' : TITLES[location.pathname] ?? 'AutoEco'
   const showAdd = !isVerifiedOnly && (location.pathname === '/transactions' || location.pathname === '/dashboard')
 
   const searchField = (
