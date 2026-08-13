@@ -22,6 +22,7 @@ const TITLES: Record<string, string> = {
   '/receipt': 'Чеки',
   '/tags': 'Теги',
   '/rules': 'Правила',
+  '/sellers': 'Магазины',
   '/data': 'Данные',
   '/profile': 'Профиль',
   '/admin': 'Администрирование',
@@ -55,13 +56,13 @@ export function Header() {
         bgcolor: alpha(theme.palette.background.paper, 0.85),
         backdropFilter: 'blur(10px)',
         borderBottom: `1px solid ${theme.palette.divider}`,
-        px: { xs: 2, md: 3 },
-        py: 1.25,
+        px: { xs: 1.5, md: 3 },
+        py: { xs: 1, md: 1.25 },
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, md: 2 }, minWidth: 0 }}>
         {isMobile && <Logo compact onClick={() => navigate('/transactions')} />}
-        <Typography variant="h5" sx={{ fontSize: { xs: 18, md: 22 }, whiteSpace: 'nowrap' }}>
+        <Typography variant="h5" sx={{ fontSize: { xs: 17, md: 22 }, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {title}
         </Typography>
 
@@ -73,7 +74,8 @@ export function Header() {
           <IconButton
             onClick={toggleThemeMode}
             aria-label="Переключить тему"
-            sx={{ color: 'text.secondary' }}
+            size={isMobile ? 'small' : 'medium'}
+            sx={{ color: 'text.secondary', flexShrink: 0 }}
           >
             {themeMode === 'dark' ? (
               <DarkModeOutlinedIcon />

@@ -49,8 +49,9 @@ export function ReceiptCard({ receipt, tagsMap }: ReceiptCardProps) {
                 }
             }}
             sx={{
-                aspectRatio: '1 / 1',
-                p: 2,
+                aspectRatio: { xs: 'auto', sm: '1 / 1' },
+                minHeight: { xs: 188, sm: 0 },
+                p: { xs: 1.75, sm: 2 },
                 display: 'flex',
                 flexDirection: 'column',
                 cursor: 'pointer',

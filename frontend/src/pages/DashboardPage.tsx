@@ -5,8 +5,6 @@ import { ReceiptCard } from '../components/dashboard/ReceiptCard'
 import { mapReceipt } from '../lib/receipts'
 import { rangeFor } from '../lib/period'
 import { LoadingState, EmptyState, ErrorState, OfflineState } from '../components/common/States'
-import { AddTransactionSheet } from '../components/transactions/AddTransactionSheet'
-import { AddReceiptSheet } from '../components/transactions/AddReceiptSheet'
 import { useReceipts } from '../hooks/useReceipts'
 import { useTags } from '../hooks/useTags'
 import { useOnline } from '../hooks/useOnline'
@@ -35,10 +33,11 @@ export function DashboardPage() {
     const customFrom = useUiStore((s) => s.customFrom)
     const customTo = useUiStore((s) => s.customTo)
     const monthYear = useUiStore((s) => s.monthYear)
+    const dayDate = useUiStore((s) => s.dayDate)
     const openAddMenu = useUiStore((s) => s.openAddMenu)
 
     const tagsMap = useMemo(() => new Map((tags ?? []).map((t) => [t.id, t])), [tags])
-    const range = useMemo(() => rangeFor(periodKey, customFrom, customTo, monthYear), [periodKey, customFrom, customTo, monthYear])
+    const range = useMemo(() => rangeFor(periodKey, customFrom, customTo, monthYear, dayDate), [periodKey, customFrom, customTo, monthYear, dayDate])
 
     const receipts = useMemo(() => {
         const all = data?.pages.flatMap((p) => p.items) ?? []
@@ -62,11 +61,11 @@ export function DashboardPage() {
     return (
         <Stack spacing={2}>
             <Stack spacing={1.5}>
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         <PageSearch value={search} onChange={setSearch} placeholder="Поиск по названию чека" ariaLabel="Поиск по названию чеков" width="100%" />
                     </Box>
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={openAddMenu}>
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={openAddMenu} sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
                         Добавить
                     </Button>
                 </Stack>
@@ -93,7 +92,7 @@ export function DashboardPage() {
                         width: '100%',
                         maxWidth: 1100,
                         gridTemplateColumns: {
-                            xs: 'repeat(2, 1fr)',
+                            xs: '1fr',
                             sm: 'repeat(2, 1fr)',
                             md: 'repeat(3, 1fr)',
                             lg: 'repeat(4, 1fr)',
@@ -123,8 +122,6 @@ export function DashboardPage() {
                 </Typography>
             )}
 
-            <AddTransactionSheet />
-            <AddReceiptSheet />
         </Stack>
     )
 }

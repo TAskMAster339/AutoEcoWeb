@@ -66,7 +66,7 @@ export function CreateAliasDialog({ open, scope, originalName, onClose }: Create
       fullWidth
       maxWidth="xs"
       aria-labelledby={titleId}
-      slotProps={{ paper: { sx: { borderRadius: '10px', p: { xs: 1.5, sm: 2 } } } }}
+      slotProps={{ paper: { sx: { borderRadius: { xs: 0, sm: '10px' }, p: 2, m: { xs: 0, sm: 4 }, width: { xs: '100%', sm: 'calc(100% - 64px)' } } } }}
     >
       <DialogContent sx={{ p: 0, overflow: 'visible' }}>
         <Typography id={titleId} sx={{ fontSize: 17, fontWeight: 700, mb: 0.75 }}>
@@ -91,9 +91,9 @@ export function CreateAliasDialog({ open, scope, originalName, onClose }: Create
           />
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ px: 0, pb: 0, pt: 2 }}>
-        <Button onClick={onClose} disabled={createAlias.isPending}>Отмена</Button>
-        <Button variant="contained" onClick={() => void submit()} disabled={createAlias.isPending} sx={{ minWidth: 120 }}>
+      <DialogActions sx={{ px: 0, pb: 0, pt: 2, flexDirection: { xs: 'column-reverse', sm: 'row' }, gap: 1 }}>
+        <Button fullWidth onClick={onClose} disabled={createAlias.isPending}>Отмена</Button>
+        <Button fullWidth variant="contained" onClick={() => void submit()} disabled={createAlias.isPending} sx={{ minWidth: 120 }}>
           {createAlias.isPending ? <CircularProgress size={20} color="inherit" /> : 'Создать'}
         </Button>
       </DialogActions>

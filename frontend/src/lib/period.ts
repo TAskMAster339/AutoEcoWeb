@@ -30,6 +30,7 @@ export function rangeFor(
   customFrom: string | null,
   customTo: string | null,
   monthYear: string | null = null,
+  dayDate: string | null = null,
 ): { from: string; to: string } {
   const now = new Date()
   switch (key) {
@@ -48,6 +49,10 @@ export function rangeFor(
       return { from: customFrom ?? daysAgoIso(30), to: customTo ?? todayIso() }
     case 'month':
       return monthRange(monthYear)
+    case 'day': {
+      const day = /^\d{4}-\d{2}-\d{2}$/.test(dayDate ?? '') ? dayDate! : todayIso()
+      return { from: day, to: day }
+    }
     case 'all':
     default:
       return { from: '2000-01-01', to: todayIso() }

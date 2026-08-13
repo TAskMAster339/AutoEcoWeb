@@ -1,4 +1,4 @@
-import { Box, Button } from '@mui/material'
+import { Box, Paper, Typography } from '@mui/material'
 import QrCodeScannerOutlinedIcon from '@mui/icons-material/QrCodeScannerOutlined'
 import PlaylistAddOutlinedIcon from '@mui/icons-material/PlaylistAddOutlined'
 import { BottomSheet } from './BottomSheet'
@@ -17,31 +17,36 @@ export function AddMenu() {
 
   return (
     <BottomSheet open={open} onClose={close} title="Добавить">
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-        <Button
-          variant="outlined"
-          fullWidth
-          startIcon={<QrCodeScannerOutlinedIcon />}
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        Выберите, что хотите добавить
+      </Typography>
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1 }}>
+        <Paper
+          component="button"
+          type="button"
           onClick={() => {
             close()
             openReceiptSheet()
           }}
-          sx={{ justifyContent: 'flex-start', py: 1.25, borderRadius: '8px' }}
+          variant="outlined"
+          sx={{ minHeight: 128, p: 1.5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'space-between', textAlign: 'left', color: 'text.primary', borderRadius: '8px', cursor: 'pointer', font: 'inherit', bgcolor: 'background.paper' }}
         >
-          Добавить чек
-        </Button>
-        <Button
-          variant="contained"
-          fullWidth
-          startIcon={<PlaylistAddOutlinedIcon />}
+          <Box sx={{ width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: '8px', bgcolor: 'action.hover', color: 'primary.main' }}><QrCodeScannerOutlinedIcon /></Box>
+          <Box><Typography sx={{ fontWeight: 700 }}>Чек</Typography><Typography variant="caption" color="text.secondary">Сканировать QR-код</Typography></Box>
+        </Paper>
+        <Paper
+          component="button"
+          type="button"
           onClick={() => {
             close()
             openTransactionSheet()
           }}
-          sx={{ justifyContent: 'flex-start', py: 1.25, borderRadius: '8px' }}
+          variant="outlined"
+          sx={{ minHeight: 128, p: 1.5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'space-between', textAlign: 'left', color: 'text.primary', borderRadius: '8px', cursor: 'pointer', font: 'inherit', bgcolor: 'background.paper' }}
         >
-          Добавить транзакцию
-        </Button>
+          <Box sx={{ width: 40, height: 40, display: 'grid', placeItems: 'center', borderRadius: '8px', bgcolor: 'primary.main', color: 'primary.contrastText' }}><PlaylistAddOutlinedIcon /></Box>
+          <Box><Typography sx={{ fontWeight: 700 }}>Транзакция</Typography><Typography variant="caption" color="text.secondary">Ввести вручную</Typography></Box>
+        </Paper>
       </Box>
     </BottomSheet>
   )

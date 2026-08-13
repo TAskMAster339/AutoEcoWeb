@@ -5,7 +5,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type PeriodKey = 'thisMonth' | 'lastMonth' | '3m' | 'all' | 'custom' | 'month'
+export type PeriodKey = 'thisMonth' | 'lastMonth' | '3m' | 'all' | 'custom' | 'month' | 'day'
 export type ThemeMode = 'light' | 'dark' | 'system'
 
 /** Порядок циклического переключения темы: светлая → тёмная → системная → светлая. */
@@ -18,6 +18,8 @@ interface UiState {
   customTo: string | null
   /** Конкретный месяц в формате «YYYY-MM» (период 'month'). */
   monthYear: string | null
+  /** Конкретный день в формате «YYYY-MM-DD» (период 'day'). */
+  dayDate: string | null
   search: string
   /** Мультивыбор: пустой массив = без фильтра. */
   tagFilterIds: string[]
@@ -36,6 +38,7 @@ interface UiState {
   setCustomRange: (from: string, to: string) => void
   /** Устанавливает период «конкретный месяц»: monthYear в формате «YYYY-MM». */
   setMonthPeriod: (monthYear: string) => void
+  setDayPeriod: (dayDate: string) => void
   setSearch: (value: string) => void
   setTagFilterIds: (tagIds: string[]) => void
   setStoreFilters: (stores: string[]) => void
@@ -64,6 +67,7 @@ export const useUiStore = create<UiState>()(
       customFrom: null,
       customTo: null,
       monthYear: null,
+      dayDate: null,
       search: '',
       tagFilterIds: [],
       storeFilters: [],
@@ -82,6 +86,7 @@ export const useUiStore = create<UiState>()(
       setPeriodKey: (periodKey) => set({ periodKey }),
       setCustomRange: (customFrom, customTo) => set({ customFrom, customTo, periodKey: 'custom' }),
       setMonthPeriod: (monthYear) => set({ monthYear, periodKey: 'month' }),
+      setDayPeriod: (dayDate) => set({ dayDate, periodKey: 'day' }),
       setSearch: (search) => set({ search }),
       setTagFilterIds: (tagFilterIds) => set({ tagFilterIds }),
       setStoreFilters: (storeFilters) => set({ storeFilters }),
@@ -106,6 +111,7 @@ export const useUiStore = create<UiState>()(
         customFrom: state.customFrom,
         customTo: state.customTo,
         monthYear: state.monthYear,
+        dayDate: state.dayDate,
         sidebarCollapsed: state.sidebarCollapsed,
       }),
     },
