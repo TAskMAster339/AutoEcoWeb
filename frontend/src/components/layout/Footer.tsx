@@ -3,6 +3,7 @@ import { Link as RouterLink } from 'react-router-dom'
 
 /**
  * Page footer — desktop-only (mobile keeps the bottom navigation clean).
+ * Three equal columns keep the product name visually centered.
  */
 export function Footer() {
   const year = new Date().getFullYear()
@@ -11,25 +12,25 @@ export function Footer() {
     <Box
       component="footer"
       sx={{
-        display: { xs: 'none', md: 'flex' },
+        display: { xs: 'none', md: 'grid' },
+        gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center',
-        gap: 2,
+        gap: 3,
         px: 3,
         py: 1.5,
         borderTop: '1px solid',
         borderColor: 'divider',
         color: 'text.secondary',
-        flexWrap: 'wrap',
       }}
     >
-      <Typography variant="caption">© {year} AutoEco — учёт чеков и расходов</Typography>
-      <Box sx={{ flex: 1 }} />
-      <Typography variant="caption">v0.1.0</Typography>
-      <Link component={RouterLink} to="/profile" variant="caption" underline="hover" color="inherit">
-        Профиль
+      <Link component={RouterLink} to="/about" variant="caption" underline="hover" color="inherit" sx={{ justifySelf: 'start' }}>
+        Wiki о проекте
       </Link>
-      <Link component={RouterLink} to="/about" variant="caption" underline="hover" color="inherit">
-        О приложении
+      <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 700, whiteSpace: 'nowrap' }}>
+        © {year} AutoEco
+      </Typography>
+      <Link component={RouterLink} to="/privacy" variant="caption" underline="hover" color="inherit" sx={{ justifySelf: 'end' }}>
+        Политика конфиденциальности
       </Link>
     </Box>
   )

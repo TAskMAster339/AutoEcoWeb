@@ -4,12 +4,14 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   CircularProgress,
+  Link,
   Stack,
   TextField,
   Typography,
 } from '@mui/material'
-import { useNavigate } from 'react-router-dom'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import { Logo } from '../components/common/Logo'
 import { PasswordField } from '../components/common/PasswordField'
 import { useAuthStore } from '../store/authStore'
@@ -29,6 +31,7 @@ export function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [password2, setPassword2] = useState('')
+  const [acceptedPolicies, setAcceptedPolicies] = useState(false)
 
   const [localError, setLocalError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
@@ -44,6 +47,7 @@ export function LoginPage() {
 
     setPassword('')
     setPassword2('')
+    setAcceptedPolicies(false)
   }
 
   const submit = async (e: React.FormEvent) => {
@@ -64,6 +68,10 @@ export function LoginPage() {
       return
     }
     if (mode === 'register') {
+      if (!acceptedPolicies) {
+        setLocalError('Подтвердите согласие с политикой конфиденциальности')
+        return
+      }
       if (password.length < 8) {
         setLocalError('Пароль должен быть не короче 8 символов')
         return
@@ -159,10 +167,34 @@ export function LoginPage() {
                     autoComplete="new-password"
                     required
                   />
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75 }}>
+                    <Checkbox
+                      checked={acceptedPolicies}
+                      onChange={(event) => setAcceptedPolicies(event.target.checked)}
+                      inputProps={{ 'aria-label': 'Согласие с политикой конфиденциальности и использованием cookie' }}
+                      sx={{ mt: -0.75, ml: -0.75 }}
+                    />
+                    <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.55 }}>
+                      Я принимаю{' '}
+                      <Link component={RouterLink} to="/privacy" target="_blank" rel="noreferrer">
+                        Политику обработки персональных данных
+                      </Link>{' '}
+                      и соглашаюсь с использованием{' '}
+                      <Link component={RouterLink} to="/privacy#section-7" target="_blank" rel="noreferrer">
+                        обязательных cookie
+                      </Link>
+                    </Typography>
+                  </Box>
                 </>
               )}
 
-              <Button type="submit" variant="contained" size="large" disabled={busy || busyLogin} fullWidth>
+              <Button
+                type="submit"
+                variant="contained"
+                size="large"
+                disabled={busy || busyLogin || (mode === 'register' && !acceptedPolicies)}
+                fullWidth
+              >
                 {busy || busyLogin ? (
                   <CircularProgress size={22} color="inherit" />
                 ) : mode === 'login' ? (
@@ -205,6 +237,9 @@ export function LoginPage() {
               </>
             )}
           </Typography>
+          <Link component={RouterLink} to="/privacy" variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
+            Политика конфиденциальности
+          </Link>
         </Stack>
       </Card>
     </Box>

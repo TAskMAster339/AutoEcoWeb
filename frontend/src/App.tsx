@@ -23,6 +23,7 @@ const ReceiptDetailPage = page(() => import('./pages/ReceiptDetailPage'), 'Recei
 const ProfilePage = page(() => import('./pages/ProfilePage'), 'ProfilePage')
 const AdminPage = page(() => import('./pages/AdminPage'), 'AdminPage')
 const AboutPage = page(() => import('./pages/AboutPage'), 'AboutPage')
+const PrivacyPolicyPage = page(() => import('./pages/PrivacyPolicyPage'), 'PrivacyPolicyPage')
 const FeedbackPage = page(() => import('./pages/FeedbackPage'), 'FeedbackPage')
 
 function suspense(element: React.ReactNode) {
@@ -54,6 +55,7 @@ const router = createBrowserRouter([
             </PublicOnlyRoute>
         ),
     },
+    { path: '/privacy', element: suspense(<PrivacyPolicyPage />) },
     {
         element: <ProtectedRoute />,
         children: [
@@ -78,6 +80,7 @@ const router = createBrowserRouter([
                             { path: '/settings', element: <Navigate to="/profile" replace /> },
                             { path: '/admin', element: suspense(<AdminPage />) },
                             { path: '/about', element: suspense(<AboutPage />) },
+                            { path: '/about/:topic', element: suspense(<AboutPage />) },
                             { path: '/feedback', element: suspense(<FeedbackPage />) },
                         ],
                     },

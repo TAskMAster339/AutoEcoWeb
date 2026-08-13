@@ -26,7 +26,8 @@ const TITLES: Record<string, string> = {
   '/data': 'Данные',
   '/profile': 'Профиль',
   '/admin': 'Администрирование',
-  '/about': 'О приложении',
+  '/about': 'Справка',
+  '/privacy': 'Конфиденциальность',
   '/feedback': 'Обратная связь',
 }
 
@@ -44,7 +45,7 @@ export function Header() {
   const navigate = useNavigate()
   const themeMode = useUiStore((s) => s.themeMode)
   const toggleThemeMode = useUiStore((s) => s.toggleThemeMode)
-  const title = TITLES[location.pathname] ?? 'AutoEco'
+  const title = location.pathname.startsWith('/about/') ? 'Справка' : TITLES[location.pathname] ?? 'AutoEco'
 
   return (
     <Box
