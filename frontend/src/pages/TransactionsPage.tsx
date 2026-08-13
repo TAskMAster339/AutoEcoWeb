@@ -172,6 +172,7 @@ export function TransactionsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [bulkError, setBulkError] = useState<string | null>(null)
+  const [mobileDeleteId, setMobileDeleteId] = useState<string | null>(null)
   // Транзакция для модалки редактирования (null = закрыта).
   const [editingTx, setEditingTx] = useState<TransactionView | null>(null)
 
@@ -183,6 +184,17 @@ export function TransactionsPage() {
       setConfirmDeleteOpen(false)
     } catch (e) {
       setBulkError(e instanceof Error ? e.message : 'Не удалось удалить транзакции')
+    }
+  }
+
+  const mobileDelete = async () => {
+    if (!mobileDeleteId) return
+    setBulkError(null)
+    try {
+      await deleteTx.mutateAsync(mobileDeleteId)
+      setMobileDeleteId(null)
+    } catch (e) {
+      setBulkError(e instanceof Error ? e.message : 'Не удалось удалить транзакцию')
     }
   }
 
@@ -326,7 +338,7 @@ export function TransactionsPage() {
           ) : (
             <>
               {mobileRows.map((t) => (
-                <TransactionCard key={t.id} tx={t} tagsMap={tagsMap} onDelete={(id) => void deleteTx.mutate(id)} onEdit={setEditingTx} />
+                <TransactionCard key={t.id} tx={t} tagsMap={tagsMap} onDelete={setMobileDeleteId} onEdit={setEditingTx} />
               ))}
               <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                 Показано {mobileRows.length} из {total ?? 0} · свайп влево — удалить
@@ -424,6 +436,16 @@ export function TransactionsPage() {
         error={bulkError}
         onConfirm={() => void bulkDelete()}
         onClose={() => setConfirmDeleteOpen(false)}
+      />
+      <ConfirmDialog
+        open={mobileDeleteId !== null}
+        title="Удалить транзакцию?"
+        message="Операция необратима. Транзакция будет удалена."
+        confirmLabel="Удалить"
+        pending={deleteTx.isPending}
+        error={bulkError}
+        onConfirm={() => void mobileDelete()}
+        onClose={() => setMobileDeleteId(null)}
       />
     </Stack>
   )
