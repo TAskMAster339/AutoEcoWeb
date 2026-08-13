@@ -27,7 +27,6 @@ import SearchIcon from '@mui/icons-material/Search'
 import { messageFromError } from '../api/client'
 import type { AdminUser, UserRole, UserStatus } from '../api/types'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
-import { PageHeader } from '../components/common/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '../components/common/States'
 import { useAdminUsers, useDeleteUser, useUpdateUser } from '../hooks/useAdminUsers'
 import { formatLongDate } from '../lib/format'
@@ -208,12 +207,7 @@ export function AdminPage() {
   }
 
   if (me?.role !== 'admin') {
-    return (
-      <Stack spacing={2}>
-        <PageHeader title="Администрирование" />
-        <Alert severity="info">Раздел доступен только администраторам.</Alert>
-      </Stack>
-    )
+    return <Alert severity="info">Раздел доступен только администраторам.</Alert>
   }
 
   const fillSx = isMobile
@@ -222,21 +216,11 @@ export function AdminPage() {
 
   return (
     <Stack spacing={2} sx={isMobile ? undefined : { height: '100%', minHeight: 0 }}>
-      <PageHeader
-        title="Администрирование"
-        subtitle="Пользователи системы"
-        actions={
-          isFetching && !isFetchingNextPage ? (
-            <CircularProgress size={18} sx={{ color: colors.primary }} />
-          ) : undefined
-        }
-      />
-
       <Card sx={{ p: 2 }}>
         <FeedbackAdminPanel />
       </Card>
 
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
         <TextField
           size="small"
           placeholder="Поиск по email…"
@@ -281,6 +265,7 @@ export function AdminPage() {
             </MenuItem>
           ))}
         </TextField>
+        {isFetching && !isFetchingNextPage && <CircularProgress size={18} sx={{ color: colors.primary }} />}
       </Stack>
 
       {actionError && (

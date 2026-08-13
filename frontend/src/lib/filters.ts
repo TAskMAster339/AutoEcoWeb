@@ -1,6 +1,6 @@
 /**
  * Фильтры транзакций → параметры запроса к бэкенду.
- * Период/тег/поиск/магазин живут в uiStore; здесь они превращаются в
+ * Глобальный период и фильтры таблицы живут в uiStore; здесь они превращаются в
  * TransactionsPageParams, которые бэкенд применяет в SQL (WHERE + агрегаты).
  */
 import { useMemo } from 'react'
@@ -32,7 +32,19 @@ export function filterParams(
   return params
 }
 
-/** Мемоизированные параметры фильтров из стора — стабильный объект,
+/** Только глобальный период — для страниц, не связанных с фильтрами таблицы. */
+export function usePeriodParams(): TransactionsPageParams {
+  const periodKey = useUiStore((s) => s.periodKey)
+  const customFrom = useUiStore((s) => s.customFrom)
+  const customTo = useUiStore((s) => s.customTo)
+  const monthYear = useUiStore((s) => s.monthYear)
+  return useMemo(
+    () => filterParams(periodKey, customFrom, customTo, monthYear, '', [], []),
+    [periodKey, customFrom, customTo, monthYear],
+  )
+}
+
+/** Мемоизированные параметры фильтров таблицы — стабильный объект,
  *  чтобы query-ключи TanStack Query не менялись на каждом рендере. */
 export function useFilterParams(): TransactionsPageParams {
   const periodKey = useUiStore((s) => s.periodKey)

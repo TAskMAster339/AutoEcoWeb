@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import {
   Avatar,
   Box,
@@ -32,7 +32,7 @@ import { softBg, softFg } from '../../theme'
 const NAV_ITEMS = [
   { to: '/transactions', label: 'Таблица', icon: TableChartOutlinedIcon },
   { to: '/analytics', label: 'Аналитика', icon: BarChartOutlinedIcon },
-  { to: '/dashboard', label: 'Чеки', icon: ReceiptLongOutlinedIcon },
+  { to: '/receipt', label: 'Чеки', icon: ReceiptLongOutlinedIcon },
   { to: '/tags', label: 'Теги', icon: LabelOutlinedIcon },
   { to: '/sellers', label: 'Магазины', icon: StorefrontOutlinedIcon },
   { to: '/rules', label: 'Правила', icon: LinkOutlinedIcon },
@@ -56,6 +56,7 @@ const USER_CARD_HEIGHT = 54
 
 export function Sidebar() {
   const theme = useTheme()
+  const navigate = useNavigate()
   const collapsed = useUiStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const role = useAuthStore((s) => s.user?.role)
@@ -98,7 +99,7 @@ export function Sidebar() {
           minHeight: HEADER_HEIGHT,
         }}
       >
-        <Logo compact={collapsed} />
+        <Logo compact={collapsed} onClick={() => navigate('/transactions')} />
         <Tooltip title={collapsed ? 'Развернуть меню' : 'Свернуть меню'} placement="right" arrow>
           <IconButton
             onClick={toggleSidebar}

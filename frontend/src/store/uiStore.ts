@@ -1,5 +1,5 @@
 /**
- * UI store (Zustand) — period, filters, bottom sheets.
+ * UI store (Zustand) — global period, table-only filters and bottom sheets.
  * Persisted partially to localStorage (period preferences only, never tokens).
  */
 import { create } from 'zustand'
@@ -96,7 +96,7 @@ export const useUiStore = create<UiState>()(
       openFilterSheet: () => set({ filterSheetOpen: true }),
       closeFilterSheet: () => set({ filterSheetOpen: false }),
       resetFilters: () =>
-        set({ search: '', tagFilterIds: [], storeFilters: [], monthYear: null, periodKey: 'all' }),
+        set({ search: '', tagFilterIds: [], storeFilters: [] }),
     }),
     {
       name: 'autoeco-ui',

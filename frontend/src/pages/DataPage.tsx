@@ -14,7 +14,6 @@ import { useQueryClient } from '@tanstack/react-query'
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
-import { PageHeader } from '../components/common/PageHeader'
 import {
   downloadExport,
   previewImport,
@@ -131,8 +130,6 @@ export function DataPage() {
 
   return (
     <Stack spacing={2} sx={{ maxWidth: 720 }}>
-      <PageHeader title="Данные" subtitle="Импорт и экспорт транзакций" />
-
       {/* Экспорт */}
       <Card sx={{ p: 2.5 }}>
         <Stack direction="row" alignItems="center" spacing={2} sx={{ flexWrap: 'wrap' }}>

@@ -12,7 +12,6 @@ import LabelOutlinedIcon from '@mui/icons-material/LabelOutlined'
 import StorageOutlinedIcon from '@mui/icons-material/StorageOutlined'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import TrendingDownIcon from '@mui/icons-material/TrendingDown'
-import { PageHeader } from '../components/common/PageHeader'
 import { colors, softBg, softFg } from '../theme'
 
 function P({ children, sx }: { children: ReactNode; sx?: SxProps<Theme> }) {
@@ -73,8 +72,6 @@ export function AboutPage() {
 
   return (
     <Stack spacing={2} sx={{ maxWidth: 760, mx: 'auto', width: '100%', pb: 2 }}>
-      <PageHeader title="О приложении" subtitle="Как устроен учёт: периоды, дельты, баланс, операции" />
-
       <Section icon={<CalendarMonthOutlinedIcon sx={{ fontSize: 18 }} />} title="Периоды">
         <P>Выбор периода работает на страницах «Таблица», «Чеки» и в аналитике: выбранный диапазон применяется к списку операций, сводке и графикам.</P>
         <Li>«Этот месяц», «Прошлый месяц», «Последние 3 месяца» — быстрые пресеты.</Li>

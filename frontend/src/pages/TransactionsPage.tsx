@@ -12,10 +12,10 @@ import {
 } from '@mui/material'
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import AddIcon from '@mui/icons-material/Add'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { StatisticCard } from '../components/common/StatisticCard'
-import { PeriodSelector } from '../components/common/PeriodSelector'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
 import { TransactionsGrid } from '../components/transactions/TransactionsGrid'
 import { TransactionCard } from '../components/transactions/TransactionCard'
@@ -33,6 +33,7 @@ import { useFilterParams } from '../lib/filters'
 import { fetchTransactionsPage, toTransactionView } from '../api/transactions'
 import { formatCurrency, pluralRu } from '../lib/format'
 import { colors } from '../theme'
+import { PageSearch } from '../components/common/PageSearch'
 import type { TransactionView } from '../api/types'
 
 /** Размер страницы мобильного списка (карточки, кнопка «Показать ещё»). */
@@ -268,8 +269,20 @@ export function TransactionsPage() {
     <Stack spacing={2.25} sx={{ height: '100%' }}>
       <SummaryCards />
 
-      {/* Toolbar: filters / export / period */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+      {/* Toolbar: filters table-only; period lives in the shared header. */}
+      <Box sx={{ display: 'flex', width: '100%', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+        <Box sx={{ flex: 1, minWidth: 200 }}>
+          <PageSearch value={search} onChange={useUiStore.getState().setSearch} placeholder="Магазин, название или комментарий" ariaLabel="Поиск по магазинам, названиям и комментариям" width="100%" />
+        </Box>
+        <Button
+          variant="text"
+          color="inherit"
+          onClick={handleResetFilters}
+          disabled={!hasFilters}
+          sx={{ color: 'text.secondary', textTransform: 'none' }}
+        >
+          Сбросить фильтры
+        </Button>
         {hasFilters ? (
           <Badge color="primary" variant="dot">
             <Button
@@ -293,17 +306,9 @@ export function TransactionsPage() {
             Фильтры
           </Button>
         )}
-        <Button
-          variant="text"
-          color="inherit"
-          onClick={handleResetFilters}
-          disabled={!hasFilters}
-          sx={{ color: 'text.secondary', textTransform: 'none' }}
-        >
-          Сбросить фильтры
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openAddMenu}>
+          Добавить
         </Button>
-        <Box sx={{ flex: 1 }} />
-        <PeriodSelector />
       </Box>
 
       {showNoTransactions ? (

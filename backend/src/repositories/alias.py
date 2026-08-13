@@ -78,6 +78,7 @@ class AliasRepository:
         scope: str | None,
         limit: int,
         offset: int = 0,
+        search: str | None = None,
     ) -> tuple[list[Alias], int]:
         """Страница алиасов (offset-пагинация) + общее количество.
 
@@ -86,6 +87,9 @@ class AliasRepository:
         conditions = [Alias.user_id == user_id]
         if scope is not None:
             conditions.append(Alias.scope == scope)
+        if search:
+            q = f"%{search}%"
+            conditions.append((Alias.original_name.ilike(q)) | (Alias.alias_name.ilike(q)))
 
         stmt = (
             select(Alias)

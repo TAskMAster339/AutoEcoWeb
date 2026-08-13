@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Alert, Button, Card, MenuItem, Stack, TextField, Typography } from '@mui/material'
-import { PageHeader } from '../components/common/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '../components/common/States'
 import { messageFromError } from '../api/client'
 import { FEEDBACK_TEMPLATES } from '../api/feedback'
@@ -17,7 +16,6 @@ export function FeedbackPage() {
   }
   return (
     <Stack spacing={2} sx={{ maxWidth: 760, mx: 'auto', width: '100%' }}>
-      <PageHeader title="Обратная связь" subtitle="Оставьте обращение — мы внимательно его рассмотрим" />
       <Card sx={{ p: { xs: 2, sm: 3 } }}><Stack spacing={2}>
         <TextField label="Тема обращения" value={subject} onChange={(e) => setSubject(e.target.value)} inputProps={{ maxLength: 200 }} fullWidth />
         <TextField label="Сообщение" value={message} onChange={(e) => setMessage(e.target.value)} multiline minRows={5} inputProps={{ maxLength: 10000 }} fullWidth />

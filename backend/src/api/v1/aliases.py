@@ -22,6 +22,7 @@ async def list_aliases(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     scope: Literal["seller", "product"] | None = Query(None),
+    search: str | None = Query(None, max_length=255),
 ) -> CursorPage[AliasResponse]:
     """Страница алиасов (offset-пагинация) + total — алиасов может быть много."""
     items, total = await alias_service.list_page(
@@ -29,6 +30,7 @@ async def list_aliases(
         scope=scope,
         limit=limit,
         offset=offset,
+        search=search,
     )
     return CursorPage[AliasResponse](
         items=[AliasResponse.model_validate(a) for a in items],

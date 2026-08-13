@@ -1,8 +1,23 @@
 import { Box } from '@mui/material'
 
-export function Logo({ compact = false, size = 34 }: { compact?: boolean; size?: number }) {
+export function Logo({ compact = false, size = 34, onClick }: { compact?: boolean; size?: number; onClick?: () => void }) {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+    <Box
+      component={onClick ? 'button' : 'div'}
+      onClick={onClick}
+      aria-label={onClick ? 'Перейти к таблице' : undefined}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.25,
+        color: 'inherit',
+        flexShrink: 0,
+        border: 0,
+        p: 0,
+        bgcolor: 'transparent',
+        cursor: onClick ? 'pointer' : 'default',
+      }}
+    >
       <Box
         sx={{
           width: size,

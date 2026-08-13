@@ -22,7 +22,6 @@ import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { Link as RouterLink } from 'react-router-dom'
-import { PageHeader } from '../components/common/PageHeader'
 import { useAuthStore } from '../store/authStore'
 import { useUiStore } from '../store/uiStore'
 import type { ThemeMode } from '../store/uiStore'
@@ -252,8 +251,6 @@ export function ProfilePage() {
 
   return (
     <Stack spacing={2}>
-      <PageHeader title="Профиль" subtitle="Аккаунт, оформление и сервис проверки чеков" />
-
       <Grid container spacing={2}>
         {/* Аккаунт — крупный тайл */}
         <Grid size={{ xs: 12, md: 8 }}>

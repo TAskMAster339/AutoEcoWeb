@@ -6,7 +6,6 @@ import {
   Box,
   Button,
   Card,
-
   Stack,
   TextField,
   Typography,
@@ -15,13 +14,12 @@ import AddIcon from '@mui/icons-material/Add'
 import CheckIcon from '@mui/icons-material/Check'
 
 import { BottomSheet } from '../components/common/BottomSheet'
-import { PageHeader } from '../components/common/PageHeader'
 import { LoadingState, EmptyState, ErrorState, OfflineState } from '../components/common/States'
 import { useInfiniteTags, useCreateTag, useDeleteTag, useUpdateTag } from '../hooks/useTags'
-
 import { useTransactions } from '../hooks/useTransactions'
 import { useOnline } from '../hooks/useOnline'
-
+import { PageSearch } from '../components/common/PageSearch'
+import { useNavigate } from 'react-router-dom'
 import type { Tag } from '../api/types'
 
 const PALETTE = ['#16A34A', '#3B82F6', '#8B5CF6', '#F97316', '#06B6D4', '#F59E0B', '#EF4444', '#65A30D']
@@ -29,6 +27,7 @@ const PALETTE = ['#16A34A', '#3B82F6', '#8B5CF6', '#F97316', '#06B6D4', '#F59E0B
 /** Теги — manage category tags (реальный API; счётчики — из чеков). */
 export function TagsPage() {
   const online = useOnline()
+  const navigate = useNavigate()
   const infiniteTags = useInfiniteTags()
   const { data: transactions } = useTransactions()
 
@@ -44,7 +43,6 @@ export function TagsPage() {
     }
     return m
   }, [transactions])
-
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [name, setName] = useState('')
@@ -94,6 +92,8 @@ export function TagsPage() {
   }
 
   const tags = infiniteTags.data?.pages.flatMap((page) => page.items) ?? []
+  const [search, setSearch] = useState('')
+  const visibleTags = tags.filter((tag) => tag.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
   const isLoading = infiniteTags.isLoading
   const isError = infiniteTags.isError
   const error = infiniteTags.error
@@ -116,17 +116,16 @@ export function TagsPage() {
 
   return (
     <Stack spacing={2}>
-      <PageHeader
-        title="Теги"
-        subtitle="Категории для автоматической сортировки чеков"
-        actions={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-            Добавить
-          </Button>
-        }
-      />
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <PageSearch value={search} onChange={setSearch} placeholder="Поиск по имени тега" ariaLabel="Поиск по имени тега" width="100%" />
+        </Box>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={{ flexShrink: 0 }}>
+          Добавить
+        </Button>
+      </Stack>
 
-      {tags.length === 0 ? (
+      {visibleTags.length === 0 ? (
         <EmptyState
           title="Тегов пока нет"
           subtitle="Создайте тег, например «Продукты» или «Транспорт»"
@@ -142,9 +141,16 @@ export function TagsPage() {
             width: '100%',
           }}
         >
-          {tags.map((tag) => (
+          {visibleTags.map((tag) => (
             <Card key={tag.id} sx={{ aspectRatio: '1 / 1', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <Box sx={{ flex: 1, minHeight: 0, bgcolor: tag.color }} />
+              <Box
+                component="button"
+                type="button"
+                onClick={() => navigate(`/transactions?tag=${encodeURIComponent(tag.id)}`)}
+                title={`Открыть таблицу с тегом «${tag.name}»`}
+                aria-label={`Открыть таблицу с фильтром по тегу ${tag.name}`}
+                sx={{ flex: 1, minHeight: 0, border: 0, p: 0, bgcolor: tag.color, cursor: 'pointer' }}
+              />
               <Box sx={{ bgcolor: 'background.paper', p: 1.5 }}>
                 <Typography sx={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tag.name}</Typography>
                 <Typography variant="caption" color="text.secondary">{counts.get(tag.id) ?? 0} операций</Typography>

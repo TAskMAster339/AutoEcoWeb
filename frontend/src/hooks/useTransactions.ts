@@ -21,12 +21,18 @@ export function useStores() {
 /** После любой мутации обновляются все зависимые данные. 'txPage' — страницы
  *  таблицы (datasource AG Grid и мобильный список ходят через fetchQuery). */
 function invalidateAfterMutation(queryClient: ReturnType<typeof useQueryClient>) {
+  // Сначала удаляем block-кэш. Если сперва увеличить revision, компонент грида
+  // может успеть запросить ещё свежий (staleTime 30 s) txPage до асинхронной
+  // invalidation — тогда новая транзакция появится только позднее. Удаление
+  // гарантирует, что purgeInfiniteCache / мобильная первая страница получат
+  // актуальные строки непосредственно после успешного POST/PATCH/DELETE.
+  queryClient.removeQueries({ queryKey: ['txPage'] })
+  queryClient.removeQueries({ queryKey: ['txTotal'] })
   // AG Grid keeps already-loaded rows in its own Infinite Row Model cache.
   // A TanStack invalidation alone marks the HTTP query stale, but does not
   // make AG Grid ask for the visible block again. The revision is observed by
   // both desktop and mobile transaction views and forces that reload.
   queryClient.setQueryData<number>(['txRevision'], (revision = 0) => revision + 1)
-  void queryClient.invalidateQueries({ queryKey: ['txPage'] })
   void queryClient.invalidateQueries({ queryKey: ['transactions'] })
   void queryClient.invalidateQueries({ queryKey: ['summary'] })
   void queryClient.invalidateQueries({ queryKey: ['analytics'] })

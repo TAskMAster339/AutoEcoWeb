@@ -111,6 +111,7 @@ async def list_receipts(  # noqa: PLR0913
     date_from: date | None = Query(None),  # noqa: B008
     date_to: date | None = Query(None),  # noqa: B008
     seller: str | None = Query(None, max_length=255),
+    search: str | None = Query(None, max_length=255),
 ) -> CursorPage[ReceiptResponse]:
     receipts, next_cursor = await ReceiptService(
         receipt_repo,
@@ -124,6 +125,7 @@ async def list_receipts(  # noqa: PLR0913
         date_from=_day_bounds(date_from, end_of_day=False) if date_from else None,
         date_to=_day_bounds(date_to, end_of_day=True) if date_to else None,
         seller=seller,
+        search=search,
     )
     # транзакции всех чеков страницы — одним запросом (без N+1)
     receipt_transactions = await tx_repo.list_by_receipts([r.id for r in receipts])

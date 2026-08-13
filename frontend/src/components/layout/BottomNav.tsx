@@ -20,7 +20,7 @@ import { softBg, softFg } from '../../theme'
 const MAIN_ITEMS = [
   { to: '/transactions', label: 'Таблица', icon: TableChartOutlinedIcon },
   { to: '/analytics', label: 'Аналитика', icon: BarChartOutlinedIcon },
-  { to: '/dashboard', label: 'Чеки', icon: ReceiptLongOutlinedIcon },
+  { to: '/receipt', label: 'Чеки', icon: ReceiptLongOutlinedIcon },
   { to: '/tags', label: 'Теги', icon: LabelOutlinedIcon },
 ] as const
 

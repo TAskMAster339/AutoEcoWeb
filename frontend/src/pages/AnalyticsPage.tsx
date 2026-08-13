@@ -16,13 +16,13 @@ import {
   weekdayLabel,
 } from '../components/analytics/Charts'
 import { PriceChartCard } from '../components/analytics/PriceChartCard'
-import { PeriodSelector } from '../components/common/PeriodSelector'
 import { StatisticCard } from '../components/common/StatisticCard'
 import { LoadingState, ErrorState, OfflineState } from '../components/common/States'
 import { useAnalytics, useSummary } from '../hooks/useSummary'
 import { useOnline } from '../hooks/useOnline'
 import { formatCurrency, plural } from '../lib/format'
 import { useUiStore } from '../store/uiStore'
+import { usePeriodParams } from '../lib/filters'
 import { colors } from '../theme'
 
 /** Аналитика — расходы по дням (тренд), круговые по магазинам/категориям/доходам,
@@ -32,9 +32,10 @@ export function AnalyticsPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const navigate = useNavigate()
   const online = useOnline()
+  const periodParams = usePeriodParams()
 
   const { data, isLoading, isError, error, refetch } = useAnalytics()
-  const summary = useSummary()
+  const summary = useSummary(periodParams)
 
   // Переход на транзакции с фильтром магазина(ов): «Другое» выбирает все
   // слитые магазины сразу (мульти-фильтр ?store=A&store=B). Сброс поиска и
@@ -113,10 +114,6 @@ export function AnalyticsPage() {
 
   return (
     <Stack spacing={2.25}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-        <PeriodSelector />
-      </Stack>
-
       <Grid container spacing={2}>
         <Grid size={{ xs: 6, md: 3 }}>
           <StatisticCard label="Расходы" value={formatCurrency(totalExpenses)} />

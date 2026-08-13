@@ -23,7 +23,7 @@ interface ReceiptCardProps {
     tagsMap: Map<string, Tag>
 }
 
-/** Чек — крупный квадратный тайл (grid-раскладка на /dashboard).
+/** Чек — крупный квадратный тайл (grid-раскладка на /receipt).
  *  Клик по тайлу открывает подробную страницу чека (/receipts/:id). */
 export function ReceiptCard({ receipt, tagsMap }: ReceiptCardProps) {
     const theme = useTheme()

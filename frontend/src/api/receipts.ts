@@ -21,6 +21,7 @@ export interface ReceiptsPageParams {
     date_from?: string
     date_to?: string
     seller?: string
+    search?: string
 }
 
 /** GET /api/v1/receipts — cursor-пагинация, новые сверху. */
@@ -31,6 +32,7 @@ export function fetchReceiptsPage(params: ReceiptsPageParams = {}): Promise<Curs
     if (params.date_from) search.set('date_from', params.date_from)
     if (params.date_to) search.set('date_to', params.date_to)
     if (params.seller) search.set('seller', params.seller)
+    if (params.search) search.set('search', params.search)
     const qs = search.toString()
     return api.get<CursorPage<Receipt>>(`/api/v1/receipts${qs ? `?${qs}` : ''}`)
 }

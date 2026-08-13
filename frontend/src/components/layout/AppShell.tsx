@@ -1,5 +1,5 @@
 import { Alert, Box, Button, useMediaQuery, useTheme } from '@mui/material'
-import { Link as RouterLink, Outlet } from 'react-router-dom'
+import { Link as RouterLink, Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { BottomNav } from './BottomNav'
@@ -19,8 +19,10 @@ export function AppShell() {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const online = useOnline()
+  const location = useLocation()
   const user = useAuthStore((s) => s.user)
   const isVerifiedOnly = user?.status === 'verified'
+  const showMobileAdd = location.pathname === '/transactions' || location.pathname === '/receipt'
 
   return (
     <Box
@@ -74,7 +76,7 @@ export function AppShell() {
       </Box>
 
       {isMobile && <BottomNav />}
-      {isMobile && !isVerifiedOnly && <FloatingAddButton />}
+      {isMobile && !isVerifiedOnly && showMobileAdd && <FloatingAddButton />}
 
       {/* Global «Добавить» menu — открывается из пустых состояний страниц */}
       {!isVerifiedOnly && <AddMenu />}

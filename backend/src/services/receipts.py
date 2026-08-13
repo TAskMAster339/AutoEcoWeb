@@ -182,6 +182,7 @@ class ReceiptService:
         date_from: datetime | None,
         date_to: datetime | None,
         seller: str | None,
+        search: str | None = None,
     ) -> tuple[list[Receipt], str | None]:
         cursor_tuple = decode_cursor(cursor) if cursor is not None else None
         items = await self._repo.list_cursor(
@@ -191,6 +192,7 @@ class ReceiptService:
             date_from=date_from,
             date_to=date_to,
             seller=seller,
+            search=search,
         )
         has_more = len(items) > limit
         items = items[:limit]
