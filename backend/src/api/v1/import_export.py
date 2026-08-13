@@ -1,5 +1,6 @@
 import datetime
 from io import BytesIO
+from typing import Literal
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -50,10 +51,11 @@ async def run_import(
 async def export_data(
     current_user: CurrentUser,
     import_export_svc: ImportExportSvc,
+    layout: Literal["monthly", "single"] = "monthly",
 ) -> StreamingResponse:
-    """Выгрузить все транзакции пользователя в .xlsx канонического формата."""
+    """Выгрузить все транзакции в один лист или с разбивкой по месяцам."""
     rows = await import_export_svc.export_rows(current_user)
-    content = build_export_workbook(rows)
+    content = build_export_workbook(rows, layout=layout)
     filename = f"autoeco-export-{datetime.date.today().isoformat()}.xlsx"  # noqa: DTZ011
     return StreamingResponse(
         BytesIO(content),

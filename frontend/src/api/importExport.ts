@@ -12,6 +12,10 @@ export interface ImportRowPreview {
   category: string | null
   store: string | null
   description: string
+  quantity: string | null
+  unit: string | null
+  price: string | null
+  comment: string | null
   income: string
   expense: string
   errors: string[]
@@ -29,6 +33,10 @@ export interface ImportRowIn {
   category: string | null
   store: string | null
   description: string
+  quantity: string | null
+  unit: string | null
+  price: string | null
+  comment: string | null
   income: string
   expense: string
 }
@@ -51,9 +59,11 @@ export async function runImport(rows: ImportRowIn[]): Promise<ImportResult> {
   return api.post<ImportResult>('/api/v1/import-export/import', { rows })
 }
 
-/** Скачать все транзакции в .xlsx канонического формата (лист на месяц). */
-export async function downloadExport(): Promise<void> {
-  const blob = await api.blob('/api/v1/import-export/export')
+export type ExportLayout = 'single' | 'monthly'
+
+/** Скачать все транзакции в .xlsx: один лист или лист на месяц. */
+export async function downloadExport(layout: ExportLayout): Promise<void> {
+  const blob = await api.blob(`/api/v1/import-export/export?layout=${layout}`)
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url

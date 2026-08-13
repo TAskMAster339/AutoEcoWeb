@@ -1,7 +1,8 @@
 """Схемы импорта/экспорта данных (универсальный формат).
 
 Канонический формат (источник истины — экспорт приложения):
-    Дата | Категория | Магазин | Описание | Доход | Расход
+    Дата | Категория | Магазин | Описание | Количество | Единица |
+    Цена | Комментарий | Доход | Расход
 
 - Дата: Excel-дата или текст DD.MM.YYYY / YYYY-MM-DD.
 - Категория: имя тега; пусто = без тега. Отсутствующие теги создаются
@@ -35,6 +36,10 @@ class ImportRowPreview(BaseModel):
     category: str | None = None
     store: str | None = None
     description: str = ""
+    quantity: Decimal | None = None
+    unit: str | None = None
+    price: Decimal | None = None
+    comment: str | None = None
     income: Decimal = Decimal("0")
     expense: Decimal = Decimal("0")
     errors: list[str] = []
@@ -54,6 +59,10 @@ class ImportRowIn(BaseModel):
     category: str | None = Field(default=None, max_length=100)
     store: str | None = Field(default=None, max_length=255)
     description: str = Field(min_length=1, max_length=255)
+    quantity: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=3)
+    unit: str | None = Field(default=None, max_length=16)
+    price: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+    comment: str | None = Field(default=None, max_length=1000)
     income: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
     expense: Decimal = Field(
         default=Decimal("0"),
@@ -62,7 +71,7 @@ class ImportRowIn(BaseModel):
         decimal_places=2,
     )
 
-    @field_validator("category", "store", mode="before")
+    @field_validator("category", "store", "unit", "comment", mode="before")
     @classmethod
     def _clean_optional(cls, value: object) -> str | None:
         if value is None:

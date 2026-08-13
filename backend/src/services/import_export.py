@@ -2,7 +2,8 @@
 
 Канонический формат (источник истины — экспорт приложения):
 
-    Дата | Категория | Магазин | Описание | Доход | Расход
+    Дата | Категория | Магазин | Описание | Количество | Единица |
+    Цена | Комментарий | Доход | Расход
 
 - Файлы: .xlsx (любое число листов, у каждого шапка в первых 5 строках)
   или .csv (UTF-8/CP1251, разделитель ';' или ',').
@@ -23,6 +24,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from typing import Literal
 from uuid import UUID
 
 from openpyxl import Workbook, load_workbook
@@ -90,9 +92,11 @@ _HEADER_ALIASES: dict[str, tuple[str, ...]] = {
         "description",
         "название",
         "name",
-        "комментарий",
-        "comment",
     ),
+    "quantity": ("количество", "quantity", "кол-во", "qty"),
+    "unit": ("единица", "unit", "ед. изм.", "единица измерения"),
+    "price": ("цена", "price", "цена за единицу"),
+    "comment": ("комментарий", "comment", "примечание", "note"),
     "income": ("доход", "income", "приход"),
     "expense": ("расход", "expense"),
 }
@@ -112,6 +116,10 @@ class ExportRow:
     category: str | None
     store: str | None
     description: str
+    quantity: Decimal | None
+    unit: str | None
+    price: Decimal | None
+    comment: str | None
     income: Decimal
     expense: Decimal
 
@@ -179,6 +187,17 @@ def _parse_money(value: object) -> Decimal | None:  # noqa: PLR0911
         return Decimal(text).quantize(Decimal("0.01"))
     except InvalidOperation:
         return None
+
+
+def _parse_quantity(value: object) -> Decimal | None:
+    """Количество хранится с точностью до трёх знаков, в отличие от денег."""
+    parsed = _parse_money(value)
+    if parsed is None:
+        return None
+    try:
+        return Decimal(str(value).strip().replace(",", ".")).quantize(Decimal("0.001"))
+    except InvalidOperation:
+        return parsed.quantize(Decimal("0.001"))
 
 
 # ---------- чтение файла ----------
@@ -268,6 +287,17 @@ def _row_to_preview(
     if not description:
         errors.append("Пустое описание")
 
+    quantity = _parse_quantity(_cell(row, mapping, "quantity"))
+    price = _parse_money(_cell(row, mapping, "price"))
+    unit = _clean_str(_cell(row, mapping, "unit"))
+    comment = _clean_str(_cell(row, mapping, "comment"))
+    if quantity is not None and quantity <= 0:
+        errors.append("Количество должно быть больше нуля")
+        quantity = None
+    if price is not None and price < 0:
+        errors.append("Цена не может быть отрицательной")
+        price = None
+
     income = _parse_money(_cell(row, mapping, "income"))
     expense = _parse_money(_cell(row, mapping, "expense"))
     if income is not None and income < 0:
@@ -287,6 +317,10 @@ def _row_to_preview(
         category=category,
         store=store,
         description=description,
+        quantity=quantity,
+        unit=unit,
+        price=price,
+        comment=comment,
         income=income or Decimal("0"),
         expense=expense or Decimal("0"),
         errors=errors,
@@ -329,65 +363,55 @@ def parse_import_file(filename: str, content: bytes) -> ImportPreview:
 # ---------- сборка экспорта ----------
 
 
-def build_export_workbook(rows: list[ExportRow]) -> bytes:
-    """Строки → .xlsx: лист на месяц («Сентябрь 2025»), шапка канонического формата."""
+_EXPORT_HEADER = [
+    "Дата", "Категория", "Магазин", "Описание", "Количество",
+    "Единица", "Цена", "Комментарий", "Доход", "Расход",
+]
+_EXPORT_WIDTHS = (12, 22, 22, 48, 14, 12, 14, 36, 14, 14)
+
+
+def _fill_export_sheet(worksheet, rows: list[ExportRow]) -> None:
+    worksheet.append(_EXPORT_HEADER)
+    for item in sorted(rows, key=lambda row: row.date):
+        worksheet.append([
+            item.date, item.category or "", item.store or "", item.description,
+            item.quantity, item.unit or "", item.price, item.comment or "",
+            item.income, item.expense,
+        ])
+    for row_cells in worksheet.iter_rows(min_row=2):
+        row_cells[0].number_format = "DD.MM.YYYY"
+        row_cells[4].number_format = "#,##0.000"
+        row_cells[6].number_format = "#,##0.00"
+        row_cells[8].number_format = "#,##0.00"
+        row_cells[9].number_format = "#,##0.00"
+    worksheet.freeze_panes = "A2"
+    for index, width in enumerate(_EXPORT_WIDTHS, start=1):
+        worksheet.column_dimensions[chr(64 + index)].width = width
+
+
+def build_export_workbook(
+    rows: list[ExportRow],
+    *,
+    layout: Literal["monthly", "single"] = "monthly",
+) -> bytes:
+    """Строки → .xlsx: один общий лист или отдельный лист на каждый месяц."""
     workbook = Workbook()
     if workbook.active is not None:
         workbook.remove(workbook.active)
 
-    by_month: dict[tuple[int, int], list[ExportRow]] = {}
-    for row in rows:
-        by_month.setdefault((row.date.year, row.date.month), []).append(row)
-
-    if not by_month:
-        worksheet = workbook.create_sheet("Транзакции")
-        worksheet.append(
-            ["Дата", "Категория", "Магазин", "Описание", "Доход", "Расход"],
-        )
-        worksheet.freeze_panes = "A2"
-        for column_letter, width in (
-            ("A", 12),
-            ("B", 22),
-            ("C", 22),
-            ("D", 48),
-            ("E", 12),
-            ("F", 12),
-        ):
-            worksheet.column_dimensions[column_letter].width = width
-        buffer = io.BytesIO()
-        workbook.save(buffer)
-        return buffer.getvalue()
-
-    for (year, month), items in sorted(by_month.items()):
-        worksheet = workbook.create_sheet(f"{_RU_MONTHS[month - 1]} {year}")
-        worksheet.append(
-            ["Дата", "Категория", "Магазин", "Описание", "Доход", "Расход"],
-        )
-        for item in sorted(items, key=lambda r: r.date):
-            worksheet.append(
-                [
-                    item.date,
-                    item.category or "",
-                    item.store or "",
-                    item.description,
-                    item.income,
-                    item.expense,
-                ],
+    if layout == "single":
+        _fill_export_sheet(workbook.create_sheet("Транзакции"), rows)
+    else:
+        by_month: dict[tuple[int, int], list[ExportRow]] = {}
+        for row in rows:
+            by_month.setdefault((row.date.year, row.date.month), []).append(row)
+        if not by_month:
+            _fill_export_sheet(workbook.create_sheet("Транзакции"), [])
+        for (year, month), items in sorted(by_month.items()):
+            _fill_export_sheet(
+                workbook.create_sheet(f"{_RU_MONTHS[month - 1]} {year}"),
+                items,
             )
-        for row_cells in worksheet.iter_rows(min_row=2):
-            row_cells[0].number_format = "DD.MM.YYYY"
-            row_cells[4].number_format = "#,##0.00"
-            row_cells[5].number_format = "#,##0.00"
-        worksheet.freeze_panes = "A2"
-        for column_letter, width in (
-            ("A", 12),
-            ("B", 22),
-            ("C", 22),
-            ("D", 48),
-            ("E", 12),
-            ("F", 12),
-        ):
-            worksheet.column_dimensions[column_letter].width = width
 
     buffer = io.BytesIO()
     workbook.save(buffer)
@@ -467,10 +491,11 @@ class ImportExportService:
                     if product_resolved.alias is not None
                     else None,
                     seller_id=seller.id if seller is not None else None,
-                    quantity=None,
-                    unit=None,
-                    price=None,
+                    quantity=row.quantity,
+                    unit=row.unit,
+                    price=row.price,
                     amount=amount.quantize(Decimal("0.01")),
+                    comment=row.comment,
                     operation_type=2 if row.income > 0 else 1,
                     check_datetime=datetime.datetime.combine(
                         row.date,
@@ -503,6 +528,10 @@ class ImportExportService:
                     # seller value, including the receipt fallback.
                     store=seller_name,
                     description=tx.name,
+                    quantity=tx.quantity,
+                    unit=tx.unit,
+                    price=tx.price,
+                    comment=tx.comment,
                     income=tx.amount if is_income else Decimal("0"),
                     expense=tx.amount if not is_income else Decimal("0"),
                 ),

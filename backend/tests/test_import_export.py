@@ -24,6 +24,18 @@ from src.services.import_export import (
 from src.services.sellers import SellerService
 
 HEADER = ["Дата", "Категория", "Магазин", "Описание", "Доход", "Расход"]
+EXPORT_HEADER = [
+    "Дата",
+    "Категория",
+    "Магазин",
+    "Описание",
+    "Количество",
+    "Единица",
+    "Цена",
+    "Комментарий",
+    "Доход",
+    "Расход",
+]
 
 
 def _make_xlsx(rows: list[Sequence[object]], sheet: str = "Данные") -> bytes:
@@ -181,6 +193,10 @@ def test_build_export_workbook_roundtrip():
             category="Еда",
             store="Пятёрочка",
             description="Молоко",
+            quantity=Decimal("2.125"),
+            unit="шт",
+            price=Decimal("44.95"),
+            comment="По акции",
             income=Decimal("0"),
             expense=Decimal("89.90"),
         ),
@@ -189,6 +205,10 @@ def test_build_export_workbook_roundtrip():
             category="ЗП",
             store=None,
             description="Аванс",
+            quantity=None,
+            unit=None,
+            price=None,
+            comment=None,
             income=Decimal("40000.00"),
             expense=Decimal("0"),
         ),
@@ -201,6 +221,10 @@ def test_build_export_workbook_roundtrip():
     assert by_desc["Молоко"].date == datetime.date(2025, 9, 21)
     assert by_desc["Молоко"].store == "Пятёрочка"
     assert by_desc["Молоко"].expense == Decimal("89.90")
+    assert by_desc["Молоко"].quantity == Decimal("2.125")
+    assert by_desc["Молоко"].unit == "шт"
+    assert by_desc["Молоко"].price == Decimal("44.95")
+    assert by_desc["Молоко"].comment == "По акции"
     assert by_desc["Аванс"].income == Decimal("40000.00")
     assert by_desc["Аванс"].category == "ЗП"
 
@@ -208,23 +232,38 @@ def test_build_export_workbook_roundtrip():
 def test_build_export_workbook_sheets_by_month():
     rows = [
         ExportRow(
-            datetime.date(2025, 9, 5), None, None, "A", Decimal("0"), Decimal("1")
+            datetime.date(2025, 9, 5), None, None, "A", None, None, None, None, Decimal("0"), Decimal("1")
         ),
         ExportRow(
-            datetime.date(2025, 10, 5), None, None, "B", Decimal("0"), Decimal("2")
+            datetime.date(2025, 10, 5), None, None, "B", None, None, None, None, Decimal("0"), Decimal("2")
         ),
     ]
     content = build_export_workbook(rows)
     wb = openpyxl.load_workbook(io.BytesIO(content))
     assert wb.sheetnames == ["Сентябрь 2025", "Октябрь 2025"]
-    assert list(wb["Сентябрь 2025"].iter_rows(values_only=True))[0] == tuple(HEADER)
+    assert list(wb["Сентябрь 2025"].iter_rows(values_only=True))[0] == tuple(EXPORT_HEADER)
+
+
+def test_build_export_workbook_single_sheet():
+    rows = [
+        ExportRow(
+            datetime.date(2025, 9, 5), None, None, "A", None, None, None, None, Decimal("0"), Decimal("1")
+        ),
+        ExportRow(
+            datetime.date(2025, 10, 5), None, None, "B", None, None, None, None, Decimal("0"), Decimal("2")
+        ),
+    ]
+    content = build_export_workbook(rows, layout="single")
+    wb = openpyxl.load_workbook(io.BytesIO(content))
+    assert wb.sheetnames == ["Транзакции"]
+    assert len(list(wb["Транзакции"].iter_rows(values_only=True))) == 3
 
 
 def test_build_export_workbook_empty():
     content = build_export_workbook([])
     wb = openpyxl.load_workbook(io.BytesIO(content))
     assert wb.sheetnames == ["Транзакции"]
-    assert list(wb["Транзакции"].iter_rows(values_only=True))[0] == tuple(HEADER)
+    assert list(wb["Транзакции"].iter_rows(values_only=True))[0] == tuple(EXPORT_HEADER)
 
 
 # ---------- сервис: импорт ----------
@@ -333,3 +372,23 @@ async def test_export_rows_excludes_tag_field_when_no_tag(session):
     await _service(session).import_rows(user, [_row(description="Без тега")])
     rows = await _service(session).export_rows(user)
     assert rows[0].category is None
+
+
+async def test_export_rows_includes_quantity_price_and_comment(session):
+    user = await _make_user(session)
+    await _service(session).import_rows(
+        user,
+        [
+            _row(
+                quantity=Decimal("2.125"),
+                unit="кг",
+                price=Decimal("42.30"),
+                comment="Для дома",
+            ),
+        ],
+    )
+    rows = await _service(session).export_rows(user)
+    assert rows[0].quantity == Decimal("2.125")
+    assert rows[0].unit == "кг"
+    assert rows[0].price == Decimal("42.30")
+    assert rows[0].comment == "Для дома"

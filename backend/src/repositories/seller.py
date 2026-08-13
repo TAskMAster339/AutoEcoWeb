@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import Table, bindparam, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from src.models.alias import Alias
 from src.models.seller import Seller
 
@@ -136,6 +137,33 @@ class SellerRepository:
         from src.models.receipt import Receipt
         from src.models.transaction import Transaction
 
+        effective_seller = aliased(Seller, name="effective_seller")
+        receipt_seller = aliased(Seller, name="management_receipt_seller")
+        transaction_count = (
+            select(func.count(Transaction.id))
+            .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+            .join(
+                effective_seller,
+                effective_seller.id
+                == func.coalesce(Transaction.seller_id, Receipt.seller_id),
+            )
+            .where(
+                Transaction.user_id == user_id,
+                effective_seller.normalized_name == Seller.normalized_name,
+            )
+            .correlate(Seller)
+            .scalar_subquery()
+        )
+        receipt_count = (
+            select(func.count(Receipt.id))
+            .join(receipt_seller, receipt_seller.id == Receipt.seller_id)
+            .where(
+                Receipt.user_id == user_id,
+                receipt_seller.normalized_name == Seller.normalized_name,
+            )
+            .correlate(Seller)
+            .scalar_subquery()
+        )
         stmt = (
             select(
                 Seller.id,
@@ -143,20 +171,11 @@ class SellerRepository:
                 Seller.normalized_name,
                 Seller.seller_alias_id,
                 Alias.alias_name,
-                func.count(func.distinct(Transaction.id)),
-                func.count(func.distinct(Receipt.id)),
+                transaction_count,
+                receipt_count,
             )
             .outerjoin(Alias, Alias.id == Seller.seller_alias_id)
-            .outerjoin(Transaction, Transaction.seller_id == Seller.id)
-            .outerjoin(Receipt, Receipt.seller_id == Seller.id)
             .where(Seller.user_id == user_id)
-            .group_by(
-                Seller.id,
-                Seller.name,
-                Seller.normalized_name,
-                Seller.seller_alias_id,
-                Alias.alias_name,
-            )
             .order_by(Seller.normalized_name.asc(), Seller.id.asc())
         )
         return [tuple(row) for row in (await self._session.execute(stmt)).all()]

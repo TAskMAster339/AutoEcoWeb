@@ -4,8 +4,7 @@
 
 AutoEco — Receipt Management Platform.
 
-- Backend is developed manually by the project owner.
-- Frontend is developed by AI.
+- Backend and frontend may be developed by AI.
 - Root infra files (docker-compose.*, Makefile, README.md, AGENTS.md) are
   owned by the project owner; AI may edit them only when asked.
 
@@ -14,12 +13,12 @@ AutoEco — Receipt Management Platform.
 | Path | Owner | AI access |
 |---|---|---|
 | `/frontend` | AI | read/write |
-| `/backend` | Human | **read-only — never modify** |
+| `/backend` | AI | read/write |
 | `/deploy`, `/docker-compose.*.yml`, `Makefile`, `README.md`, `AGENTS.md` | Human | edit only on request |
 
 # Responsibilities
 
-Backend (Human)
+Backend
 
 - FastAPI
 - SQLAlchemy
@@ -31,7 +30,7 @@ Backend (Human)
 - Database
 - Docker
 
-Frontend (AI)
+Frontend
 
 - React 19
 - TypeScript (strict)
@@ -48,20 +47,16 @@ Frontend (AI)
 
 The AI MUST NEVER
 
-- modify backend
-- rename API endpoints
-- change database models
-- invent backend fields
-- change authentication flow
+- make breaking API endpoint renames without an explicit migration plan
+- invent fields that are absent from both the backend model and intended contract
+- change authentication flow unless the task explicitly requires it
 - fake backend implementation
 - log into the app or do manual browser testing (login, navigation, clicks,
   form filling) — browser smoke checks only with explicit owner permission
 
-If an endpoint is missing:
-
-1. Add it to `frontend/TODO.md`.
-2. Continue implementation with mock data behind the feature flag.
-3. Never fake production API.
+If an endpoint is missing, implement it on the backend following the existing
+router → service → repository layering and then wire the frontend to the real
+OpenAPI contract. Never fake production API.
 
 # API
 
