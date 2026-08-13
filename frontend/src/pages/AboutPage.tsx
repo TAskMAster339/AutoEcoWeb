@@ -25,7 +25,6 @@ import VolunteerActivismOutlinedIcon from '@mui/icons-material/VolunteerActivism
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined'
 import ArrowForwardOutlinedIcon from '@mui/icons-material/ArrowForwardOutlined'
 import SecurityOutlinedIcon from '@mui/icons-material/SecurityOutlined'
-import { PageHeader } from '../components/common/PageHeader'
 import { softBg, softFg } from '../theme'
 
 const GUIDE_PAGES = [
