@@ -10,8 +10,32 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import { SeoMeta } from './components/common/SeoMeta'
 
 // Route-level code splitting (AGENTS.md: lazy loading, route splitting).
+const CHUNK_RELOAD_KEY = 'autoeco:chunk-reload'
+
+function isChunkLoadError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error)
+    return /dynamically imported module|Loading chunk|ChunkLoadError/i.test(message)
+}
+
 const page = (loader: () => Promise<{ [key: string]: unknown }>, name: string) =>
-    lazy(() => loader().then((m) => ({ default: m[name] as React.ComponentType })))
+    lazy(async () => {
+        try {
+            const module = await loader()
+            sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+            return { default: module[name] as React.ComponentType }
+        } catch (error) {
+            // После деплоя открытая вкладка может запросить удалённый hash-файл.
+            // Один автоматический reload получает свежий index.html и новые chunks;
+            // sessionStorage предотвращает бесконечный цикл при настоящей ошибке.
+            if (isChunkLoadError(error) && !sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+                sessionStorage.setItem(CHUNK_RELOAD_KEY, '1')
+                window.location.reload()
+                return new Promise<never>(() => undefined)
+            }
+            sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+            throw error
+        }
+    })
 
 const TransactionsPage = page(() => import('./pages/TransactionsPage'), 'TransactionsPage')
 const DashboardPage = page(() => import('./pages/DashboardPage'), 'DashboardPage')

@@ -112,7 +112,10 @@ class ImportRowIn(BaseModel):
         normalized = dict(values)
         normalized["quantity"] = normalized.get("quantity") or Decimal("1")
         normalized["unit"] = normalized.get("unit") or "шт."
-        normalized["price"] = normalized.get("price") or Decimal("0")
+        if not normalized.get("price"):
+            income = normalized.get("income") or Decimal("0")
+            expense = normalized.get("expense") or Decimal("0")
+            normalized["price"] = income or expense
         normalized["comment"] = normalized.get("comment") or ""
         return normalized
 

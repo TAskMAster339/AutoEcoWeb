@@ -329,12 +329,14 @@ async def test_import_rows_creates_tags_and_maps_fields(session):
     assert tx.normalized_name == "молоко"
     assert tx.seller.name == "Пятёрочка"
     assert tx.amount == Decimal("89.90")
+    assert tx.price == Decimal("89.90")
     assert tx.operation_type == 1  # расход
     assert tx.check_datetime.date() == datetime.date(2025, 9, 21)
     assert tx.tag_id is not None
 
     income_tx, _ = txs[1]
     assert income_tx.amount == Decimal("40000.00")
+    assert income_tx.price == Decimal("40000.00")
     assert income_tx.operation_type == 2  # доход
 
 
