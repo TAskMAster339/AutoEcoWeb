@@ -1,10 +1,10 @@
-import re
 from datetime import date, datetime
 from decimal import Decimal
 from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from src.core.regex import compile_wildcard_regex
 from sqlalchemy import (
     Table,
     and_,
@@ -732,21 +732,13 @@ class TransactionRepository:
         )
         rows = (await self._session.execute(stmt)).all()
         if is_regex:
-            pattern = name
             try:
-                rx = re.compile(pattern, re.IGNORECASE)
-            except re.error:
-                # "*биойогурт*" — wildcard-стиль, невалидный regex (ведущий *
-                # без атома). Трактуем * как .* и пробуем снова; если и так
-                # не компилируется — честный 422.
-                pattern = pattern.replace("*", ".*")
-                try:
-                    rx = re.compile(pattern, re.IGNORECASE)
-                except re.error as exc:
-                    raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                        detail=f"Невалидное регулярное выражение: {exc}",
-                    ) from exc
+                rx = compile_wildcard_regex(name)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=f"Невалидное регулярное выражение: {exc}",
+                ) from exc
             rows = [
                 row
                 for row in rows

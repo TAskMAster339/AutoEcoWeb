@@ -510,28 +510,29 @@ class TransactionService:
             )
         # Единый источник цены для всего матча
         use_price = all(price is not None for _, price, _, _, _ in rows)
-        effective: list[tuple[str, str | None, Decimal]] = []
-        for day_, price, amount, store, _name in rows:
+        effective: list[tuple[str, str | None, Decimal, str]] = []
+        for day_, price, amount, store, transaction_name in rows:
             value = price if use_price and price is not None else amount
-            effective.append((str(day_), store, value))
-        prices = [value for _, _, value in effective]
+            effective.append((str(day_), store, value, transaction_name))
+        prices = [value for _, _, value, _ in effective]
 
-        per_day: dict[tuple[str, str | None], list[Decimal]] = {}
+        per_day: dict[tuple[str, str | None], list[tuple[Decimal, str]]] = {}
         store_order: list[str | None] = []
-        for day_, store, price in effective:
+        for day_, store, price, transaction_name in effective:
             key = (day_, store)
-            per_day.setdefault(key, []).append(price)
+            per_day.setdefault(key, []).append((price, transaction_name))
             if store not in store_order:
                 store_order.append(store)
 
         points = [
             PricePoint(
                 day=day_,
-                price=_money2(float(sum(v)) / len(v)),
-                count=len(v),
+                price=_money2(float(sum(price for price, _ in values)) / len(values)),
+                count=len(values),
                 store=store,
+                names=list(dict.fromkeys(name for _, name in values)),
             )
-            for (day_, store), v in sorted(per_day.items())
+            for (day_, store), values in sorted(per_day.items())
         ]
         f_prices = [float(p) for p in prices]
         return PriceChartResponse(

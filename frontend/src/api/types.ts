@@ -337,6 +337,7 @@ export interface PricePoint {
   price: number
   count: number
   store: string | null
+  names: string[]
 }
 
 export interface PriceChartData {

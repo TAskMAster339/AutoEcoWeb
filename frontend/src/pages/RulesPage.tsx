@@ -25,6 +25,7 @@ import { useAliases, useApplyAliases, useCreateAlias, useDeleteAlias, useUpdateA
 import { useOnline } from '../hooks/useOnline'
 import type { Alias, AliasScope } from '../api/types'
 import { PageSearch } from '../components/common/PageSearch'
+import { RegexBuilder } from '../components/common/RegexBuilder'
 
 const SCOPE_LABEL: Record<AliasScope, string> = {
     seller: 'магазина',
@@ -255,10 +256,14 @@ export function RulesPage() {
             <BottomSheet open={sheetOpen} onClose={closeSheet} title={editingAlias ? `Редактировать правило ${SCOPE_LABEL[scope]}` : `Новое правило ${SCOPE_LABEL[scope]}`}>
                 <Stack spacing={2} onKeyDown={handleEditorKeyDown}>
                     {formError && <Alert severity="error">{formError}</Alert>}
-                    <TextField label="Шаблон" value={original} onChange={(e) => setOriginal(e.target.value)} fullWidth placeholder={scope === 'seller' ? 'например: перекресток|перекрёсток' : 'например: РАЭ Сырок тв.гл.с вар.сг.15%45г'} autoFocus />
+                    {isRegex ? (
+                        <RegexBuilder value={original} onChange={setOriginal} scope={scope} />
+                    ) : (
+                        <TextField label="Текст в названии" value={original} onChange={(e) => setOriginal(e.target.value)} fullWidth placeholder={scope === 'seller' ? 'например: перекресток' : 'например: РАЭ Сырок'} autoFocus helperText="Правило сработает, если название содержит этот текст" slotProps={{ htmlInput: { maxLength: 255 } }} />
+                    )}
                     <TextField label="Название по правилу" value={alias} onChange={(e) => setAlias(e.target.value)} fullWidth placeholder={scope === 'seller' ? 'например: Перекрёсток' : 'например: Глазированный сырок'} />
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}>
-                        <FormControlLabel control={<Checkbox checked={isRegex} onChange={(e) => setIsRegex(e.target.checked)} />} label="Регулярное выражение" />
+                        <FormControlLabel control={<Checkbox checked={isRegex} onChange={(e) => setIsRegex(e.target.checked)} />} label="Расширенный шаблон" />
                         <TextField label="Приоритет" value={priority} onChange={(e) => setPriority(e.target.value.replace(/[^0-9]/g, ''))} inputMode="numeric" sx={{ width: { xs: '100%', sm: 120 } }} placeholder="0" slotProps={{ htmlInput: { maxLength: 4 } }} />
                     </Stack>
                     <Box sx={{ position: 'sticky', bottom: 0, zIndex: 1, pt: 1, pb: 'env(safe-area-inset-bottom)', bgcolor: 'background.paper' }}>

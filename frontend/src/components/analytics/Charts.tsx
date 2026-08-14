@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { Box, Card, Stack, Typography, useTheme } from '@mui/material'
 import {
     Bar,
@@ -127,7 +127,7 @@ interface LineChartProps {
 }
 
 /** Кривая с точками, трендом, медианой и тултипом (Recharts). */
-export function LineChart({
+export const LineChart = memo(function LineChart({
     points,
     trend,
     median,
@@ -142,9 +142,9 @@ export function LineChart({
     const textSecondary = theme.palette.text.secondary
     const paper = theme.palette.background.paper
 
-    const data = points.map((p, i) => ({ ...p, trend: trend?.[i] ?? null }))
-    const rawMax = points.length ? Math.max(...points.map((p) => p.value)) : 0
-    const rawMin = points.length ? Math.min(...points.map((p) => p.value)) : 0
+    const data = useMemo(() => points.map((point, index) => ({ ...point, trend: trend?.[index] ?? null })), [points, trend])
+    const rawMax = useMemo(() => points.length ? Math.max(...points.map((point) => point.value)) : 0, [points])
+    const rawMin = useMemo(() => points.length ? Math.min(...points.map((point) => point.value)) : 0, [points])
     const pad = Math.max((rawMax - rawMin) * 0.1, 1)
     const labelEvery = Math.max(1, Math.ceil(points.length / 8))
 
@@ -249,7 +249,7 @@ export function LineChart({
             </ResponsiveContainer>
         </Box>
     )
-}
+})
 
 export interface DonutItem {
     label: string
@@ -275,15 +275,13 @@ interface DonutChartProps {
 }
 
 /** Кольцевая диаграмма: %, точные суммы в легенде, тултип за курсором (Recharts). */
-export function DonutChart({ items, formatValue, centerLabel = 'всего', dropZeros = true, getItemClick }: DonutChartProps) {
+export const DonutChart = memo(function DonutChart({ items, formatValue, centerLabel = 'всего', dropZeros = true, getItemClick }: DonutChartProps) {
     const [active, setActive] = useState<number | null>(null)
     const [tip, setTip] = useState<{ x: number; y: number; item: DonutItem } | null>(null)
+    const tooltipRef = useRef<HTMLDivElement | null>(null)
 
-    const data = dropZeros ? items.filter((i) => i.value > 0) : items
-    const total = data.reduce((s, i) => s + i.value, 0)
-    if (total <= 0) {
-        return <EmptyChart text="Нет данных за период" ariaLabel="Круговая диаграмма" />
-    }
+    const data = useMemo(() => dropZeros ? items.filter((item) => item.value > 0) : items, [dropZeros, items])
+    const total = useMemo(() => data.reduce((sum, item) => sum + item.value, 0), [data])
 
     // Recharts' Tooltip ставит карточку в центре сектора (= центр кольца),
     // где лежит сумма — перекрывает её. Поэтому рисуем свой тултип,
@@ -297,10 +295,19 @@ export function DonutChart({ items, formatValue, centerLabel = 'всего', dro
         ]
     }
 
-    const showTip = (i: number, clientX: number, clientY: number) => {
-        const item = data[i]!
-        setActive(i)
-        setTip({ x: clientX, y: clientY, item })
+    const showTip = useCallback((index: number, clientX: number, clientY: number) => {
+        setActive(index)
+        setTip({ x: clientX, y: clientY, item: data[index]! })
+    }, [data])
+
+    const moveTip = useCallback((clientX: number, clientY: number) => {
+        if (!tooltipRef.current) return
+        tooltipRef.current.style.left = `${clientX + 14}px`
+        tooltipRef.current.style.top = `${clientY + 14}px`
+    }, [])
+
+    if (total <= 0) {
+        return <EmptyChart text="Нет данных за период" ariaLabel="Круговая диаграмма" />
     }
 
     const handleSegmentClick = (item?: DonutItem) => {
@@ -328,7 +335,7 @@ export function DonutChart({ items, formatValue, centerLabel = 'всего', dro
                             stroke="none"
                             isAnimationActive={false}
                             onMouseEnter={(_, i, e) => showTip(i, e.clientX, e.clientY)}
-                            onMouseMove={(_, i, e) => showTip(i, e.clientX, e.clientY)}
+                            onMouseMove={(_, _index, event) => moveTip(event.clientX, event.clientY)}
                             onClick={(_, i) => handleSegmentClick(data[i])}
                         >
                             {data.map((item, i) => (
@@ -363,11 +370,12 @@ export function DonutChart({ items, formatValue, centerLabel = 'всего', dro
             </Box>
 
             {tip && (
-                <TooltipCard
-                    title={tip.item.icon ? `${tip.item.icon} ${tip.item.label}` : tip.item.label}
-                    rows={tipRows(tip.item)}
-                    style={{ position: 'fixed', left: tip.x + 14, top: tip.y + 14, zIndex: 1300, pointerEvents: 'none' }}
-                />
+                <Box ref={tooltipRef} sx={{ position: 'fixed', left: tip.x + 14, top: tip.y + 14, zIndex: 1300, pointerEvents: 'none' }}>
+                    <TooltipCard
+                        title={tip.item.icon ? `${tip.item.icon} ${tip.item.label}` : tip.item.label}
+                        rows={tipRows(tip.item)}
+                    />
+                </Box>
             )}
 
             <Stack spacing={0.5} sx={{ width: '100%', maxWidth: 300 }}>
@@ -415,7 +423,7 @@ export function DonutChart({ items, formatValue, centerLabel = 'всего', dro
             </Stack>
         </Box>
     )
-}
+})
 
 export interface WeekdayBar {
     /** 1..7, ISO (1 = Пн) */
@@ -439,16 +447,16 @@ export function weekdayLabel(weekday: number): string {
 }
 
 /** Столбчатая диаграмма трат по дням недели (всегда 7 столбцов, Recharts). */
-export function WeekdayBars({ data, formatValue }: WeekdayBarsProps) {
+export const WeekdayBars = memo(function WeekdayBars({ data, formatValue }: WeekdayBarsProps) {
     const theme = useTheme()
     const grid = theme.palette.divider
     const textSecondary = theme.palette.text.secondary
 
-    const bars = WEEKDAY_LABELS.map((label, i) => {
+    const bars = useMemo(() => WEEKDAY_LABELS.map((label, i) => {
         const d = data.find((x) => x.weekday === i + 1)
         // Цвет дня — свой, даже при нулевых тратах (но нейтральный, не акцентный)
         return { label, value: d?.value ?? 0, count: d?.count ?? 0, weekday: i + 1, fill: WEEKDAY_COLORS[i]! }
-    })
+    }), [data])
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const barTooltip = (props: any) => {
@@ -494,7 +502,7 @@ export function WeekdayBars({ data, formatValue }: WeekdayBarsProps) {
             </ResponsiveContainer>
         </Box>
     )
-}
+})
 
 /** Пустой график-заглушка. */
 export function EmptyChart({ text, ariaLabel }: { text: string; ariaLabel: string }) {

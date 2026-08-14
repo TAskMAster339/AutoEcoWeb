@@ -84,7 +84,9 @@ async def test_tag_lists_include_user_transaction_counts(session):
     user = await _make_user(session)
     tag_service = TagService(TagRepository(session))
     food = await tag_service.create(user, TagCreate(name="Еда", color="#3B82F6"))
-    empty = await tag_service.create(user, TagCreate(name="Без операций", color="#16A34A"))
+    empty = await tag_service.create(
+        user, TagCreate(name="Без операций", color="#16A34A")
+    )
     tx_service = _tx_service(session)
 
     for name in ("Хлеб", "Молоко"):
@@ -1066,6 +1068,7 @@ async def test_price_chart_substring(session):
     assert r.points[0].day == "2026-01-10"
     assert r.points[0].store == "Пятёрочка"
     assert r.points[0].price == Decimal("45.00")
+    assert r.points[0].names == ["Хлеб Бородинский"]
     assert r.avg_price == Decimal("45.00")
     assert r.median_price == Decimal("45.00")
     assert r.stddev == Decimal("0.00")
@@ -1205,6 +1208,34 @@ async def test_price_chart_glob_wildcards(session):
     assert r.avg_price == Decimal("49.00")  # (55+62+30)/3
     # все точки — только биойогурты, хлеб исключён
     assert {p.day for p in r.points} == {"2026-01-10", "2026-01-12", "2026-01-14"}
+
+
+async def test_price_chart_question_wildcard(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    for name, day in [("Сыр 200г", 10), ("Сыр 500г", 11), ("Сыр 1000г", 12)]:
+        await service.create_standalone(
+            user,
+            TransactionCreate(
+                name=name,
+                amount=Decimal("50.00"),
+                price=Decimal("50.00"),
+                quantity=Decimal("1"),
+                datetime=datetime(2026, 1, day, tzinfo=timezone.utc),
+            ),
+        )
+    r = await service.price_chart(
+        user,
+        name="сыр ?00г",
+        is_regex=True,
+        date_from=None,
+        date_to=None,
+    )
+    assert r.count == 2
+    assert {name for point in r.points for name in point.names} == {
+        "Сыр 200г",
+        "Сыр 500г",
+    }
 
 
 async def test_price_chart_invalid_regex(session):

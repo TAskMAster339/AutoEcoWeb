@@ -55,6 +55,7 @@ class PricePoint(BaseModel):
     price: Decimal
     count: int
     store: str | None
+    names: list[str] = Field(default_factory=list)
 
 
 class PriceChartResponse(BaseModel):

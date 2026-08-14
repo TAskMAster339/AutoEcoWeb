@@ -14,6 +14,7 @@ import {
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import AddIcon from '@mui/icons-material/Add'
+import RestartAltIcon from '@mui/icons-material/RestartAlt'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { StatisticCard } from '../components/common/StatisticCard'
@@ -31,7 +32,7 @@ import { useUiStore } from '../store/uiStore'
 import { useFilterParams } from '../lib/filters'
 import { fetchTransactionsPage, toTransactionView } from '../api/transactions'
 import { formatCurrency, pluralRu } from '../lib/format'
-import { colors } from '../theme'
+import { colors, softBg, softFg } from '../theme'
 import { PageSearch } from '../components/common/PageSearch'
 import type { TransactionView } from '../api/types'
 
@@ -300,11 +301,25 @@ export function TransactionsPage() {
                     <PageSearch value={search} onChange={useUiStore.getState().setSearch} placeholder="Магазин, название или комментарий" ariaLabel="Поиск по магазинам, названиям и комментариям" width="100%" />
                 </Box>
                 <Button
-                    variant="text"
-                    color="inherit"
+                    variant={hasFilters ? 'outlined' : 'text'}
+                    color={hasFilters ? 'primary' : 'inherit'}
+                    startIcon={hasFilters ? <RestartAltIcon /> : undefined}
                     onClick={handleResetFilters}
                     disabled={!hasFilters}
-                    sx={{ color: 'text.secondary', textTransform: 'none' }}
+                    aria-label="Сбросить активные фильтры"
+                    sx={(theme) => ({
+                        textTransform: 'none',
+                        ...(hasFilters
+                            ? {
+                                bgcolor: softBg(theme),
+                                color: softFg(theme),
+                                borderColor: 'primary.main',
+                                fontWeight: 700,
+                                boxShadow: 1,
+                                '&:hover': { bgcolor: 'primary.light', borderColor: 'primary.dark', boxShadow: 2 },
+                            }
+                            : { color: 'text.secondary' }),
+                    })}
                 >
                     <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Сбросить фильтры</Box>
                     <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Сбросить</Box>

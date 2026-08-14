@@ -21,6 +21,11 @@ interface UiState {
   /** Конкретный день в формате «YYYY-MM-DD» (период 'day'). */
   dayDate: string | null
   search: string
+  /** Черновик и последний применённый запрос графика цен на странице аналитики. */
+  priceChartName: string
+  priceChartIsRegex: boolean
+  priceChartSubmittedName: string
+  priceChartSubmittedIsRegex: boolean
   /** Мультивыбор: пустой массив = без фильтра. */
   tagFilterIds: string[]
   storeFilters: string[]
@@ -40,6 +45,9 @@ interface UiState {
   setMonthPeriod: (monthYear: string) => void
   setDayPeriod: (dayDate: string) => void
   setSearch: (value: string) => void
+  setPriceChartName: (name: string) => void
+  setPriceChartIsRegex: (isRegex: boolean) => void
+  submitPriceChart: (name: string, isRegex: boolean) => void
   setTagFilterIds: (tagIds: string[]) => void
   setStoreFilters: (stores: string[]) => void
   applyFilters: (filters: {
@@ -69,6 +77,10 @@ export const useUiStore = create<UiState>()(
       monthYear: null,
       dayDate: null,
       search: '',
+      priceChartName: '',
+      priceChartIsRegex: false,
+      priceChartSubmittedName: '',
+      priceChartSubmittedIsRegex: false,
       tagFilterIds: [],
       storeFilters: [],
       addMenuOpen: false,
@@ -88,6 +100,10 @@ export const useUiStore = create<UiState>()(
       setMonthPeriod: (monthYear) => set({ monthYear, periodKey: 'month' }),
       setDayPeriod: (dayDate) => set({ dayDate, periodKey: 'day' }),
       setSearch: (search) => set({ search }),
+      setPriceChartName: (priceChartName) => set({ priceChartName }),
+      setPriceChartIsRegex: (priceChartIsRegex) => set({ priceChartIsRegex }),
+      submitPriceChart: (priceChartSubmittedName, priceChartSubmittedIsRegex) =>
+        set({ priceChartSubmittedName, priceChartSubmittedIsRegex }),
       setTagFilterIds: (tagFilterIds) => set({ tagFilterIds }),
       setStoreFilters: (storeFilters) => set({ storeFilters }),
       applyFilters: ({ search, tagFilterIds, storeFilters, periodKey }) =>

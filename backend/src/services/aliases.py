@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -8,6 +7,7 @@ if TYPE_CHECKING:
     from src.services.sellers import SellerService
 
 from fastapi import HTTPException, status
+from src.core.regex import compile_wildcard_regex
 from src.models.alias import Alias
 from src.models.user import User
 from src.repositories.alias import AliasRepository
@@ -68,8 +68,8 @@ class AliasService:
         alias_name = data.alias_name.strip()
         if data.is_regex:
             try:
-                re.compile(original)
-            except re.error as exc:
+                compile_wildcard_regex(original)
+            except ValueError as exc:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Некорректное регулярное выражение",
@@ -109,8 +109,10 @@ class AliasService:
             changes["alias_name"] = changes["alias_name"].strip()
         if changes.get("is_regex", alias.is_regex):
             try:
-                re.compile(changes.get("original_name", alias.original_name))
-            except re.error as exc:
+                compile_wildcard_regex(
+                    changes.get("original_name", alias.original_name)
+                )
+            except ValueError as exc:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Некорректное регулярное выражение",
@@ -187,10 +189,10 @@ class AliasService:
             if alias.is_regex:
                 try:
                     matched = (
-                        re.search(alias.original_name, raw_name, re.IGNORECASE)
+                        compile_wildcard_regex(alias.original_name).search(raw_name)
                         is not None
                     )
-                except re.error:
+                except ValueError:
                     matched = False
             else:
                 matched = alias.original_name.lower() in raw_name.lower()

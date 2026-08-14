@@ -15,6 +15,16 @@ export function useSummary(params?: TransactionsPageParams) {
   })
 }
 
+/** Сводка только по глобальному периоду, без подписки на фильтры таблицы. */
+export function usePeriodSummary() {
+  const params = usePeriodParams()
+  return useQuery({
+    queryKey: ['summary', params],
+    queryFn: () => fetchSummary(params),
+    staleTime: 30_000,
+  })
+}
+
 /** Аналитика использует только глобальный период, без фильтров таблицы. */
 export function useAnalytics() {
   const params = usePeriodParams()

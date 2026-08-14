@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { Box, Grid2 as Grid, Skeleton, Stack, useMediaQuery, useTheme } from '@mui/material'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import CategoryIcon from '@mui/icons-material/Category'
@@ -15,15 +15,15 @@ import {
     storeColor,
     weekdayLabel,
 } from '../components/analytics/Charts'
+import type { DonutItem } from '../components/analytics/Charts'
 import { PriceChartCard } from '../components/analytics/PriceChartCard'
 import { StatisticCard } from '../components/common/StatisticCard'
 import { LoadingState, ErrorState, OfflineState } from '../components/common/States'
-import { useAnalytics, useSummary } from '../hooks/useSummary'
+import { useAnalytics, usePeriodSummary } from '../hooks/useSummary'
 import { useTags } from '../hooks/useTags'
 import { useOnline } from '../hooks/useOnline'
 import { formatCurrency, plural } from '../lib/format'
 import { useUiStore } from '../store/uiStore'
-import { usePeriodParams } from '../lib/filters'
 import { colors } from '../theme'
 
 /** Аналитика — расходы по дням (тренд), круговые по магазинам/категориям/доходам,
@@ -33,29 +33,27 @@ export function AnalyticsPage() {
     const isMobile = useMediaQuery(theme.breakpoints.down('md'))
     const navigate = useNavigate()
     const online = useOnline()
-    const periodParams = usePeriodParams()
-
     const { data, isLoading, isError, error, refetch } = useAnalytics()
     const { data: tags, isLoading: tagsLoading } = useTags()
-    const summary = useSummary(periodParams)
+    const summary = usePeriodSummary()
     const tagsMap = useMemo(() => new Map((tags ?? []).map((tag) => [tag.id, tag])), [tags])
 
     // Переход на транзакции с фильтром магазина(ов): «Другое» выбирает все
     // слитые магазины сразу (мульти-фильтр ?store=A&store=B). Сброс поиска и
     // тегов, чтобы фильтр доната был единственным; период сохраняется.
-    const goToStore = (labels: string[]) => {
+    const goToStore = useCallback((labels: string[]) => {
         const u = useUiStore.getState()
         u.setSearch('')
         u.setTagFilterIds([])
         navigate(`/transactions?${labels.map((l) => `store=${encodeURIComponent(l)}`).join('&')}`)
-    }
+    }, [navigate])
     // Категории фильтруются по id тегов — мульти тоже поддерживается.
-    const goToCategory = (ids: string[]) => {
+    const goToCategory = useCallback((ids: string[]) => {
         const u = useUiStore.getState()
         u.setSearch('')
         u.setStoreFilters([])
         navigate(`/transactions?${ids.map((id) => `tag=${encodeURIComponent(id)}`).join('&')}`)
-    }
+    }, [navigate])
 
     const dailyPoints = useMemo(
         () =>
@@ -97,6 +95,20 @@ export function AnalyticsPage() {
             s.label === 'Другое' ? { ...s, color: OTHER_SLICE_COLOR, id: undefined } : s,
         )
     }, [data, tagsMap])
+
+    const getStoreClick = useCallback((item: DonutItem) => () => {
+        if (item.others) goToStore(item.others.map((other) => other.label))
+        else goToStore([item.label])
+    }, [goToStore])
+
+    const getCategoryClick = useCallback((item: DonutItem) => () => {
+        const ids = item.others
+            ? item.others.map((other) => other.id).filter((id): id is string => Boolean(id))
+            : item.id
+                ? [item.id]
+                : []
+        if (ids.length) goToCategory(ids)
+    }, [goToCategory])
 
     // Разность доходов и расходов за период — как на странице транзакций:
     // зелёная при >= 0, красная при < 0.
@@ -209,10 +221,7 @@ export function AnalyticsPage() {
                             items={storeSlices}
                             formatValue={formatCurrency}
                             centerLabel="расходы"
-                            getItemClick={(item) => () => {
-                                if (item.others) goToStore(item.others.map((o) => o.label))
-                                else goToStore([item.label])
-                            }}
+                            getItemClick={getStoreClick}
                         />
                     </ChartCard>
                 </Grid>
@@ -222,10 +231,7 @@ export function AnalyticsPage() {
                             items={storeIncomeSlices}
                             formatValue={formatCurrency}
                             centerLabel="доходы"
-                            getItemClick={(item) => () => {
-                                if (item.others) goToStore(item.others.map((o) => o.label))
-                                else goToStore([item.label])
-                            }}
+                            getItemClick={getStoreClick}
                         />
                     </ChartCard>
                 </Grid>
@@ -235,14 +241,7 @@ export function AnalyticsPage() {
                             items={categorySlices}
                             formatValue={formatCurrency}
                             centerLabel="расходы"
-                            getItemClick={(item) => () => {
-                                const ids = item.others
-                                    ? item.others.map((o) => o.id).filter((id): id is string => Boolean(id))
-                                    : item.id
-                                        ? [item.id]
-                                        : []
-                                if (ids.length) goToCategory(ids)
-                            }}
+                            getItemClick={getCategoryClick}
                         />
                     </ChartCard>
                 </Grid>

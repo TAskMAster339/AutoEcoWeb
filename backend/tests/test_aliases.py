@@ -1,6 +1,8 @@
 from decimal import Decimal
+from typing import cast
 
 from fastapi import HTTPException
+from src.core.regex import wildcard_to_regex
 from src.repositories.alias import AliasRepository
 from src.repositories.receipt import ReceiptRepository
 from src.repositories.seller import SellerRepository
@@ -41,6 +43,35 @@ def _tx_service(session) -> TransactionService:
 
 
 # ---------- создание и дубликаты ----------
+
+
+def test_wildcard_to_regex_translates_user_friendly_tokens():
+    assert wildcard_to_regex("молоко *?%") == "молоко .*.%"
+    assert wildcard_to_regex("молоко .*%") == "молоко .*%"
+    assert wildcard_to_regex(r"перекр\.?есток") == r"перекр\.?есток"
+    assert wildcard_to_regex(r"цена \? и \*") == r"цена \? и \*"
+    assert wildcard_to_regex("[?*]") == "[?*]"
+
+
+def test_regex_alias_uses_star_and_question_as_wildcards():
+    aliases = cast(
+        list,
+        [
+            type(
+                "AliasStub",
+                (),
+                {
+                    "is_regex": True,
+                    "original_name": "молоко *?%",
+                    "alias_name": "Молоко",
+                    "priority": 0,
+                },
+            )()
+        ],
+    )
+
+    assert AliasService.resolve(aliases, "Молоко ультра 3.2%") == "Молоко"
+    assert AliasService.resolve(aliases, "Молоко %") == "Молоко %"
 
 
 async def test_alias_scope_defaults_to_seller(session):

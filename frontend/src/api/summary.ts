@@ -120,7 +120,7 @@ export async function fetchAnalytics(params: TransactionsPageParams = {}): Promi
 }
 
 interface RawPriceChart {
-  points: Array<{ day: string; price: number; count: number; store: string | null }>
+  points: Array<{ day: string; price: number; count: number; store: string | null; names?: string[] }>
   stores: Array<string | null>
   avg_price: number
   median_price: number
@@ -141,7 +141,13 @@ export async function fetchPriceChart(
   if (params.date_to) search.set('date_to', params.date_to)
   const raw = await api.get<RawPriceChart>(`/api/v1/analytics/price-chart?${search.toString()}`)
   return {
-    points: raw.points.map((p) => ({ day: p.day, price: num(p.price), count: p.count, store: p.store })),
+    points: raw.points.map((p) => ({
+      day: p.day,
+      price: num(p.price),
+      count: p.count,
+      store: p.store,
+      names: Array.isArray(p.names) ? p.names : [],
+    })),
     stores: raw.stores,
     avgPrice: num(raw.avg_price),
     medianPrice: num(raw.median_price),
