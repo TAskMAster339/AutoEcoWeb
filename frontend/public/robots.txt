@@ -1,0 +1,25 @@
+User-agent: *
+Allow: /privacy
+
+Disallow: /
+Disallow: /api/
+Disallow: /docs
+Disallow: /redoc
+Disallow: /openapi.json
+Disallow: /login
+Disallow: /recover
+Disallow: /verify-email
+Disallow: /dashboard
+Disallow: /transactions
+Disallow: /analytics
+Disallow: /settings
+Disallow: /tags
+Disallow: /sellers
+Disallow: /rules
+Disallow: /admin
+Disallow: /profile
+Disallow: /data
+Disallow: /feedback
+Disallow: /receipts/
+
+Sitemap: https://autoeco.mooo.com/sitemap.xml

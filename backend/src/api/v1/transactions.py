@@ -1,4 +1,5 @@
 from datetime import date, datetime, time, timezone
+from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
@@ -33,6 +34,9 @@ async def list_transactions(  # noqa: PLR0913
     tag_ids: list[UUID] | None = Query(None),  # noqa: B008
     search: str | None = Query(None, max_length=255),
     seller_names: list[str] | None = Query(None, max_length=255),  # noqa: B008
+    amount_min: Decimal | None = Query(None, ge=0),  # noqa: B008
+    amount_max: Decimal | None = Query(None, ge=0),  # noqa: B008
+    operation_kind: Literal["income", "expense"] | None = Query(None),
     sort_by: Literal[
         "date",
         "name",
@@ -57,6 +61,9 @@ async def list_transactions(  # noqa: PLR0913
         tag_ids=tag_ids,
         search=search,
         seller_names=seller_names,
+        amount_min=amount_min,
+        amount_max=amount_max,
+        operation_kind=operation_kind,
         sort_by=sort_by,
         sort_dir=sort_dir,
     )
@@ -78,6 +85,9 @@ async def get_summary(  # noqa: PLR0913
     tag_ids: list[UUID] | None = Query(None),  # noqa: B008
     search: str | None = Query(None, max_length=255),
     seller_names: list[str] | None = Query(None, max_length=255),  # noqa: B008
+    amount_min: Decimal | None = Query(None, ge=0),  # noqa: B008
+    amount_max: Decimal | None = Query(None, ge=0),  # noqa: B008
+    operation_kind: Literal["income", "expense"] | None = Query(None),
 ) -> TransactionSummary:
     """Показатели за период (или за всё время, если дат нет) — считает SQL."""
     return await transaction_service.summary(
@@ -87,6 +97,9 @@ async def get_summary(  # noqa: PLR0913
         tag_ids=tag_ids,
         search=search,
         seller_names=seller_names,
+        amount_min=amount_min,
+        amount_max=amount_max,
+        operation_kind=operation_kind,
     )
 
 

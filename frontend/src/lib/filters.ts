@@ -5,8 +5,9 @@
  */
 import { useMemo } from 'react'
 import type { TransactionsPageParams } from '../api/transactions'
+import { normalizeAmountFilter } from './numbers'
 import { rangeFor } from './period'
-import { useUiStore, type PeriodKey } from '../store/uiStore'
+import { useUiStore, type OperationFilter, type PeriodKey } from '../store/uiStore'
 
 export function filterParams(
   periodKey: PeriodKey,
@@ -17,6 +18,9 @@ export function filterParams(
   search: string,
   tagFilterIds: string[],
   storeFilters: string[],
+  amountMin: string,
+  amountMax: string,
+  operationFilter: OperationFilter,
 ): TransactionsPageParams {
   const params: TransactionsPageParams = {}
   // «Всё время» — без дат: бэкенд считает по всем транзакциям
@@ -30,6 +34,11 @@ export function filterParams(
   if (q) params.search = q
   if (tagFilterIds.length) params.tag_ids = tagFilterIds
   if (storeFilters.length) params.seller_names = storeFilters
+  const normalizedMin = normalizeAmountFilter(amountMin)
+  const normalizedMax = normalizeAmountFilter(amountMax)
+  if (normalizedMin) params.amount_min = Number(normalizedMin)
+  if (normalizedMax) params.amount_max = Number(normalizedMax)
+  if (operationFilter !== 'all') params.operation_kind = operationFilter
   return params
 }
 
@@ -41,7 +50,7 @@ export function usePeriodParams(): TransactionsPageParams {
   const monthYear = useUiStore((s) => s.monthYear)
   const dayDate = useUiStore((s) => s.dayDate)
   return useMemo(
-    () => filterParams(periodKey, customFrom, customTo, monthYear, dayDate, '', [], []),
+    () => filterParams(periodKey, customFrom, customTo, monthYear, dayDate, '', [], [], '', '', 'all'),
     [periodKey, customFrom, customTo, monthYear, dayDate],
   )
 }
@@ -57,8 +66,11 @@ export function useFilterParams(): TransactionsPageParams {
   const search = useUiStore((s) => s.search)
   const tagFilterIds = useUiStore((s) => s.tagFilterIds)
   const storeFilters = useUiStore((s) => s.storeFilters)
+  const amountMin = useUiStore((s) => s.amountMin)
+  const amountMax = useUiStore((s) => s.amountMax)
+  const operationFilter = useUiStore((s) => s.operationFilter)
   return useMemo(
-    () => filterParams(periodKey, customFrom, customTo, monthYear, dayDate, search, tagFilterIds, storeFilters),
-    [periodKey, customFrom, customTo, monthYear, dayDate, search, tagFilterIds, storeFilters],
+    () => filterParams(periodKey, customFrom, customTo, monthYear, dayDate, search, tagFilterIds, storeFilters, amountMin, amountMax, operationFilter),
+    [periodKey, customFrom, customTo, monthYear, dayDate, search, tagFilterIds, storeFilters, amountMin, amountMax, operationFilter],
   )
 }

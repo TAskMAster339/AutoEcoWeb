@@ -1,0 +1,18 @@
+{
+  "name": "AutoEco — учёт чеков и расходов",
+  "short_name": "AutoEco",
+  "description": "Учёт чеков, доходов и расходов",
+  "lang": "ru",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6C5CE7",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

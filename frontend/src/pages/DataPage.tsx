@@ -51,12 +51,12 @@ function formatDate(iso: string | null): string {
 
 function formatMoney(value: string): string {
     const number = Number(value)
-    if (!Number.isFinite(number) || number === 0) return '—'
+    if (!Number.isFinite(number)) return '—'
     return `${number.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`
 }
 
 function rowAmount(row: ImportRowPreview): { value: string; income: boolean } {
-    const income = Number(row.income) > 0
+    const income = row.operation_kind === 'income'
     const amount = formatMoney(income ? row.income : row.expense)
     return { value: amount === '—' ? amount : `${income ? '+' : '−'}${amount}`, income }
 }
@@ -118,6 +118,7 @@ export function DataPage() {
                 comment: row.comment,
                 income: row.income,
                 expense: row.expense,
+                operation_kind: row.operation_kind,
             }))
         setStage('importing')
         setError(null)

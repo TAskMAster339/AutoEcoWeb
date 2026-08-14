@@ -146,6 +146,23 @@ def test_parse_xlsx_row_errors():
     assert preview.rows[4].errors == []
 
 
+def test_parse_xlsx_accepts_explicit_zero_income_and_expense():
+    content = _make_xlsx(
+        [
+            HEADER,
+            ["29.09.2025", "Подарки", "", "Подарок", 0, None],
+            ["30.09.2025", "Скидки", "", "Скидка", None, 0],
+        ]
+    )
+
+    preview = parse_import_file("zero.xlsx", content)
+
+    assert preview.valid == 2  # noqa: PLR2004
+    assert preview.invalid == 0
+    assert preview.rows[0].operation_kind == "income"
+    assert preview.rows[1].operation_kind == "expense"
+
+
 def test_parse_xlsx_blank_rows_skipped():
     content = _make_xlsx(
         [
@@ -319,6 +336,43 @@ async def test_import_rows_creates_tags_and_maps_fields(session):
     income_tx, _ = txs[1]
     assert income_tx.amount == Decimal("40000.00")
     assert income_tx.operation_type == 2  # доход
+
+
+async def test_import_rows_preserves_zero_operation_kind(session):
+    user = await _make_user(session)
+
+    result = await _service(session).import_rows(
+        user,
+        [
+            _row(
+                description="Подарок",
+                income=Decimal("0"),
+                expense=Decimal("0"),
+                operation_kind="income",
+            ),
+            _row(
+                description="Скидка",
+                income=Decimal("0"),
+                expense=Decimal("0"),
+                operation_kind="expense",
+            ),
+        ],
+    )
+
+    assert result.imported == 2  # noqa: PLR2004
+    txs = await TransactionRepository(session).list_all(user.id)
+    by_name = {tx.name: tx for tx, _ in txs}
+    assert by_name["Подарок"].amount == Decimal("0.00")
+    assert by_name["Подарок"].operation_type == 2
+    assert by_name["Скидка"].amount == Decimal("0.00")
+    assert by_name["Скидка"].operation_type == 1
+
+    exported = await _service(session).export_rows(user)
+    exported_by_name = {row.description: row for row in exported}
+    assert exported_by_name["Подарок"].income == Decimal("0.00")
+    assert exported_by_name["Подарок"].expense is None
+    assert exported_by_name["Скидка"].income is None
+    assert exported_by_name["Скидка"].expense == Decimal("0.00")
 
 
 async def test_import_rows_reuses_existing_tag(session):

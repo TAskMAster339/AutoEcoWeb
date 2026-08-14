@@ -81,8 +81,8 @@ export function AddTransactionSheet() {
             setFormError('Укажите название транзакции')
             return
         }
-        if (!Number.isFinite(priceNum) || priceNum <= 0) {
-            setFormError('Укажите цену больше нуля')
+        if (!Number.isFinite(priceNum) || priceNum < 0) {
+            setFormError('Укажите цену не меньше нуля')
             return
         }
         if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
@@ -220,11 +220,11 @@ export function AddTransactionSheet() {
                         value={price}
                         onChange={setPrice}
                         required
-                        min={0.01}
+                        min={0}
                         step={1}
                         placeholder="139,90"
-                        error={price !== '' && (!Number.isFinite(priceNum) || priceNum <= 0)}
-                        helperText={price !== '' && (!Number.isFinite(priceNum) || priceNum <= 0) ? 'Цена должна быть больше 0' : ' '}
+                        error={price !== '' && (!Number.isFinite(priceNum) || priceNum < 0)}
+                        helperText={price !== '' && (!Number.isFinite(priceNum) || priceNum < 0) ? 'Цена не может быть отрицательной' : 'Можно указать 0 для подарка или скидки'}
                     />
                     <NumericField
                         label="Кол-во"

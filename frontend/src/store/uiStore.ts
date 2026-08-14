@@ -7,6 +7,7 @@ import { persist } from 'zustand/middleware'
 
 export type PeriodKey = 'thisMonth' | 'lastMonth' | '3m' | 'all' | 'custom' | 'month' | 'day'
 export type ThemeMode = 'light' | 'dark' | 'system'
+export type OperationFilter = 'all' | 'income' | 'expense'
 
 /** Порядок циклического переключения темы: светлая → тёмная → системная → светлая. */
 export const THEME_CYCLE: ThemeMode[] = ['light', 'dark', 'system']
@@ -29,6 +30,9 @@ interface UiState {
   /** Мультивыбор: пустой массив = без фильтра. */
   tagFilterIds: string[]
   storeFilters: string[]
+  amountMin: string
+  amountMax: string
+  operationFilter: OperationFilter
   /** Меню «Добавить»: чек (QR/камера) или транзакция (форма). */
   addMenuOpen: boolean
   receiptSheetOpen: boolean
@@ -54,6 +58,9 @@ interface UiState {
     search: string
     tagFilterIds: string[]
     storeFilters: string[]
+    amountMin: string
+    amountMax: string
+    operationFilter: OperationFilter
     periodKey: PeriodKey
   }) => void
   openAddMenu: () => void
@@ -83,6 +90,9 @@ export const useUiStore = create<UiState>()(
       priceChartSubmittedIsRegex: false,
       tagFilterIds: [],
       storeFilters: [],
+      amountMin: '',
+      amountMax: '',
+      operationFilter: 'all',
       addMenuOpen: false,
       receiptSheetOpen: false,
       transactionSheetOpen: false,
@@ -106,8 +116,8 @@ export const useUiStore = create<UiState>()(
         set({ priceChartSubmittedName, priceChartSubmittedIsRegex }),
       setTagFilterIds: (tagFilterIds) => set({ tagFilterIds }),
       setStoreFilters: (storeFilters) => set({ storeFilters }),
-      applyFilters: ({ search, tagFilterIds, storeFilters, periodKey }) =>
-        set({ search, tagFilterIds, storeFilters, periodKey }),
+      applyFilters: ({ search, tagFilterIds, storeFilters, amountMin, amountMax, operationFilter, periodKey }) =>
+        set({ search, tagFilterIds, storeFilters, amountMin, amountMax, operationFilter, periodKey }),
       openAddMenu: () => set({ addMenuOpen: true }),
       closeAddMenu: () => set({ addMenuOpen: false }),
       openReceiptSheet: () => set({ receiptSheetOpen: true }),
@@ -117,7 +127,7 @@ export const useUiStore = create<UiState>()(
       openFilterSheet: () => set({ filterSheetOpen: true }),
       closeFilterSheet: () => set({ filterSheetOpen: false }),
       resetFilters: () =>
-        set({ search: '', tagFilterIds: [], storeFilters: [] }),
+        set({ search: '', tagFilterIds: [], storeFilters: [], amountMin: '', amountMax: '', operationFilter: 'all' }),
     }),
     {
       name: 'autoeco-ui',

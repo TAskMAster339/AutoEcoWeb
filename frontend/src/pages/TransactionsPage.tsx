@@ -32,6 +32,7 @@ import { useUiStore } from '../store/uiStore'
 import { useFilterParams } from '../lib/filters'
 import { fetchTransactionsPage, toTransactionView } from '../api/transactions'
 import { formatCurrency, pluralRu } from '../lib/format'
+import { normalizeAmountFilter } from '../lib/numbers'
 import { colors, softBg, softFg } from '../theme'
 import { PageSearch } from '../components/common/PageSearch'
 import type { TransactionView } from '../api/types'
@@ -93,6 +94,9 @@ export function TransactionsPage() {
     const queryClient = useQueryClient()
 
     const storeFilters = useUiStore((s) => s.storeFilters)
+    const amountMin = useUiStore((s) => s.amountMin)
+    const amountMax = useUiStore((s) => s.amountMax)
+    const operationFilter = useUiStore((s) => s.operationFilter)
     const { data: txRevision } = useQuery({ queryKey: ['txRevision'], queryFn: () => 0 })
 
     // Параметры фильтров (период/тег/поиск/магазин) — применяет бэкенд.
@@ -246,14 +250,34 @@ export function TransactionsPage() {
         const urlSearch = query.get('search')
         const urlTags = query.getAll('tag')
         const urlStores = query.getAll('store')
+        const urlAmountMin = query.get('amountMin')
+        const urlAmountMax = query.get('amountMax')
+        const urlOperation = query.get('type')
         const urlPeriod = query.get('period')
         const urlFrom = query.get('from')
         const urlTo = query.get('to')
         const urlMonth = query.get('month')
         const urlDay = query.get('day')
-        if (urlSearch !== null) state.setSearch(urlSearch)
-        if (urlTags.some(Boolean)) state.setTagFilterIds(urlTags.filter(Boolean))
-        if (urlStores.some(Boolean)) state.setStoreFilters(urlStores.filter(Boolean))
+        const nextAmountMin = urlAmountMin === null ? state.amountMin : (normalizeAmountFilter(urlAmountMin) ?? '')
+        const nextAmountMax = urlAmountMax === null ? state.amountMax : (normalizeAmountFilter(urlAmountMax) ?? '')
+        const normalizedMin = normalizeAmountFilter(nextAmountMin)
+        const normalizedMax = normalizeAmountFilter(nextAmountMax)
+        const invalidAmountRange = (
+            normalizedMin !== null
+            && normalizedMax !== null
+            && normalizedMin !== ''
+            && normalizedMax !== ''
+            && Number(normalizedMin) > Number(normalizedMax)
+        )
+        state.applyFilters({
+            search: urlSearch ?? state.search,
+            tagFilterIds: urlTags.some(Boolean) ? urlTags.filter(Boolean) : state.tagFilterIds,
+            storeFilters: urlStores.some(Boolean) ? urlStores.filter(Boolean) : state.storeFilters,
+            amountMin: invalidAmountRange ? '' : (normalizedMin ?? ''),
+            amountMax: invalidAmountRange ? '' : (normalizedMax ?? ''),
+            operationFilter: urlOperation === 'income' || urlOperation === 'expense' ? urlOperation : state.operationFilter,
+            periodKey: state.periodKey,
+        })
         if (urlDay) state.setDayPeriod(urlDay)
         else if (urlFrom && urlTo) state.setCustomRange(urlFrom, urlTo)
         else if (urlMonth) state.setMonthPeriod(urlMonth)
@@ -267,6 +291,9 @@ export function TransactionsPage() {
         if (search) query.set('search', search)
         if (tagFilterIds.length) tagFilterIds.forEach((id) => query.append('tag', id))
         if (storeFilters.length) storeFilters.forEach((store) => query.append('store', store))
+        if (amountMin !== '') query.set('amountMin', amountMin)
+        if (amountMax !== '') query.set('amountMax', amountMax)
+        if (operationFilter !== 'all') query.set('type', operationFilter)
         if (periodKey !== 'all') query.set('period', periodKey)
         if (periodKey === 'custom' && customFrom && customTo) {
             query.set('from', customFrom)
@@ -279,10 +306,10 @@ export function TransactionsPage() {
         if (nextUrl !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
             window.history.replaceState(null, '', nextUrl)
         }
-    }, [search, tagFilterIds, storeFilters, periodKey, customFrom, customTo, monthYear, dayDate])
+    }, [search, tagFilterIds, storeFilters, amountMin, amountMax, operationFilter, periodKey, customFrom, customTo, monthYear, dayDate])
 
     const tagsMap = useMemo(() => new Map((tags ?? []).map((t) => [t.id, t])), [tags])
-    const hasFilters = Boolean(search || tagFilterIds.length || storeFilters.length || periodKey !== 'all')
+    const hasFilters = Boolean(search || tagFilterIds.length || storeFilters.length || amountMin || amountMax || operationFilter !== 'all' || periodKey !== 'all')
 
     const showNoTransactions = total === 0 && (allTimeTotal ?? 0) === 0 && !hasFilters
     const showNotFound = total === 0 && !showNoTransactions

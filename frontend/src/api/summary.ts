@@ -17,6 +17,9 @@ function buildQuery(params: TransactionsPageParams): string {
   if (params.search) search.set('search', params.search)
   if (params.seller_names?.length)
     params.seller_names.forEach((name) => search.append('seller_names', name))
+  if (params.amount_min !== undefined) search.set('amount_min', String(params.amount_min))
+  if (params.amount_max !== undefined) search.set('amount_max', String(params.amount_max))
+  if (params.operation_kind) search.set('operation_kind', params.operation_kind)
   const qs = search.toString()
   return qs ? `?${qs}` : ''
 }

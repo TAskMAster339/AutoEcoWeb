@@ -290,6 +290,9 @@ class TransactionService:
         tag_ids: list[UUID] | None = None,
         search: str | None = None,
         seller_names: list[str] | None = None,
+        amount_min: Decimal | None = None,
+        amount_max: Decimal | None = None,
+        operation_kind: str | None = None,
         sort_by: str = "date",
         sort_dir: str = "desc",
     ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int]:
@@ -306,6 +309,9 @@ class TransactionService:
             tag_ids=tag_ids,
             search=search,
             seller_names=seller_names,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            operation_kind=operation_kind,
             sort_by=sort_by,
             sort_dir=sort_dir,
         )
@@ -319,6 +325,9 @@ class TransactionService:
         tag_ids: list[UUID] | None,
         search: str | None,
         seller_names: list[str] | None,
+        amount_min: Decimal | None = None,
+        amount_max: Decimal | None = None,
+        operation_kind: str | None = None,
     ) -> TransactionSummary:
         """Показатели за период: суммы, счётчик, дельты, тренд, opening.
 
@@ -332,6 +341,9 @@ class TransactionService:
             tag_ids=tag_ids,
             search=search,
             seller_names=seller_names,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            operation_kind=operation_kind,
         )
         opening = (
             await self._tx_repo.opening_balance(user.id, date_from)
@@ -345,6 +357,9 @@ class TransactionService:
             tag_ids=tag_ids,
             search=search,
             seller_names=seller_names,
+            amount_min=amount_min,
+            amount_max=amount_max,
+            operation_kind=operation_kind,
         )
         trend: list[Decimal] = []
         acc = opening
@@ -364,6 +379,9 @@ class TransactionService:
                 tag_ids=tag_ids,
                 search=search,
                 seller_names=seller_names,
+                amount_min=amount_min,
+                amount_max=amount_max,
+                operation_kind=operation_kind,
             )
             income_delta = income - prev_income
             expenses_delta = expenses - prev_expenses
@@ -595,9 +613,9 @@ class TransactionService:
             name, alias_id = await self._resolve_name(user.id, fields["name"])
             fields["normalized_name"] = normalize_product_name(name)
             fields["name_alias_id"] = alias_id
-        # В API поле называется datetime, а ORM-атрибут — check_datetime
+        # В API поле называется datetime, а ORM-атрибут — check_datetime  # noqa: RUF003
         # (колонка БД также называется datetime). Без маппинга setattr создаёт
-        # обычный transient-атрибут, поэтому дата после перезагрузки возвращалась прежней.
+        # обычный transient-атрибут, поэтому дата после перезагрузки возвращалась прежней.  # noqa: E501
         if "datetime" in fields:
             fields["check_datetime"] = fields.pop("datetime")
         previous_seller_id = tx.seller_id

@@ -43,6 +43,9 @@ export interface TransactionsPageParams {
   search?: string
   /** Мультивыбор магазинов (IN); пустой/отсутствующий = без фильтра. */
   seller_names?: string[]
+  amount_min?: number
+  amount_max?: number
+  operation_kind?: 'income' | 'expense'
   sort_by?: TransactionSortBy
   sort_dir?: 'asc' | 'desc'
 }
@@ -60,6 +63,9 @@ export function fetchTransactionsPage(
   if (params.search) search.set('search', params.search)
   if (params.seller_names?.length)
     params.seller_names.forEach((name) => search.append('seller_names', name))
+  if (params.amount_min !== undefined) search.set('amount_min', String(params.amount_min))
+  if (params.amount_max !== undefined) search.set('amount_max', String(params.amount_max))
+  if (params.operation_kind) search.set('operation_kind', params.operation_kind)
   if (params.sort_by) search.set('sort_by', params.sort_by)
   if (params.sort_dir) search.set('sort_dir', params.sort_dir)
   const qs = search.toString()

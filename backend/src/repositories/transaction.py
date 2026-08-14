@@ -4,7 +4,6 @@ from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from src.core.regex import compile_wildcard_regex
 from sqlalchemy import (
     Table,
     and_,
@@ -19,6 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
+from src.core.regex import compile_wildcard_regex
 from src.models.receipt import Receipt
 from src.models.seller import Seller
 from src.models.tag import Tag
@@ -75,6 +75,9 @@ def _filters(  # noqa: PLR0913
     tag_ids: list[UUID] | None = None,
     search: str | None = None,
     seller_names: list[str] | None = None,
+    amount_min: Decimal | None = None,
+    amount_max: Decimal | None = None,
+    operation_kind: str | None = None,
     own_seller=OwnSeller,
     receipt_seller=ReceiptSeller,
 ) -> list[ColumnElement[bool]]:
@@ -100,6 +103,14 @@ def _filters(  # noqa: PLR0913
         conditions.append(
             _store_expr(own_seller, receipt_seller).in_(seller_names),
         )  # type: ignore[arg-type]
+    if amount_min is not None:
+        conditions.append(Transaction.amount >= amount_min)  # type: ignore[arg-type]
+    if amount_max is not None:
+        conditions.append(Transaction.amount <= amount_max)  # type: ignore[arg-type]
+    if operation_kind == "income":
+        conditions.append(Transaction.operation_type.in_(_INCOME_TYPES))  # type: ignore[arg-type]
+    elif operation_kind == "expense":
+        conditions.append(Transaction.operation_type.in_(_EXPENSE_TYPES))  # type: ignore[arg-type]
     if search:
         q = f"%{search}%"
         conditions.append(
@@ -208,6 +219,9 @@ class TransactionRepository:
         tag_ids: list[UUID] | None = None,
         search: str | None = None,
         seller_names: list[str] | None = None,
+        amount_min: Decimal | None = None,
+        amount_max: Decimal | None = None,
+        operation_kind: str | None = None,
         sort_by: str = "date",
         sort_dir: str = "desc",
     ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int]:
@@ -225,6 +239,9 @@ class TransactionRepository:
                 tag_ids=tag_ids,
                 search=search,
                 seller_names=seller_names,
+                amount_min=amount_min,
+                amount_max=amount_max,
+                operation_kind=operation_kind,
             ),
         ]
 
@@ -293,6 +310,9 @@ class TransactionRepository:
         tag_ids: list[UUID] | None = None,
         search: str | None = None,
         seller_names: list[str] | None = None,
+        amount_min: Decimal | None = None,
+        amount_max: Decimal | None = None,
+        operation_kind: str | None = None,
     ) -> tuple[Decimal, Decimal, int]:
         """income, expenses, count за период — SQL-агрегация с фильтрами."""  # noqa: RUF002
         stmt = (
@@ -325,6 +345,14 @@ class TransactionRepository:
                 ),
             )
         )
+        if amount_min is not None:
+            stmt = stmt.where(Transaction.amount >= amount_min)
+        if amount_max is not None:
+            stmt = stmt.where(Transaction.amount <= amount_max)
+        if operation_kind == "income":
+            stmt = stmt.where(Transaction.operation_type.in_(_INCOME_TYPES))
+        elif operation_kind == "expense":
+            stmt = stmt.where(Transaction.operation_type.in_(_EXPENSE_TYPES))
         income, expenses, count = (await self._session.execute(stmt)).one()
         return Decimal(income or 0), Decimal(expenses or 0), int(count)
 
@@ -359,6 +387,9 @@ class TransactionRepository:
         tag_ids: list[UUID] | None = None,
         search: str | None = None,
         seller_names: list[str] | None = None,
+        amount_min: Decimal | None = None,
+        amount_max: Decimal | None = None,
+        operation_kind: str | None = None,
     ) -> list[tuple[str, Decimal]]:
         """День -> нетто, по возрастанию дней."""
         day = func.date(Transaction.check_datetime)
@@ -394,6 +425,14 @@ class TransactionRepository:
             .group_by(day)
             .order_by(day)
         )
+        if amount_min is not None:
+            stmt = stmt.where(Transaction.amount >= amount_min)
+        if amount_max is not None:
+            stmt = stmt.where(Transaction.amount <= amount_max)
+        if operation_kind == "income":
+            stmt = stmt.where(Transaction.operation_type.in_(_INCOME_TYPES))
+        elif operation_kind == "expense":
+            stmt = stmt.where(Transaction.operation_type.in_(_EXPENSE_TYPES))
         rows = (await self._session.execute(stmt)).all()
         return [(str(day_), Decimal(net or 0)) for day_, net in rows]
 

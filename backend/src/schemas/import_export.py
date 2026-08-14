@@ -2,106 +2,118 @@
 
 Канонический формат (источник истины — экспорт приложения):
     Дата | Категория | Магазин | Описание | Количество | Единица |
-    Цена | Комментарий | Доход | Расход
+    Цена | Комментарий | Теги | Доход | Расход
 
-- Дата: Excel-дата или текст DD.MM.YYYY / YYYY-MM-DD.
-- Категория: имя тега; пусто = без тега. Отсутствующие теги создаются
-  автоматически при импорте.
-- Магазин: необязательно; становится seller_name транзакции.
-- Описание: название транзакции (обязательно).
-- Доход/Расход: ровно одно поле заполнено и > 0.
-
-Лишние колонки в файле игнорируются, порядок колонок не важен.
+- Доход/Расход: одна из колонок заполнена числом >= 0, вторая пуста.
+  Для нулевой операции направление задаётся заполненной колонкой.
+- Теги: имена через запятую.
+- Дата: YYYY-MM-DD (экспорт) или дата Excel.
 """
 
 import datetime
 from decimal import Decimal
+from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
-def _strip(value: str | None) -> str | None:
-    if value is None:
-        return None
-    cleaned = value.strip()
-    return cleaned or None
+class ExportRow(BaseModel):
+    date: datetime.date
+    category: str
+    store: str
+    description: str
+    quantity: Decimal
+    unit: str
+    price: Decimal
+    comment: str
+    tags: str
+    income: Decimal | None
+    expense: Decimal | None
+
+
+class ExportOptions(BaseModel):
+    date_from: datetime.date | None = None
+    date_to: datetime.date | None = None
+    format: str = Field(default="xlsx", pattern="^(xlsx|csv)$")
+
+    @model_validator(mode="after")
+    def validate_range(self):
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("date_from не может быть позже date_to")
+        return self
 
 
 class ImportRowPreview(BaseModel):
-    """Строка файла после парсинга (предпросмотр). Не валидируется строго —
-    ошибки строки собираются в `errors`, чтобы фронт показал их до импорта."""  # noqa: RUF002
+    """Нормализованная строка для предпросмотра перед импортом."""
 
-    index: int
+    row_number: int
     date: datetime.date | None = None
-    category: str | None = None
-    store: str | None = None
+    category: str = ""
+    store: str = ""
     description: str = ""
     quantity: Decimal | None = None
-    unit: str | None = None
+    unit: str = "шт."
     price: Decimal | None = None
-    comment: str | None = None
-    income: Decimal = Decimal("0")
-    expense: Decimal = Decimal("0")
-    errors: list[str] = []
+    comment: str = ""
+    tags: list[str] = Field(default_factory=list)
+    income: Decimal | None = None
+    expense: Decimal | None = None
+    operation_kind: Literal["income", "expense"] | None = None
+    errors: list[str] = Field(default_factory=list)
 
 
-class ImportPreview(BaseModel):
+class ImportPreviewResponse(BaseModel):
     rows: list[ImportRowPreview]
-    total: int
-    valid: int
-    invalid: int
+    total_rows: int
+    valid_rows: int
+    invalid_rows: int
 
 
 class ImportRowIn(BaseModel):
-    """Строка, подтверждённая пользователем в предпросмотре (POST /import)."""
-
     date: datetime.date
-    category: str | None = Field(default=None, max_length=100)
-    store: str | None = Field(default=None, max_length=255)
-    description: str = Field(min_length=1, max_length=255)
-    quantity: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=3)
-    unit: str | None = Field(default=None, max_length=16)
-    price: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
-    comment: str | None = Field(default=None, max_length=1000)
+    category: str = ""
+    store: str = ""
+    description: str = ""
+    quantity: Decimal = Field(default=Decimal("1"), gt=0, max_digits=12, decimal_places=3)
+    unit: str = "шт."
+    price: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
+    comment: str = ""
+    tags: list[str] = Field(default_factory=list)
     income: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
-    expense: Decimal = Field(
-        default=Decimal("0"),
-        ge=0,
-        max_digits=12,
-        decimal_places=2,
-    )
-
-    @field_validator("category", "store", "unit", "comment", mode="before")
-    @classmethod
-    def _clean_optional(cls, value: object) -> str | None:
-        if value is None:
-            return None
-        return _strip(str(value))
-
-    @field_validator("description", mode="before")
-    @classmethod
-    def _clean_description(cls, value: object) -> str:
-        return (str(value).strip()) or ""
+    expense: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
+    operation_kind: Literal["income", "expense"] | None = None
 
     @model_validator(mode="after")
-    def _validate_amount(self) -> "ImportRowIn":
+    def validate_amount(self):
+        income_present = "income" in self.model_fields_set
+        expense_present = "expense" in self.model_fields_set
+
         if self.income > 0 and self.expense > 0:
-            raise ValueError("Заполните только одно из полей Доход/Расход")
-        if self.income <= 0 and self.expense <= 0:
-            raise ValueError("Укажите сумму: Доход или Расход")
+            raise ValueError("Одновременно Доход и Расход не допускаются")
+
+        inferred_kind: Literal["income", "expense"] | None = None
+        if self.income > 0:
+            inferred_kind = "income"
+        elif self.expense > 0:
+            inferred_kind = "expense"
+        elif income_present != expense_present:
+            inferred_kind = "income" if income_present else "expense"
+
+        if inferred_kind is not None:
+            if self.operation_kind is not None and self.operation_kind != inferred_kind:
+                raise ValueError("Тип операции не соответствует колонке Доход/Расход")
+            self.operation_kind = inferred_kind
+        elif self.operation_kind is None:
+            raise ValueError("Для нулевой суммы явно укажите тип операции")
+
         return self
 
 
 class ImportRequest(BaseModel):
-    rows: list[ImportRowIn] = Field(min_length=1, max_length=10000)
-
-
-class ImportErrorItem(BaseModel):
-    index: int
-    message: str
+    rows: list[ImportRowIn]
 
 
 class ImportResult(BaseModel):
     imported: int
-    errors: list[ImportErrorItem] = []
-    tags_created: list[str] = []
+    skipped: int
+    errors: list[str] = Field(default_factory=list)

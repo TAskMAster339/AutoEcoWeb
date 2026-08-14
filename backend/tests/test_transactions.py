@@ -375,6 +375,21 @@ async def test_create_standalone_without_receipt(session):
     assert tx.normalized_name == "зарплата"
 
 
+async def test_create_standalone_allows_zero_amount_and_price(session):
+    user = await _make_user(session)
+    tx = await _tx_service(session).create_standalone(
+        user,
+        TransactionCreate(
+            name="Подарок",
+            amount=Decimal("0.00"),
+            price=Decimal("0.00"),
+            quantity=Decimal("1"),
+        ),
+    )
+    assert tx.amount == Decimal("0.00")
+    assert tx.price == Decimal("0.00")
+
+
 async def test_create_standalone_with_tag(session):
     user = await _make_user(session)
     tag = await TagService(TagRepository(session)).create(
@@ -613,6 +628,80 @@ async def test_list_page_offset_paginates(session):
         | {tx.id for tx, _, _ in rows3}
     )
     assert len(ids) == 5  # noqa: PLR2004
+
+
+async def test_list_and_summary_filter_by_amount_range(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    for name, amount in (("Подарок", "0.00"), ("Кофе", "100.00"), ("Покупка", "1000.00")):
+        await service.create_standalone(
+            user,
+            TransactionCreate(name=name, amount=Decimal(amount)),
+        )
+
+    rows, total = await service.list_page(
+        user,
+        limit=50,
+        amount_min=Decimal("100.00"),
+        amount_max=Decimal("1000.00"),
+    )
+    assert total == 2  # границы включаются
+    assert {tx.name for tx, _, _ in rows} == {"Кофе", "Покупка"}
+
+    summary = await service.summary(
+        user,
+        date_from=None,
+        date_to=None,
+        tag_ids=None,
+        search=None,
+        seller_names=None,
+        amount_min=Decimal("100.00"),
+        amount_max=Decimal("1000.00"),
+    )
+    assert summary.transactions == 2  # noqa: PLR2004
+    assert summary.expenses == Decimal("1100.00")
+
+
+async def test_list_and_summary_filter_by_operation_kind(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    expense = await service.create_standalone(
+        user,
+        TransactionCreate(name="Покупка", amount=Decimal("100.00"), operation_type=1),
+    )
+    income = await service.create_standalone(
+        user,
+        TransactionCreate(name="Возврат", amount=Decimal("50.00"), operation_type=2),
+    )
+
+    income_rows, income_total = await service.list_page(
+        user,
+        limit=50,
+        operation_kind="income",
+    )
+    assert income_total == 1
+    assert income_rows[0][0].id == income.id
+
+    expense_rows, expense_total = await service.list_page(
+        user,
+        limit=50,
+        operation_kind="expense",
+    )
+    assert expense_total == 1
+    assert expense_rows[0][0].id == expense.id
+
+    summary = await service.summary(
+        user,
+        date_from=None,
+        date_to=None,
+        tag_ids=None,
+        search=None,
+        seller_names=None,
+        operation_kind="income",
+    )
+    assert summary.transactions == 1
+    assert summary.income == Decimal("50.00")
+    assert summary.expenses == Decimal("0")
 
 
 async def test_list_page_filters_by_date_tag_search(session):

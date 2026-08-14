@@ -18,6 +18,7 @@ export interface ImportRowPreview {
   comment: string | null
   income: string
   expense: string
+  operation_kind: 'income' | 'expense'
   errors: string[]
 }
 
@@ -39,6 +40,7 @@ export interface ImportRowIn {
   comment: string | null
   income: string
   expense: string
+  operation_kind: 'income' | 'expense'
 }
 
 export interface ImportResult {

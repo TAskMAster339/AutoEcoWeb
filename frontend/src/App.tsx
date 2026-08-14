@@ -7,6 +7,7 @@ import { LoginPage } from './pages/LoginPage'
 import { RecoveryPage } from './pages/RecoveryPage'
 import { EmailVerificationPage } from './pages/EmailVerificationPage'
 import { NotFoundPage } from './pages/NotFoundPage'
+import { SeoMeta } from './components/common/SeoMeta'
 
 // Route-level code splitting (AGENTS.md: lazy loading, route splitting).
 const page = (loader: () => Promise<{ [key: string]: unknown }>, name: string) =>
@@ -30,37 +31,41 @@ function suspense(element: React.ReactNode) {
     return <Suspense fallback={<FullPageSplash />}>{element}</Suspense>
 }
 
+function withSeo(element: React.ReactNode) {
+    return <><SeoMeta />{element}</>
+}
+
 const router = createBrowserRouter([
     {
         path: '/login',
-        element: (
+        element: withSeo(
             <PublicOnlyRoute>
                 <LoginPage />
-            </PublicOnlyRoute>
+            </PublicOnlyRoute>,
         ),
     },
     {
         path: '/recover',
-        element: (
+        element: withSeo(
             <PublicOnlyRoute>
                 <RecoveryPage />
-            </PublicOnlyRoute>
+            </PublicOnlyRoute>,
         ),
     },
     {
         path: '/verify-email',
-        element: (
+        element: withSeo(
             <PublicOnlyRoute>
                 <EmailVerificationPage />
-            </PublicOnlyRoute>
+            </PublicOnlyRoute>,
         ),
     },
-    { path: '/privacy', element: suspense(<PrivacyPolicyPage />) },
+    { path: '/privacy', element: withSeo(suspense(<PrivacyPolicyPage />)) },
     {
         element: <ProtectedRoute />,
         children: [
             {
-                element: <AppShell />,
+                element: withSeo(<AppShell />),
                 children: [
                     {
                         element: <VerifiedAccessRoute />,
@@ -88,7 +93,7 @@ const router = createBrowserRouter([
             },
         ],
     },
-    { path: '*', element: <NotFoundPage /> },
+    { path: '*', element: withSeo(<NotFoundPage />) },
 ])
 
 /** Restores the session from the READONLY cookie once, then renders the router. */

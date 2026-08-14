@@ -120,8 +120,8 @@ class ExportRow:
     unit: str | None
     price: Decimal | None
     comment: str | None
-    income: Decimal
-    expense: Decimal
+    income: Decimal | None
+    expense: Decimal | None
 
 
 def _clean_str(value: object) -> str | None:
@@ -190,7 +190,7 @@ def _parse_money(value: object) -> Decimal | None:  # noqa: PLR0911
 
 
 def _parse_quantity(value: object) -> Decimal | None:
-    """Количество хранится с точностью до трёх знаков, в отличие от денег."""
+    """Количество хранится с точностью до трёх знаков, в отличие от денег."""  # noqa: RUF002
     parsed = _parse_money(value)
     if parsed is None:
         return None
@@ -308,8 +308,14 @@ def _row_to_preview(
         expense = Decimal("0")
     if income is not None and expense is not None and income > 0 and expense > 0:
         errors.append("Заполнены и Доход, и Расход")
-    elif (income is None or income <= 0) and (expense is None or expense <= 0):
+    elif income is None and expense is None:
         errors.append("Нет суммы: заполните Доход или Расход")
+
+    operation_kind = (
+        "income"
+        if income is not None and (income > 0 or expense is None)
+        else "expense"
+    )
 
     return ImportRowPreview(
         index=index,
@@ -323,6 +329,7 @@ def _row_to_preview(
         comment=comment,
         income=income or Decimal("0"),
         expense=expense or Decimal("0"),
+        operation_kind=operation_kind,
         errors=errors,
     )
 
@@ -364,8 +371,16 @@ def parse_import_file(filename: str, content: bytes) -> ImportPreview:
 
 
 _EXPORT_HEADER = [
-    "Дата", "Категория", "Магазин", "Описание", "Количество",
-    "Единица", "Цена", "Комментарий", "Доход", "Расход",
+    "Дата",
+    "Категория",
+    "Магазин",
+    "Описание",
+    "Количество",
+    "Единица",
+    "Цена",
+    "Комментарий",
+    "Доход",
+    "Расход",
 ]
 _EXPORT_WIDTHS = (12, 22, 22, 48, 14, 12, 14, 36, 14, 14)
 
@@ -373,11 +388,20 @@ _EXPORT_WIDTHS = (12, 22, 22, 48, 14, 12, 14, 36, 14, 14)
 def _fill_export_sheet(worksheet, rows: list[ExportRow]) -> None:
     worksheet.append(_EXPORT_HEADER)
     for item in sorted(rows, key=lambda row: row.date):
-        worksheet.append([
-            item.date, item.category or "", item.store or "", item.description,
-            item.quantity, item.unit or "", item.price, item.comment or "",
-            item.income, item.expense,
-        ])
+        worksheet.append(
+            [
+                item.date,
+                item.category or "",
+                item.store or "",
+                item.description,
+                item.quantity,
+                item.unit or "",
+                item.price,
+                item.comment or "",
+                item.income,
+                item.expense,
+            ],
+        )
     for row_cells in worksheet.iter_rows(min_row=2):
         row_cells[0].number_format = "DD.MM.YYYY"
         row_cells[4].number_format = "#,##0.000"
@@ -470,7 +494,10 @@ class ImportExportService:
                     tags_created.append(row.category)
                 tag_id = tag.id
 
-            amount = row.income if row.income > 0 else row.expense
+            is_income = row.operation_kind == "income" or (
+                row.operation_kind is None and row.income > 0
+            )
+            amount = row.income if is_income else row.expense
             product_resolved = AliasService.resolve_with_alias(
                 product_aliases,
                 row.description,
@@ -496,7 +523,7 @@ class ImportExportService:
                     price=row.price,
                     amount=amount.quantize(Decimal("0.01")),
                     comment=row.comment,
-                    operation_type=2 if row.income > 0 else 1,
+                    operation_type=2 if is_income else 1,
                     check_datetime=datetime.datetime.combine(
                         row.date,
                         datetime.time(12, 0),
@@ -532,8 +559,8 @@ class ImportExportService:
                     unit=tx.unit,
                     price=tx.price,
                     comment=tx.comment,
-                    income=tx.amount if is_income else Decimal("0"),
-                    expense=tx.amount if not is_income else Decimal("0"),
+                    income=tx.amount if is_income else None,
+                    expense=tx.amount if not is_income else None,
                 ),
             )
         return rows
