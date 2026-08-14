@@ -130,7 +130,7 @@ export function PriceChartCard() {
         >
           {isRegex ? (
             <Stack spacing={1.25}>
-              <RegexBuilder value={name} onChange={setName} scope="product" />
+              <RegexBuilder value={name} onChange={setName} scope="product" autoFocus={false} />
               <Button type="submit" variant="contained" fullWidth disabled={!name.trim() || !regexChanged || isFetching}>
                 {isFetching ? 'Ищем…' : 'Показать график'}
               </Button>

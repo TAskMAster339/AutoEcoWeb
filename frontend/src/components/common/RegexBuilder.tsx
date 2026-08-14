@@ -14,6 +14,7 @@ interface RegexBuilderProps {
     value: string
     onChange: (value: string) => void
     scope: 'seller' | 'product'
+    autoFocus?: boolean
 }
 
 const TOKENS = [
@@ -30,7 +31,7 @@ function escapeLiteral(value: string) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-export function RegexBuilder({ value, onChange, scope }: RegexBuilderProps) {
+export function RegexBuilder({ value, onChange, scope, autoFocus = true }: RegexBuilderProps) {
     const [literal, setLiteral] = useState('')
 
     const append = (token: string) => onChange(`${value}${token}`)
@@ -52,7 +53,7 @@ export function RegexBuilder({ value, onChange, scope }: RegexBuilderProps) {
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 fullWidth
-                autoFocus
+                autoFocus={autoFocus}
                 size="small"
                 placeholder={scope === 'seller' ? '*перекр?сток*' : '*сырок*45?*'}
                 helperText={`${value.length}/255 · шаблон можно поправить вручную`}
