@@ -1,113 +1,148 @@
 # AutoEco
 
-Receipt Management Platform — FastAPI backend (human-owned) + React frontend (AI-owned).
+AutoEco — open-source веб-приложение для учёта чеков, доходов и расходов. Сервис помогает хранить операции, классифицировать их по магазинам и тегам, просматривать аналитику и импортировать или экспортировать финансовые данные.
 
-## Structure
+![Гифка](docs/scrennshots/demo.gif)
 
-- `backend/`  — FastAPI, SQLAlchemy, Alembic, PostgreSQL (developed manually)
-- `frontend/` — React 19 + TypeScript strict + Vite + MUI + TanStack Query + Zustand + AG Grid
+## Скриншоты
 
-## Docker
+Нажмите на миниатюру, чтобы открыть соответствующий скриншот в полном размере.
 
-Two compose files:
+| № | Раздел | Устройство | Скриншот |
+|---:|---|---|---|
+| 1 | Таблица операций | Компьютер | [![Таблица операций AutoEco](docs/scrennshots/screenshot-1.png)](docs/scrennshots/screenshot-1.png) |
+| 2 | Аналитика | Компьютер | [![Аналитика AutoEco](docs/scrennshots/screenshot-2.png)](docs/scrennshots/screenshot-2.png) |
+| 3 | Справка | Компьютер | [![Справка AutoEco](docs/scrennshots/screenshot-3.png)](docs/scrennshots/screenshot-3.png) |
+| 4 | Теги | Компьютер | [![Теги AutoEco](docs/scrennshots/screenshot-4.png)](docs/scrennshots/screenshot-4.png) |
+| 5 | Страница чека | Компьютер | [![Страница чека AutoEco](docs/scrennshots/screenshot-5.png)](docs/scrennshots/screenshot-5.png) |
+| 6 | Изменение транзакции | Компьютер | [![Изменение транзакции AutoEco](docs/scrennshots/screenshot-6.png)](docs/scrennshots/screenshot-6.png) |
+| 7 | Сканирование чека | Телефон | [![Сканирование чека на телефоне в AutoEco](docs/scrennshots/screenshot-7.png)](docs/scrennshots/screenshot-7.png) |
+| 8 | Правила | Телефон | [![Правила на телефоне в AutoEco](docs/scrennshots/screenshot-8.png)](docs/scrennshots/screenshot-8.png) |
+| 9 | Профиль | Телефон | [![Профиль на телефоне в AutoEco](docs/scrennshots/screenshot-9.png)](docs/scrennshots/screenshot-9.png) |
 
-| File | Purpose | Services | Entry point |
-|---|---|---|---|
-| `docker-compose.dev.yml` | Local dev (`make up` / `make dev-up`) | backend (hot-reload), frontend (Vite HMR), postgres, adminer | backend :80, frontend :5173, adminer :8080 |
-| `docker-compose.deploy.yml` | Production | nginx gateway, frontend (static build), backend, postgres | nginx :80 only |
+## Быстрый старт на Linux
 
-### Environment (.env)
+### Требования
 
-Root `.env` is the **single source** for container env: `backend` and
-`postgres` load the whole file via `env_file: .env` — no per-variable
-listing in the compose files. First run: `cp .env.example .env`.
+- Linux с установленными Docker Engine и Docker Compose Plugin;
+- Git;
+- доступные порты `80`, `5173`, `5432` и `8080` для dev-режима.
 
-- `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB_NAME` — database
-  credentials (postgres image + FastAPI backend)
-- `POSTGRES_HOST` / `POSTGRES_PORT` — used by the backend
-- `JWT_SECRET` — auth token signing key (backend)
-
-Frontend vars (`VITE_*`) live in the same root `.env` — one place for the
-whole stack (see below).
-
-### Dev (local development)
+Проверьте установку:
 
 ```bash
-# full stack with HMR
-make up            # docker compose -f docker-compose.dev.yml up -d
-# or explicitly rebuild
-make dev-up        # docker compose -f docker-compose.dev.yml up -d --build
+docker --version
+docker compose version
+git --version
 ```
 
-- Frontend: http://localhost:5173 (Vite HMR, proxies `/api` → backend :80)
-- Backend API: http://localhost:80 — docs at http://localhost:80/docs
-- DB UI: http://localhost:8080 (adminer)
-
-### Deploy (production)
+### Скачать проект
 
 ```bash
-make deploy-up     # docker compose -f docker-compose.deploy.yml up -d --build
+git clone https://github.com/TAskMAster339/AutoEcoWeb.git
+cd AutoEcoWeb
 ```
 
-One domain — only port 80 is exposed (nginx gateway); the backend is never
-published directly:
+### Настроить `.env`
 
-- `/` — frontend static build (SPA)
-- `/api/*` — backend (proxied by nginx)
-- `/docs`, `/redoc`, `/openapi.json` — backend OpenAPI docs
-- `/health` — backend health check
-
-Build-time env for the frontend image (Vite bakes these in; values come from
-the root `.env`, override on the CLI if needed):
+Все сервисы используют один файл окружения в корне проекта. Создайте его из шаблона:
 
 ```bash
-VITE_USE_MOCK_API=false make deploy-up   # real API (default)
-VITE_USE_MOCK_API=true  make deploy-up   # mock data until backend endpoints land
+cp .env.example .env
 ```
 
-### Frontend env
+Перед запуском обязательно измените как минимум:
 
-Also in the root `.env` (the frontend container loads them via `env_file`,
-Vite exposes them to the client as `import.meta.env`):
+- `POSTGRES_PASSWORD` — пароль PostgreSQL;
+- `JWT_SECRET` — длинный случайный секрет для подписи токенов;
+- `VITE_USE_MOCK_API=false` — использовать настоящий API в production;
+- `COOKIE_SECURE=true` — включить для HTTPS;
+- `APP_URL` — публичный адрес приложения.
 
-- `VITE_API_URL` — backend base URL (empty = same origin; dev proxy → backend)
-- `VITE_PROXY_TARGET` — dev-only, read by `vite.config.ts` (server-side):
-  inside compose it is `http://backend:80` (the compose service name —
-  `localhost` inside a container is the container itself); host dev without
-  compose falls back to `http://localhost:80`.
-- `VITE_USE_MOCK_API` — `true` serves transactions/summary/tags/rules/analytics
-  from mock data until the backend endpoints exist (see `frontend/TODO.md`).
-  Auth always uses the real API. Override for production builds on the CLI:
-  `VITE_USE_MOCK_API=false make deploy-up`.
+Если нужна отправка кодов подтверждения и восстановления пароля по почте, заполните SMTP-переменные: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` и параметры TLS.
 
-## Backend
+### Собрать и запустить
 
-- Generate requirements.txt
+Для локальной разработки с hot reload:
 
 ```bash
-uv export --format requirements-txt --no-dev --no-emit-project --output-file requirements.txt
+docker compose -f docker-compose.dev.yml up -d --build
 ```
 
-- Migrate local
+или:
 
 ```bash
-cd backend && POSTGRES_HOST=localhost uv run alembic upgrade head
+make dev-up
 ```
 
-- Create migration local
+После запуска:
+
+- приложение: <http://localhost:5173>;
+- API: <http://localhost:80>;
+- Swagger: <http://localhost:80/docs>;
+- Adminer: <http://localhost:8080>.
+
+Примените миграции базы данных:
 
 ```bash
-cd backend && POSTGRES_HOST=localhost uv run alembic revision --autogenerate -m "init users"
+docker compose -f docker-compose.dev.yml exec -T backend alembic upgrade head
 ```
 
-- Admin setup
+Для production-сборки:
 
 ```bash
-docker compose -f docker-compose.dev.yml exec -T postgres psql -U postgres -d postgres -c "UPDATE users SET role = 'admin' WHERE email = 'test@example.com';"
+docker compose -f docker-compose.deploy.yml up -d --build
 ```
 
-- Status setup
+В production внешний вход выполняется через nginx. Для HTTPS должны существовать сертификаты в `deploy/certbot/conf`, а DNS публичного домена должен указывать на сервер.
+
+### Создать первого пользователя и сделать его администратором
+
+1. Откройте <http://localhost:5173/login> или публичный адрес приложения.
+2. Создайте пользователя через форму регистрации.
+3. Подтвердите email шестизначным кодом из письма.
+4. Если SMTP не настроен, найдите код в логах backend:
+
+   ```bash
+   docker compose -f docker-compose.dev.yml logs -f backend
+   ```
+
+5. После подтверждения email обновите статус и роль скриптами. Замените `your-email@example.com` на email первого пользователя:
+
+   ```bash
+   chmod +x scripts/set-user-status.sh scripts/set-user-role.sh
+   ./scripts/set-user-status.sh your-email@example.com active
+   ./scripts/set-user-role.sh your-email@example.com admin
+   ```
+
+Скрипты проверяют допустимые значения и обновляют пользователя через PostgreSQL внутри контейнера. Допустимые статусы: `pending`, `verified`, `active`, `blocked`. Допустимые роли: `user`, `admin`.
+
+Статус нового пользователя проходит путь `pending → verified`; вход разрешён только после перевода в `active`. Роль `admin` открывает административный раздел.
+
+Остановить dev-окружение можно командой:
 
 ```bash
-docker compose -f docker-compose.dev.yml exec -T postgres psql -U postgres -d postgres -c "UPDATE users SET status = 'active' WHERE email = 'test@example.com';"
+docker compose -f docker-compose.dev.yml down
 ```
+
+### Вики и справка
+
+В приложении есть встроенная вики-справка. Она доступна по маршрутам:
+
+- `/about` — главная страница справки;
+- `/about/<тема>` — отдельная статья справки;
+- `/privacy` — политика конфиденциальности.
+
+В исходном коде страницы справки находятся в `frontend/src/pages/AboutPage.tsx`, а политика конфиденциальности — в `frontend/src/pages/PrivacyPolicyPage.tsx`.
+
+## Создание проекта и некоммерческий статус
+
+AutoEco создан как независимый open-source проект для личного учёта финансов и демонстрации разработки веб-приложений. Проект не является коммерческим продуктом, не предоставляет финансовых, бухгалтерских или инвестиционных консультаций и не гарантирует сохранность данных без самостоятельного резервного копирования.
+
+Используйте приложение на свой риск и проверяйте корректность импортированных и рассчитанных данных.
+
+## Лицензия
+
+Проект распространяется как open-source программное обеспечение под лицензией MIT. Полный текст лицензии находится в файле [LICENSE](LICENSE).
+
+Вы можете использовать, изменять и распространять проект в соответствии с условиями MIT License.
