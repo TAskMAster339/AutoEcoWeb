@@ -283,6 +283,16 @@ function CommercialGuide() {
             <GuideSection title="Некоммерческий проект">
                 <Text>AutoEco — некоммерческий личный проект. Он не продаёт подписки, не показывает рекламу, не берёт комиссию за операции и не получает доход от пользовательских данных или действий в сервисе.</Text>
             </GuideSection>
+            <GuideSection title="Open source и исходный код">
+                <Text>
+                    AutoEco распространяется как open-source проект. Исходный код доступен публично на GitHub:
+                    {' '}
+                    <Link href="https://github.com/TAskMAster339/AutoEcoWeb" target="_blank" rel="noreferrer" color="primary" underline="hover" fontWeight={700}>
+                        github.com/TAskMAster339/AutoEcoWeb
+                    </Link>
+                    . Проект можно изучать, запускать самостоятельно, изменять и развивать в соответствии с условиями лицензии MIT.
+                </Text>
+            </GuideSection>
             <GuideSection title="Финансирование">
                 <Text>Работа сервиса полностью оплачивается создателем: инфраструктура, домен и разработка содержатся за его счёт. Проект не претендует на получение денег; единственный экономический эффект — возможная экономия самих пользователей благодаря более понятному учёту расходов и сравнению цен.</Text>
             </GuideSection>

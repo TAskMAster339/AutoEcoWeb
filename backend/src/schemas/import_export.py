@@ -67,7 +67,7 @@ class ImportPreview(BaseModel):
 
     Имена полей сохранены короткими для совместимости с текущим API и
     фронтендом: total/valid/invalid — агрегаты по строкам.
-    """
+    """  # noqa: RUF002
 
     rows: list[ImportRowPreview]
     total: int
@@ -84,13 +84,23 @@ class ImportRowIn(BaseModel):
     category: str | None = None
     store: str | None = None
     description: str = ""
-    quantity: Decimal = Field(default=Decimal("1"), gt=0, max_digits=12, decimal_places=3)
+    quantity: Decimal = Field(
+        default=Decimal("1"),
+        gt=0,
+        max_digits=12,
+        decimal_places=3,
+    )
     unit: str = "шт."
     price: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
     comment: str = ""
     tags: list[str] = Field(default_factory=list)
     income: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
-    expense: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
+    expense: Decimal = Field(
+        default=Decimal("0"),
+        ge=0,
+        max_digits=12,
+        decimal_places=2,
+    )
     operation_kind: Literal["income", "expense"] | None = None
 
     @model_validator(mode="after")
