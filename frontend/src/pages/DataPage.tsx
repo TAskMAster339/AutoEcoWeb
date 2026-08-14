@@ -86,7 +86,7 @@ export function DataPage() {
         try {
             const nextPreview = await previewImport(file)
             setPreview(nextPreview)
-            setSelected(new Set(nextPreview.rows.filter((row) => row.errors.length === 0).map((row) => row.index)))
+            setSelected(new Set(nextPreview.rows.filter((row) => row.errors.length === 0).map((row) => row.row_number)))
             setStage('preview')
         } catch (caught) {
             setError(messageFromError(caught))
@@ -106,7 +106,7 @@ export function DataPage() {
     const handleImport = async () => {
         if (!preview || selected.size === 0) return
         const rows = preview.rows
-            .filter((row) => selected.has(row.index))
+            .filter((row) => selected.has(row.row_number))
             .map((row) => ({
                 date: row.date ?? '',
                 category: row.category,
@@ -385,7 +385,7 @@ function PreviewBlock({
         const target = errorRows[activeError]
         if (!target) return
         const frame = window.requestAnimationFrame(() => {
-            rowRefs.current.get(target.index)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            rowRefs.current.get(target.row_number)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         })
         return () => window.cancelAnimationFrame(frame)
     }, [activeError, errorRows, filter, page, query])
@@ -468,12 +468,12 @@ function PreviewBlock({
                             <TableBody>
                                 {pagedRows.map((row) => (
                                     <PreviewTableRow
-                                        key={row.index}
+                                        key={row.row_number}
                                         row={row}
-                                        checked={selected.has(row.index)}
-                                        highlighted={errorRows[activeError]?.index === row.index && filter === 'invalid'}
-                                        onToggle={() => onToggle(row.index)}
-                                        setRef={(element) => element ? rowRefs.current.set(row.index, element) : rowRefs.current.delete(row.index)}
+                                        checked={selected.has(row.row_number)}
+                                        highlighted={errorRows[activeError]?.row_number === row.row_number && filter === 'invalid'}
+                                        onToggle={() => onToggle(row.row_number)}
+                                        setRef={(element) => element ? rowRefs.current.set(row.row_number, element) : rowRefs.current.delete(row.row_number)}
                                     />
                                 ))}
                             </TableBody>
@@ -481,12 +481,12 @@ function PreviewBlock({
                     </TableContainer> : <Stack spacing={1} sx={{ p: 1.5, maxHeight: 520, overflowY: 'auto' }}>
                         {pagedRows.map((row) => (
                             <PreviewMobileRow
-                                key={row.index}
+                                key={row.row_number}
                                 row={row}
-                                checked={selected.has(row.index)}
-                                highlighted={errorRows[activeError]?.index === row.index && filter === 'invalid'}
-                                onToggle={() => onToggle(row.index)}
-                                setRef={(element) => element ? rowRefs.current.set(row.index, element) : rowRefs.current.delete(row.index)}
+                                checked={selected.has(row.row_number)}
+                                highlighted={errorRows[activeError]?.row_number === row.row_number && filter === 'invalid'}
+                                onToggle={() => onToggle(row.row_number)}
+                                setRef={(element) => element ? rowRefs.current.set(row.row_number, element) : rowRefs.current.delete(row.row_number)}
                             />
                         ))}
                     </Stack>}

@@ -7,7 +7,7 @@
 import { api } from './client'
 
 export interface ImportRowPreview {
-  index: number
+  row_number: number
   date: string | null
   category: string | null
   store: string | null

@@ -103,6 +103,19 @@ class ImportRowIn(BaseModel):
     )
     operation_kind: Literal["income", "expense"] | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_empty_optional_values(cls, values: object) -> object:
+        """Превращает пустые значения preview в значения контракта импорта."""
+        if not isinstance(values, dict):
+            return values
+        normalized = dict(values)
+        normalized["quantity"] = normalized.get("quantity") or Decimal("1")
+        normalized["unit"] = normalized.get("unit") or "шт."
+        normalized["price"] = normalized.get("price") or Decimal("0")
+        normalized["comment"] = normalized.get("comment") or ""
+        return normalized
+
     @model_validator(mode="after")
     def validate_amount(self):
         income_present = "income" in self.model_fields_set
