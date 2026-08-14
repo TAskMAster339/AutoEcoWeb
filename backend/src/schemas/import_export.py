@@ -48,13 +48,13 @@ class ImportRowPreview(BaseModel):
 
     row_number: int
     date: datetime.date | None = None
-    category: str = ""
-    store: str = ""
+    category: str | None = None
+    store: str | None = None
     description: str = ""
     quantity: Decimal | None = None
-    unit: str = "шт."
+    unit: str | None = "шт."
     price: Decimal | None = None
-    comment: str = ""
+    comment: str | None = ""
     tags: list[str] = Field(default_factory=list)
     income: Decimal | None = None
     expense: Decimal | None = None
@@ -62,17 +62,27 @@ class ImportRowPreview(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
-class ImportPreviewResponse(BaseModel):
+class ImportPreview(BaseModel):
+    """Результат предпросмотра файла перед импортом.
+
+    Имена полей сохранены короткими для совместимости с текущим API и
+    фронтендом: total/valid/invalid — агрегаты по строкам.
+    """
+
     rows: list[ImportRowPreview]
-    total_rows: int
-    valid_rows: int
-    invalid_rows: int
+    total: int
+    valid: int
+    invalid: int
+
+
+# Явное имя для клиентов, которым нужен более описательный вариант схемы.
+ImportPreviewResponse = ImportPreview
 
 
 class ImportRowIn(BaseModel):
     date: datetime.date
-    category: str = ""
-    store: str = ""
+    category: str | None = None
+    store: str | None = None
     description: str = ""
     quantity: Decimal = Field(default=Decimal("1"), gt=0, max_digits=12, decimal_places=3)
     unit: str = "шт."
@@ -115,5 +125,6 @@ class ImportRequest(BaseModel):
 
 class ImportResult(BaseModel):
     imported: int
-    skipped: int
+    skipped: int = 0
+    tags_created: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

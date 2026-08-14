@@ -318,7 +318,7 @@ def _row_to_preview(
     )
 
     return ImportRowPreview(
-        index=index,
+        row_number=index,
         date=parsed_date,
         category=category,
         store=store,
