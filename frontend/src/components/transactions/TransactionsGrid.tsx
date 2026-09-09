@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AgGridReact, type CustomCellRendererProps } from 'ag-grid-react'
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-quartz.css'
-import type { ColDef, IDatasource, IGetRowsParams } from 'ag-grid-community'
-import { Box, MenuItem, Select, Typography, useTheme } from '@mui/material'
+import type { CellContextMenuEvent, ColDef, IDatasource, IGetRowsParams, RowClickedEvent } from 'ag-grid-community'
+import { Box, MenuItem, Paper, Popper, Select, Stack, Typography, useTheme } from '@mui/material'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { TagChip } from '../common/TagChip'
 import { formatCurrency, formatNumber, formatShortDate } from '../../lib/format'
@@ -14,6 +14,11 @@ import {
   type TransactionsPageParams,
 } from '../../api/transactions'
 import type { Tag, TransactionView } from '../../api/types'
+import {
+  QuickEditPopover,
+  type QuickEditField,
+  type QuickEditTarget,
+} from './QuickEditPopover'
 
 interface GridContext {
   tagsMap: Map<string, Tag>
@@ -53,6 +58,166 @@ const rightAligned: Partial<ColDef<TransactionView>> = {
  */
 function headerMinWidth(headerName: string): number {
   return Math.ceil(headerName.length * 8.4) + 24
+}
+
+type StatsColumnId = keyof Pick<
+  TransactionView,
+  'date' | 'store' | 'tagId' | 'name' | 'quantity' | 'price' | 'income' | 'expense' | 'balance' | 'comment'
+>
+
+interface NumericColumnStats {
+  kind: 'numeric'
+  count: number
+  sum: number
+  min: number | null
+  max: number | null
+}
+
+interface CategoryColumnStats {
+  kind: 'category'
+  count: number
+  empty: number
+  unique: Set<string>
+  frequencies: Map<string, number>
+  topValue: string | null
+  topCount: number
+}
+
+type ColumnStats = NumericColumnStats | CategoryColumnStats
+
+interface StatsAccumulator {
+  rowIds: Set<string>
+  columns: Record<StatsColumnId, ColumnStats>
+}
+
+const NUMERIC_COLUMNS = new Set<StatsColumnId>(['quantity', 'price', 'income', 'expense', 'balance'])
+const QUICK_EDIT_FIELDS = new Set<QuickEditField>([
+  'date',
+  'store',
+  'tagId',
+  'name',
+  'quantity',
+  'price',
+  'income',
+  'expense',
+  'comment',
+])
+
+function createStatsAccumulator(): StatsAccumulator {
+  const columns = {} as Record<StatsColumnId, ColumnStats>
+  for (const field of ['date', 'store', 'tagId', 'name', 'quantity', 'price', 'income', 'expense', 'balance', 'comment'] as StatsColumnId[]) {
+    columns[field] = NUMERIC_COLUMNS.has(field)
+      ? { kind: 'numeric', count: 0, sum: 0, min: null, max: null }
+      : { kind: 'category', count: 0, empty: 0, unique: new Set(), frequencies: new Map(), topValue: null, topCount: 0 }
+  }
+  return { rowIds: new Set(), columns }
+}
+
+function addRowsToStats(accumulator: StatsAccumulator, rows: TransactionView[]): boolean {
+  let changed = false
+  for (const row of rows) {
+    if (accumulator.rowIds.has(row.id)) continue
+    accumulator.rowIds.add(row.id)
+    changed = true
+
+    for (const field of Object.keys(accumulator.columns) as StatsColumnId[]) {
+      const stats = accumulator.columns[field]
+      const rawValue = row[field]
+      if (stats.kind === 'numeric') {
+        if (typeof rawValue !== 'number' || !Number.isFinite(rawValue)) continue
+        stats.count += 1
+        stats.sum += rawValue
+        stats.min = stats.min === null ? rawValue : Math.min(stats.min, rawValue)
+        stats.max = stats.max === null ? rawValue : Math.max(stats.max, rawValue)
+        continue
+      }
+
+      const value = rawValue === null || rawValue === undefined || rawValue === '' ? null : String(rawValue)
+      if (value === null) {
+        stats.empty += 1
+        continue
+      }
+      stats.count += 1
+      stats.unique.add(value)
+      const nextCount = (stats.frequencies.get(value) ?? 0) + 1
+      stats.frequencies.set(value, nextCount)
+      if (nextCount > stats.topCount) {
+        stats.topValue = value
+        stats.topCount = nextCount
+      }
+    }
+  }
+  return changed
+}
+
+function categoryLabel(field: StatsColumnId, value: string | null, tagsMap: Map<string, Tag>): string {
+  if (value === null) return '—'
+  if (field === 'tagId') return tagsMap.get(value)?.name ?? 'Удалённый тег'
+  if (field === 'date') return formatShortDate(value)
+  return value
+}
+
+function ColumnStatsPopover({
+  anchorEl,
+  field,
+  stats,
+  loaded,
+  total,
+  tagsMap,
+}: {
+  anchorEl: HTMLElement | null
+  field: StatsColumnId | null
+  stats: ColumnStats | null
+  loaded: number
+  total: number | null
+  tagsMap: Map<string, Tag>
+}) {
+  if (!anchorEl || !field || !stats) return null
+  const isCurrency = ['price', 'income', 'expense', 'balance'].includes(field)
+  const formatValue = (value: number | null) => isCurrency ? formatCurrency(value) : formatNumber(value)
+
+  return (
+    <Popper open anchorEl={anchorEl} placement="bottom-start" sx={{ zIndex: 20, pointerEvents: 'none' }} modifiers={[{ name: 'offset', options: { offset: [0, 8] } }]}>
+      <Paper
+        role="tooltip"
+        elevation={8}
+        sx={{ width: 246, p: 1.5, borderRadius: '8px', border: '1px solid', borderColor: 'divider' }}
+      >
+        <Typography variant="subtitle2" sx={{ mb: 0.25 }}>Статистика столбца</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.25 }}>
+          Загружено {loaded}{total !== null ? ` из ${total}` : ''}
+        </Typography>
+        {loaded === 0 ? (
+          <Typography variant="body2" color="text.secondary">Данные ещё загружаются</Typography>
+        ) : stats.kind === 'numeric' ? (
+          <Stack spacing={0.75}>
+            <StatsLine label="Значений" value={formatNumber(stats.count)} />
+            <StatsLine label="Сумма" value={formatValue(stats.sum)} />
+            <StatsLine label="Среднее" value={stats.count ? formatValue(stats.sum / stats.count) : '—'} />
+            <StatsLine label="Минимум" value={formatValue(stats.min)} />
+            <StatsLine label="Максимум" value={formatValue(stats.max)} />
+          </Stack>
+        ) : (
+          <Stack spacing={0.75}>
+            <StatsLine label="Значений" value={formatNumber(stats.count)} />
+            <StatsLine label="Уникальных" value={formatNumber(stats.unique.size)} />
+            <StatsLine label="Чаще всего" value={categoryLabel(field, stats.topValue, tagsMap)} />
+            <StatsLine label="Встречается" value={stats.topValue === null ? '—' : formatNumber(stats.topCount)} />
+            <StatsLine label="Пустых" value={formatNumber(stats.empty)} />
+          </Stack>
+        )}
+      </Paper>
+    </Popper>
+  )
+}
+
+function StatsLine({ label, value }: { label: string; value: string }) {
+  return (
+    <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.25fr)', gap: 1.5, alignItems: 'baseline' }}>
+      <Typography variant="caption" color="text.secondary">{label}</Typography>
+      <Typography variant="body2" className="tnum" noWrap sx={{ textAlign: 'right', fontWeight: 600 }}>{value}</Typography>
+    </Box>
+  )
 }
 
 const columnDefs: ColDef<TransactionView>[] = [
@@ -176,8 +341,18 @@ export function TransactionsGrid({
   const queryClient = useQueryClient()
   const { data: txRevision } = useQuery({ queryKey: ['txRevision'], queryFn: () => 0 })
   const gridRef = useRef<AgGridReact<TransactionView>>(null)
+  const gridWrapperRef = useRef<HTMLDivElement>(null)
+  const statsAccumulatorRef = useRef<StatsAccumulator>(createStatsAccumulator())
+  const statsGenerationRef = useRef(0)
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hoveredHeaderRef = useRef<HTMLElement | null>(null)
+  const selectionAnchorRef = useRef<number | null>(null)
 
   const [pageSize, setPageSize] = useState(50)
+  const [, setStatsRevision] = useState(0)
+  const [statsAnchor, setStatsAnchor] = useState<HTMLElement | null>(null)
+  const [statsField, setStatsField] = useState<StatsColumnId | null>(null)
+  const [quickEditTarget, setQuickEditTarget] = useState<QuickEditTarget | null>(null)
 
   // Свежие значения для замыкания datasource (без пересоздания на каждый рендер)
   const onTotalChangeRef = useRef(onTotalChange)
@@ -190,15 +365,26 @@ export function TransactionsGrid({
   // params, кэш не протухнет) — здесь только заставляем AG Grid перезапросить
   // видимые блоки и сбросить старый кэш.
   useEffect(() => {
+    statsGenerationRef.current += 1
+    statsAccumulatorRef.current = createStatsAccumulator()
+    setStatsRevision((revision) => revision + 1)
+    setStatsAnchor(null)
+    setStatsField(null)
+    selectionAnchorRef.current = null
     const api = gridRef.current?.api
     if (!api) return
     api.purgeInfiniteCache()
   }, [params, txRevision])
 
+  useEffect(() => () => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+  }, [])
+
   // Infinite-источник: блоки запрашиваются по мере прокрутки; sortModel
   // приходит от AG Grid при клике по заголовку — пробрасывается на бэкенд.
   const datasource = useMemo<IDatasource>(() => {
     const getRows = (p: IGetRowsParams): void => {
+      const statsGeneration = statsGenerationRef.current
       const { startRow, endRow, sortModel, successCallback, failCallback } = p
       const sort = sortModel?.[0]
       const sortBy = (sort?.colId && sort?.sort ? sort.colId : 'date') as TransactionsPageParams['sort_by']
@@ -220,7 +406,11 @@ export function TransactionsGrid({
         })
         .then((page) => {
           onTotalChangeRef.current(page.total ?? 0)
-          successCallback(page.items.map(toTransactionView), page.total ?? 0)
+          const rows = page.items.map(toTransactionView)
+          if (statsGeneration === statsGenerationRef.current && addRowsToStats(statsAccumulatorRef.current, rows)) {
+            setStatsRevision((revision) => revision + 1)
+          }
+          successCallback(rows, page.total ?? 0)
         })
         .catch(() => failCallback())
     }
@@ -243,8 +433,78 @@ export function TransactionsGrid({
     return () => window.removeEventListener('keydown', onKey)
   }, [onSelectionChange])
 
+  const handleGridMouseOver = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target instanceof HTMLElement ? event.target : null
+    const header = target?.closest<HTMLElement>('.ag-header-cell[col-id]') ?? null
+    if (!header || !gridWrapperRef.current?.contains(header)) return
+    const field = header.getAttribute('col-id') as StatsColumnId | null
+    if (!field || !(field in statsAccumulatorRef.current.columns) || hoveredHeaderRef.current === header) return
+
+    hoveredHeaderRef.current = header
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+    hoverTimerRef.current = setTimeout(() => {
+      setStatsField(field)
+      setStatsAnchor(header)
+    }, 180)
+  }
+
+  const handleGridMouseOut = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target instanceof HTMLElement ? event.target : null
+    const header = target?.closest<HTMLElement>('.ag-header-cell[col-id]') ?? null
+    if (!header) return
+    const relatedTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null
+    if (relatedTarget && header.contains(relatedTarget)) return
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+    hoverTimerRef.current = null
+    hoveredHeaderRef.current = null
+    setStatsAnchor(null)
+    setStatsField(null)
+  }
+
+  const handleRowClicked = (event: RowClickedEvent<TransactionView>) => {
+    const mouseEvent = event.event
+    if (!(mouseEvent instanceof MouseEvent) || mouseEvent.button !== 0 || event.node.rowIndex === null) return
+
+    if (mouseEvent.shiftKey) {
+      mouseEvent.preventDefault()
+      const end = event.node.rowIndex
+      const start = selectionAnchorRef.current ?? end
+      event.api.deselectAll()
+      for (let index = Math.min(start, end); index <= Math.max(start, end); index += 1) {
+        const node = event.api.getDisplayedRowAtIndex(index)
+        if (node?.data) node.setSelected(true, false)
+      }
+      if (selectionAnchorRef.current === null) selectionAnchorRef.current = end
+      return
+    }
+
+    if (mouseEvent.altKey) {
+      mouseEvent.preventDefault()
+      event.node.setSelected(!event.node.isSelected(), false)
+      selectionAnchorRef.current = event.node.rowIndex
+    }
+  }
+
+  const handleCellContextMenu = (event: CellContextMenuEvent<TransactionView>) => {
+    const mouseEvent = event.event
+    if (!(mouseEvent instanceof MouseEvent) || !event.data) return
+    mouseEvent.preventDefault()
+    const field = event.column.getColId() as QuickEditField
+    if (!QUICK_EDIT_FIELDS.has(field)) return
+    setQuickEditTarget({ tx: event.data, field, x: mouseEvent.clientX, y: mouseEvent.clientY })
+  }
+
+  // The revision state above turns the mutable accumulator into a render snapshot.
+  const activeStats = statsField
+    ? statsAccumulatorRef.current.columns[statsField]
+    : null
+  const loadedCount = statsAccumulatorRef.current.rowIds.size
+
   return (
     <Box
+      ref={gridWrapperRef}
+      onMouseOver={handleGridMouseOver}
+      onMouseOut={handleGridMouseOut}
       sx={{
         position: 'relative',
         minWidth: 0,
@@ -312,6 +572,10 @@ export function TransactionsGrid({
           onRowDoubleClicked={(e) => {
             if (e.data) onEdit?.(e.data)
           }}
+          onRowClicked={handleRowClicked}
+          onCellContextMenu={handleCellContextMenu}
+          suppressContextMenu
+          preventDefaultOnContextMenu
           // Стабильный id строки: выделение переживает подгрузку блоков и refetch
           getRowId={(p) => p.data.id}
           domLayout="normal"
@@ -335,6 +599,10 @@ export function TransactionsGrid({
       >
         <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
           {total !== null && total !== undefined ? `Всего ${total} записей` : ''}
+        </Typography>
+
+        <Typography variant="caption" color="text.secondary" sx={{ display: { md: 'none', lg: 'block' }, whiteSpace: 'nowrap' }}>
+          Alt — выбор · Shift — диапазон · ПКМ — изменить
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -363,6 +631,22 @@ export function TransactionsGrid({
           </Select>
         </Box>
       </Box>
+
+      <ColumnStatsPopover
+        anchorEl={statsAnchor}
+        field={statsField}
+        stats={activeStats}
+        loaded={loadedCount}
+        total={total}
+        tagsMap={tagsMap}
+      />
+
+      <QuickEditPopover
+        key={quickEditTarget ? `${quickEditTarget.tx.id}:${quickEditTarget.field}` : 'closed'}
+        target={quickEditTarget}
+        tags={[...tagsMap.values()]}
+        onClose={() => setQuickEditTarget(null)}
+      />
     </Box>
   )
 }

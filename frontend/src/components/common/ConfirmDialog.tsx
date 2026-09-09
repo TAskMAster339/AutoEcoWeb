@@ -160,7 +160,16 @@ export function ConfirmDialog({
                     {error}
                 </Alert>
             )}
-            <DialogActions sx={{ p: 0, pt: 1, flexDirection: isMobile ? 'column' : 'row', gap: 1 }}>
+            <DialogActions
+                sx={{
+                    p: 0,
+                    pt: 1,
+                    flexDirection: isMobile ? 'column' : 'row',
+                    justifyContent: isMobile ? 'stretch' : 'space-between',
+                    gap: 1,
+                    '& > :not(style) ~ :not(style)': { ml: 0 },
+                }}
+            >
                 <Button variant="outlined" color="inherit" fullWidth={isMobile} onClick={onClose} disabled={pending}>
                     {cancelLabel}
                 </Button>

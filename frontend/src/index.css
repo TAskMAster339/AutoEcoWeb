@@ -17,6 +17,11 @@ body {
   box-sizing: border-box;
 }
 
+::selection {
+  color: #ffffff;
+  background-color: #6c5ce7;
+}
+
 button,
 a {
   -webkit-tap-highlight-color: transparent;
@@ -55,6 +60,21 @@ a {
 }
 *::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Touch scrolling stays enabled on mobile, only the visual rails are hidden.
+   This override must come after the desktop scrollbar theme above. */
+@media (max-width: 899.95px) {
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
 }
 
 /* Safe area helpers for mobile bottom bars */

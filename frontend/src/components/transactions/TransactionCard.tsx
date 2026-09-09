@@ -1,6 +1,5 @@
-import { useRef, useState } from 'react'
-import { Box, Card, Collapse, IconButton, Typography, useTheme } from '@mui/material'
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import { useEffect, useRef, useState } from 'react'
+import { Box, ButtonBase, Card, Collapse, Typography, useTheme } from '@mui/material'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { TagChip } from '../common/TagChip'
@@ -11,15 +10,15 @@ import type { Tag, TransactionView } from '../../api/types'
 interface TransactionCardProps {
   tx: TransactionView
   tagsMap: Map<string, Tag>
-  onDelete: (id: string) => void
-  /** Открыть модалку редактирования. */
-  onEdit?: (tx: TransactionView) => void
+  swipeOpen: boolean
+  onSwipeOpen: (id: string | null) => void
+  onEdit: (tx: TransactionView) => void
 }
 
 /**
- * Mobile transaction card — expandable details + swipe-left reveal of Delete.
+ * Mobile transaction card — expandable details + swipe-left reveal of Edit.
  */
-export function TransactionCard({ tx, tagsMap, onDelete, onEdit }: TransactionCardProps) {
+export function TransactionCard({ tx, tagsMap, swipeOpen, onSwipeOpen, onEdit }: TransactionCardProps) {
   const theme = useTheme()
   const [expanded, setExpanded] = useState(false)
   const [offset, setOffset] = useState(0)
@@ -31,7 +30,12 @@ export function TransactionCard({ tx, tagsMap, onDelete, onEdit }: TransactionCa
   const amount = isExpense ? tx.expense : tx.income
   const amountColor = isExpense ? colors.red : colors.green
 
+  useEffect(() => {
+    if (!swipeOpen && !dragging.current) setOffset(0)
+  }, [swipeOpen])
+
   const onTouchStart = (e: React.TouchEvent) => {
+    if (!swipeOpen) onSwipeOpen(null)
     startX.current = e.touches[0]?.clientX ?? null
     dragging.current = true
   }
@@ -43,13 +47,21 @@ export function TransactionCard({ tx, tagsMap, onDelete, onEdit }: TransactionCa
   const endSwipe = () => {
     dragging.current = false
     startX.current = null
-    setOffset(offset < -44 ? -88 : 0)
+    const shouldOpen = offset < -44
+    setOffset(shouldOpen ? -88 : 0)
+    onSwipeOpen(shouldOpen ? tx.id : null)
   }
 
   return (
     <Box sx={{ position: 'relative', borderRadius: '8px', overflow: 'hidden' }} onTouchEnd={endSwipe}>
-      {/* Delete action revealed by swipe */}
-      <Box
+      <ButtonBase
+        onClick={(event) => {
+          event.stopPropagation()
+          setOffset(0)
+          onSwipeOpen(null)
+          onEdit(tx)
+        }}
+        aria-label={`Изменить транзакцию «${tx.name}»`}
         sx={{
           position: 'absolute',
           top: 0,
@@ -57,20 +69,20 @@ export function TransactionCard({ tx, tagsMap, onDelete, onEdit }: TransactionCa
           right: 0,
           width: 88,
           display: 'flex',
+          flexDirection: 'column',
+          gap: 0.5,
           alignItems: 'center',
           justifyContent: 'center',
-          bgcolor: colors.red,
+          bgcolor: 'primary.main',
           color: '#fff',
+          borderRadius: 0,
         }}
       >
-        <IconButton
-          onClick={() => onDelete(tx.id)}
-          aria-label="Удалить"
-          sx={{ color: '#fff' }}
-        >
-          <DeleteOutlineIcon />
-        </IconButton>
-      </Box>
+        <EditOutlinedIcon fontSize="small" />
+        <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 600 }}>
+          Изменить
+        </Typography>
+      </ButtonBase>
 
       <Card
         sx={{
@@ -83,39 +95,52 @@ export function TransactionCard({ tx, tagsMap, onDelete, onEdit }: TransactionCa
         onTouchMove={onTouchMove}
         onClick={() => setExpanded((v) => !v)}
       >
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography sx={{ fontWeight: 700, fontSize: 14.5 }}>{tx.store ?? '—'}</Typography>
-              <Typography variant="caption" color="text.secondary">
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) auto',
+            alignItems: 'center',
+            columnGap: 1.5,
+            rowGap: 0.25,
+          }}
+        >
+          <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography noWrap sx={{ minWidth: 0, fontWeight: 700, fontSize: 14.5 }}>
+                {tx.store ?? '—'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
                 {formatLongDate(tx.date)}
               </Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary" noWrap sx={{ mt: 0.25 }}>
-              {tx.name}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 0.5, mt: 0.75, flexWrap: 'wrap' }}>
-              {tag && <TagChip key={tag.id} tag={tag} />}
-            </Box>
           </Box>
-          <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-            <Typography
-              className="tnum"
-              sx={{ fontWeight: 700, fontSize: 15, color: amountColor }}
-            >
-              {isExpense ? '−' : '+'}
-              {formatCurrency(amount)}
-            </Typography>
-          </Box>
+          <Typography
+            className="tnum"
+            sx={{ justifySelf: 'end', fontWeight: 700, fontSize: 15, color: amountColor }}
+          >
+            {isExpense ? '−' : '+'}
+            {formatCurrency(amount)}
+          </Typography>
+
+          <Typography variant="body2" color="text.secondary" noWrap sx={{ minWidth: 0 }}>
+            {tx.name}
+          </Typography>
           <ExpandMoreIcon
             sx={{
+              gridColumn: 2,
+              gridRow: tag ? 3 : 2,
+              justifySelf: 'end',
+              alignSelf: tag ? 'end' : 'center',
               fontSize: 18,
               color: colors.textSecondary,
               transform: expanded ? 'rotate(180deg)' : 'none',
               transition: 'transform 0.2s',
-              mt: 0.5,
             }}
           />
+
+          {tag && (
+            <Box sx={{ gridColumn: 1, gridRow: 3, display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
+              <TagChip tag={tag} />
+            </Box>
+          )}
         </Box>
 
         <Collapse in={expanded}>
@@ -141,25 +166,6 @@ export function TransactionCard({ tx, tagsMap, onDelete, onEdit }: TransactionCa
               <Typography variant="body2" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 {tx.comment}
               </Typography>
-            </Box>
-          )}
-          {onEdit && (
-            <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
-              <IconButton
-                size="small"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onEdit(tx)
-                }}
-                aria-label="Изменить"
-                sx={{
-                  borderRadius: '8px',
-                  border: `1px solid ${theme.palette.divider}`,
-                  color: 'text.secondary',
-                }}
-              >
-                <EditOutlinedIcon fontSize="small" />
-              </IconButton>
             </Box>
           )}
         </Collapse>

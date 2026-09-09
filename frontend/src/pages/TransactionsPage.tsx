@@ -132,6 +132,7 @@ export function TransactionsPage() {
     const [mobileLoading, setMobileLoading] = useState(true)
     const [mobileLoadingMore, setMobileLoadingMore] = useState(false)
     const [mobileLoadError, setMobileLoadError] = useState(false)
+    const [mobileSwipeId, setMobileSwipeId] = useState<string | null>(null)
     const mobileSentinelRef = useRef<HTMLDivElement | null>(null)
 
     // Смена фильтров/периода → сброс списка и первая страница.
@@ -139,6 +140,7 @@ export function TransactionsPage() {
         let cancelled = false
         setMobileLoading(true)
         setMobileLoadError(false)
+        setMobileSwipeId(null)
         void queryClient
             .fetchQuery({
                 queryKey: ['txPage', params, 'date', 'asc', MOBILE_PAGE, 0],
@@ -199,7 +201,6 @@ export function TransactionsPage() {
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
     const [bulkError, setBulkError] = useState<string | null>(null)
-    const [mobileDeleteId, setMobileDeleteId] = useState<string | null>(null)
     // Транзакция для модалки редактирования (null = закрыта).
     const [editingTx, setEditingTx] = useState<TransactionView | null>(null)
 
@@ -211,17 +212,6 @@ export function TransactionsPage() {
             setConfirmDeleteOpen(false)
         } catch (e) {
             setBulkError(e instanceof Error ? e.message : 'Не удалось удалить транзакции')
-        }
-    }
-
-    const mobileDelete = async () => {
-        if (!mobileDeleteId) return
-        setBulkError(null)
-        try {
-            await deleteTx.mutateAsync(mobileDeleteId)
-            setMobileDeleteId(null)
-        } catch (e) {
-            setBulkError(e instanceof Error ? e.message : 'Не удалось удалить транзакцию')
         }
     }
 
@@ -309,9 +299,11 @@ export function TransactionsPage() {
     }, [search, tagFilterIds, storeFilters, amountMin, amountMax, operationFilter, periodKey, customFrom, customTo, monthYear, dayDate])
 
     const tagsMap = useMemo(() => new Map((tags ?? []).map((t) => [t.id, t])), [tags])
-    const hasFilters = Boolean(search || tagFilterIds.length || storeFilters.length || amountMin || amountMax || operationFilter !== 'all' || periodKey !== 'all')
+    // Период — отдельный глобальный срез в шапке, а не фильтр из панели.
+    // Поэтому он не включает точку на кнопке и не активирует «Сбросить фильтры».
+    const hasTableFilters = Boolean(search || tagFilterIds.length || storeFilters.length || amountMin || amountMax || operationFilter !== 'all')
 
-    const showNoTransactions = total === 0 && (allTimeTotal ?? 0) === 0 && !hasFilters
+    const showNoTransactions = total === 0 && (allTimeTotal ?? 0) === 0 && !hasTableFilters
     const showNotFound = total === 0 && !showNoTransactions
 
     if (totalLoading) return <LoadingState label="Загружаем операции…" />
@@ -328,15 +320,15 @@ export function TransactionsPage() {
                     <PageSearch value={search} onChange={useUiStore.getState().setSearch} placeholder="Магазин, название или комментарий" ariaLabel="Поиск по магазинам, названиям и комментариям" width="100%" />
                 </Box>
                 <Button
-                    variant={hasFilters ? 'outlined' : 'text'}
-                    color={hasFilters ? 'primary' : 'inherit'}
-                    startIcon={hasFilters ? <RestartAltIcon /> : undefined}
+                    variant={hasTableFilters ? 'outlined' : 'text'}
+                    color={hasTableFilters ? 'primary' : 'inherit'}
+                    startIcon={hasTableFilters ? <RestartAltIcon /> : undefined}
                     onClick={handleResetFilters}
-                    disabled={!hasFilters}
+                    disabled={!hasTableFilters}
                     aria-label="Сбросить активные фильтры"
                     sx={(theme) => ({
                         textTransform: 'none',
-                        ...(hasFilters
+                        ...(hasTableFilters
                             ? {
                                 bgcolor: softBg(theme),
                                 color: softFg(theme),
@@ -351,7 +343,7 @@ export function TransactionsPage() {
                     <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Сбросить фильтры</Box>
                     <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Сбросить</Box>
                 </Button>
-                {hasFilters ? (
+                {hasTableFilters ? (
                     <Badge color="primary" variant="dot">
                         <Button
                             variant="outlined"
@@ -390,13 +382,13 @@ export function TransactionsPage() {
                 <EmptyState
                     title="Ничего не найдено"
                     subtitle={
-                        hasFilters
+                        hasTableFilters
                             ? 'Попробуйте изменить период или сбросить фильтры'
                             : 'В этом периоде нет операций'
                     }
-                    actionLabel={hasFilters ? 'Сбросить фильтры' : 'Показать всё время'}
+                    actionLabel={hasTableFilters ? 'Сбросить фильтры' : 'Показать всё время'}
                     onAction={() => {
-                        if (hasFilters) {
+                        if (hasTableFilters) {
                             handleResetFilters()
                         } else {
                             // Активных фильтров нет — период пуст; показываем все операции.
@@ -411,10 +403,17 @@ export function TransactionsPage() {
                     ) : (
                         <>
                             {mobileRows.map((t) => (
-                                <TransactionCard key={t.id} tx={t} tagsMap={tagsMap} onDelete={setMobileDeleteId} onEdit={setEditingTx} />
+                                <TransactionCard
+                                    key={t.id}
+                                    tx={t}
+                                    tagsMap={tagsMap}
+                                    swipeOpen={mobileSwipeId === t.id}
+                                    onSwipeOpen={setMobileSwipeId}
+                                    onEdit={setEditingTx}
+                                />
                             ))}
                             <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
-                                Показано {mobileRows.length} из {total ?? 0} · свайп влево — удалить
+                                Показано {mobileRows.length} из {total ?? 0} · свайп влево — изменить
                             </Typography>
                             {total !== null && mobileRows.length < total && !mobileLoadError && (
                                 <Box ref={mobileSentinelRef} sx={{ minHeight: 52, display: 'grid', placeItems: 'center' }} aria-live="polite">
@@ -512,16 +511,6 @@ export function TransactionsPage() {
                 error={bulkError}
                 onConfirm={() => void bulkDelete()}
                 onClose={() => setConfirmDeleteOpen(false)}
-            />
-            <ConfirmDialog
-                open={mobileDeleteId !== null}
-                title="Удалить транзакцию?"
-                message="Операция необратима. Транзакция будет удалена."
-                confirmLabel="Удалить"
-                pending={deleteTx.isPending}
-                error={bulkError}
-                onConfirm={() => void mobileDelete()}
-                onClose={() => setMobileDeleteId(null)}
             />
         </Stack>
     )
