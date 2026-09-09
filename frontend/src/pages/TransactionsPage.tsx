@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     Badge,
     Box,
@@ -13,14 +13,15 @@ import {
 } from '@mui/material'
 import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import AddIcon from '@mui/icons-material/Add'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { StatisticCard } from '../components/common/StatisticCard'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
-import { TransactionsGrid } from '../components/transactions/TransactionsGrid'
 import { TransactionCard } from '../components/transactions/TransactionCard'
+import { VirtualizedTransactionList } from '../components/transactions/VirtualizedTransactionList'
 import { FilterSheet } from '../components/transactions/FilterSheet'
 import { EditTransactionDialog } from '../components/transactions/EditTransactionDialog'
 import { LoadingState, EmptyState, ErrorState, OfflineState } from '../components/common/States'
@@ -36,9 +37,32 @@ import { normalizeAmountFilter } from '../lib/numbers'
 import { colors, softBg, softFg } from '../theme'
 import { PageSearch } from '../components/common/PageSearch'
 import type { TransactionView } from '../api/types'
+import { hasActiveTableFilters, nextOpenSwipeId } from '../lib/transactionInteractions.mjs'
 
 /** Размер автоматически подгружаемой страницы мобильного списка. */
 const MOBILE_PAGE = 50
+const TransactionsGrid = lazy(() =>
+    import('../components/transactions/TransactionsGrid').then((module) => ({ default: module.TransactionsGrid })),
+)
+const BulkEditSheet = lazy(() =>
+    import('../components/transactions/BulkEditSheet').then((module) => ({ default: module.BulkEditSheet })),
+)
+
+function hasSeenSwipeHint(): boolean {
+    try {
+        return window.localStorage.getItem('autoeco:swipe-hint-seen') === '1'
+    } catch {
+        return false
+    }
+}
+
+function rememberSwipeHint(): void {
+    try {
+        window.localStorage.setItem('autoeco:swipe-hint-seen', '1')
+    } catch {
+        // Storage may be unavailable in strict privacy modes; the hint still works.
+    }
+}
 
 function SummaryCards() {
     const theme = useTheme()
@@ -133,6 +157,7 @@ export function TransactionsPage() {
     const [mobileLoadingMore, setMobileLoadingMore] = useState(false)
     const [mobileLoadError, setMobileLoadError] = useState(false)
     const [mobileSwipeId, setMobileSwipeId] = useState<string | null>(null)
+    const [showSwipeHint, setShowSwipeHint] = useState(() => !hasSeenSwipeHint())
     const [highlightedMobileId, setHighlightedMobileId] = useState<string | null>(null)
     const mobileSentinelRef = useRef<HTMLDivElement | null>(null)
     const highlightTimerRef = useRef<number | null>(null)
@@ -140,6 +165,31 @@ export function TransactionsPage() {
     useEffect(() => () => {
         if (highlightTimerRef.current !== null) window.clearTimeout(highlightTimerRef.current)
     }, [])
+
+    useEffect(() => {
+        if (!isMobile || !mobileSwipeId) return
+        const scrollRoot = document.querySelector<HTMLElement>('main')
+        const closeSwipe = () => setMobileSwipeId(null)
+        const closeOnOutsidePointer = (event: PointerEvent) => {
+            const target = event.target instanceof Element ? event.target : null
+            const card = target?.closest<HTMLElement>('[data-mobile-transaction-id]')
+            if (card?.dataset.mobileTransactionId !== mobileSwipeId) closeSwipe()
+        }
+        scrollRoot?.addEventListener('scroll', closeSwipe, { passive: true })
+        document.addEventListener('pointerdown', closeOnOutsidePointer)
+        return () => {
+            scrollRoot?.removeEventListener('scroll', closeSwipe)
+            document.removeEventListener('pointerdown', closeOnOutsidePointer)
+        }
+    }, [isMobile, mobileSwipeId])
+
+    const handleSwipeOpen = useCallback((id: string | null) => {
+        setMobileSwipeId(nextOpenSwipeId(id))
+        if (id && showSwipeHint) {
+            rememberSwipeHint()
+            setShowSwipeHint(false)
+        }
+    }, [showSwipeHint])
 
     const handleTransactionSaved = useCallback((id: string) => {
         setHighlightedMobileId(id)
@@ -215,6 +265,8 @@ export function TransactionsPage() {
     // Выбранные в таблице строки (чекбоксы) → панель «Удалить (N)».
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+    const [bulkEditOpen, setBulkEditOpen] = useState(false)
+    const [selectionResetRevision, setSelectionResetRevision] = useState(0)
     const [bulkError, setBulkError] = useState<string | null>(null)
     // Транзакция для модалки редактирования (null = закрыта).
     const [editingTx, setEditingTx] = useState<TransactionView | null>(null)
@@ -224,6 +276,7 @@ export function TransactionsPage() {
         try {
             await Promise.all(selectedIds.map((id) => deleteTx.mutateAsync(id)))
             setSelectedIds([])
+            setSelectionResetRevision((revision) => revision + 1)
             setConfirmDeleteOpen(false)
         } catch (e) {
             setBulkError(e instanceof Error ? e.message : 'Не удалось удалить транзакции')
@@ -316,7 +369,7 @@ export function TransactionsPage() {
     const tagsMap = useMemo(() => new Map((tags ?? []).map((t) => [t.id, t])), [tags])
     // Период — отдельный глобальный срез в шапке, а не фильтр из панели.
     // Поэтому он не включает точку на кнопке и не активирует «Сбросить фильтры».
-    const hasTableFilters = Boolean(search || tagFilterIds.length || storeFilters.length || amountMin || amountMax || operationFilter !== 'all')
+    const hasTableFilters = hasActiveTableFilters({ search, tagFilterIds, storeFilters, amountMin, amountMax, operationFilter })
 
     const showNoTransactions = total === 0 && (allTimeTotal ?? 0) === 0 && !hasTableFilters
     const showNotFound = total === 0 && !showNoTransactions
@@ -417,18 +470,42 @@ export function TransactionsPage() {
                         <LoadingState label="Загружаем операции…" />
                     ) : (
                         <>
-                            {mobileRows.map((t, index) => (
-                                <TransactionCard
-                                    key={t.id}
-                                    tx={t}
-                                    tagsMap={tagsMap}
-                                    swipeOpen={mobileSwipeId === t.id}
-                                    animationIndex={index}
-                                    highlighted={highlightedMobileId === t.id}
-                                    onSwipeOpen={setMobileSwipeId}
-                                    onEdit={setEditingTx}
-                                />
-                            ))}
+                            {showSwipeHint && mobileRows.length > 0 && (
+                                <Box
+                                    role="status"
+                                    sx={{
+                                        display: 'flex', alignItems: 'center', gap: 1.25, px: 1.5, py: 1.25,
+                                        border: '1px solid', borderColor: 'divider', borderRadius: '8px', bgcolor: 'background.paper',
+                                    }}
+                                >
+                                    <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+                                        Смахните операцию влево, чтобы быстро её изменить. С клавиатуры используйте F2.
+                                    </Typography>
+                                    <Button
+                                        size="small"
+                                        onClick={() => {
+                                            rememberSwipeHint()
+                                            setShowSwipeHint(false)
+                                        }}
+                                    >
+                                        Понятно
+                                    </Button>
+                                </Box>
+                            )}
+                            <VirtualizedTransactionList
+                                items={mobileRows}
+                                renderItem={(t, index) => (
+                                    <TransactionCard
+                                        tx={t}
+                                        tagsMap={tagsMap}
+                                        swipeOpen={mobileSwipeId === t.id}
+                                        animationIndex={index}
+                                        highlighted={highlightedMobileId === t.id}
+                                        onSwipeOpen={handleSwipeOpen}
+                                        onEdit={setEditingTx}
+                                    />
+                                )}
+                            />
                             <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
                                 Показано {mobileRows.length} из {total ?? 0} · свайп влево — изменить
                             </Typography>
@@ -483,6 +560,14 @@ export function TransactionsPage() {
                             </Typography>
                             <Box sx={{ flex: 1 }} />
                             <Button
+                                variant="contained"
+                                size="small"
+                                startIcon={<EditOutlinedIcon />}
+                                onClick={() => setBulkEditOpen(true)}
+                            >
+                                Изменить
+                            </Button>
+                            <Button
                                 variant="outlined"
                                 color="error"
                                 size="small"
@@ -502,14 +587,17 @@ export function TransactionsPage() {
                             </Button>
                         </Box>
                     )}
-                    <TransactionsGrid
-                        params={params}
-                        tagsMap={tagsMap}
-                        total={total}
-                        onTotalChange={setTotal}
-                        onSelectionChange={setSelectedIds}
-                        onEdit={setEditingTx}
-                    />
+                    <Suspense fallback={<LoadingState label="Загружаем таблицу…" />}>
+                        <TransactionsGrid
+                            params={params}
+                            tagsMap={tagsMap}
+                            total={total}
+                            onTotalChange={setTotal}
+                            onSelectionChange={setSelectedIds}
+                            selectionResetRevision={selectionResetRevision}
+                            onEdit={setEditingTx}
+                        />
+                    </Suspense>
                 </Box>
             )}
 
@@ -521,6 +609,22 @@ export function TransactionsPage() {
                 onClose={() => setEditingTx(null)}
                 onSaved={handleTransactionSaved}
             />
+
+            {!isMobile && bulkEditOpen && (
+                <Suspense fallback={null}>
+                    <BulkEditSheet
+                        open
+                        selectedIds={selectedIds}
+                        tags={tags ?? []}
+                        stores={stores}
+                        onClose={() => setBulkEditOpen(false)}
+                        onSaved={() => {
+                            setSelectedIds([])
+                            setSelectionResetRevision((revision) => revision + 1)
+                        }}
+                    />
+                </Suspense>
+            )}
 
             {/* Подтверждение массового удаления */}
             <ConfirmDialog

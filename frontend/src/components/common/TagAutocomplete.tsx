@@ -1,5 +1,6 @@
 import { Autocomplete, Box, TextField, Typography } from '@mui/material'
 import type { Tag } from '../../api/types'
+import { matchesOptionSearch } from '../../lib/transactionInteractions.mjs'
 
 interface TagAutocompleteProps {
   tags: Tag[]
@@ -14,6 +15,7 @@ export function TagAutocomplete({ tags, value, onChange }: TagAutocompleteProps)
   return (
     <Autocomplete
       options={tags}
+      filterOptions={(options, state) => options.filter((tag) => matchesOptionSearch(tag.name, state.inputValue))}
       value={selectedTag}
       onChange={(_, tag) => onChange(tag?.id ?? null)}
       getOptionLabel={(tag) => tag.name}

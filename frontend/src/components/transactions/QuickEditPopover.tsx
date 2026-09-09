@@ -20,6 +20,7 @@ import { useStores, useUpdateTransaction } from '../../hooks/useTransactions'
 import { messageFromError } from '../../api/client'
 import { parseNum } from '../../lib/numbers'
 import type { Store, Tag, TransactionUpdatePatch, TransactionView } from '../../api/types'
+import { matchesOptionSearch } from '../../lib/transactionInteractions.mjs'
 
 export type QuickEditField =
   | 'date'
@@ -108,10 +109,12 @@ export function QuickEditPopover({
   target,
   tags,
   onClose,
+  onContextMenuThrough,
 }: {
   target: QuickEditTarget | null
   tags: Tag[]
   onClose: () => void
+  onContextMenuThrough?: (x: number, y: number, overlay: HTMLElement) => void
 }) {
   const updateTx = useUpdateTransaction()
   const storesQuery = useStores()
@@ -194,6 +197,11 @@ export function QuickEditPopover({
         { name: 'preventOverflow', options: { padding: 12 } },
       ]}
       sx={{ zIndex: (theme) => theme.zIndex.modal }}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onContextMenuThrough?.(event.clientX, event.clientY, event.currentTarget)
+      }}
     >
       <ClickAwayListener onClickAway={() => { if (!updateTx.isPending) onClose() }} mouseEvent="onMouseDown">
         <Paper
@@ -224,12 +232,12 @@ export function QuickEditPopover({
                 <Autocomplete
                   freeSolo
                   disablePortal
-                  openOnFocus
                   autoHighlight
                   autoSelect
                   selectOnFocus
                   loading={storesQuery.isLoading}
                   options={stores}
+                  filterOptions={(options, state) => options.filter((store) => matchesOptionSearch(storeLabel(store), state.inputValue))}
                   value={selectedStore}
                   inputValue={value}
                   onChange={(_, nextStore) => {

@@ -70,3 +70,40 @@ export function useUpdateTransaction() {
     onSuccess: () => invalidateAfterMutation(queryClient),
   })
 }
+
+export interface BulkTransactionUpdate {
+  ids: string[]
+  patch: TransactionUpdatePatch
+}
+
+/** Обновляет выбранные строки через существующий PATCH с ограниченной
+ * конкуренцией и обновляет клиентские кэши один раз после всей пачки. */
+export function useBulkUpdateTransactions() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ ids, patch }: BulkTransactionUpdate) => {
+      let cursor = 0
+      const failures: unknown[] = []
+      const workers = Array.from({ length: Math.min(4, ids.length) }, async () => {
+        while (cursor < ids.length) {
+          const id = ids[cursor]
+          cursor += 1
+          if (!id) continue
+          try {
+            await api.updateTransaction(id, patch)
+          } catch (error) {
+            failures.push(error)
+          }
+        }
+      })
+      await Promise.all(workers)
+      if (failures.length > 0) {
+        throw failures[0] instanceof Error
+          ? failures[0]
+          : new Error(`Не удалось обновить ${failures.length} транзакций`)
+      }
+      return ids.length
+    },
+    onSettled: () => invalidateAfterMutation(queryClient),
+  })
+}

@@ -129,28 +129,16 @@ a {
 
 @media (prefers-reduced-motion: reduce) {
   .mobile-transaction-card,
+  .mobile-transaction-surface--saved,
   .active-filter-badge .MuiBadge-badge {
-    animation: none;
-  }
-
-  .mobile-transaction-surface--saved {
-    animation: mobile-card-saved-reduced 600ms ease;
+    animation: none !important;
   }
 
   .mobile-transaction-surface,
   .mobile-card-details,
   .mobile-swipe-action-content,
   .mobile-expand-icon {
-    transition-duration: 80ms !important;
-  }
-}
-
-@keyframes mobile-card-saved-reduced {
-  0%, 100% {
-    box-shadow: inset 0 0 0 0 rgba(108, 92, 231, 0);
-  }
-  35%, 65% {
-    box-shadow: inset 0 0 0 2px rgba(139, 127, 240, 0.9);
+    transition-duration: 0.01ms !important;
   }
 }
 

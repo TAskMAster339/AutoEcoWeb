@@ -3,7 +3,7 @@ import { AgGridReact, type CustomCellRendererProps } from 'ag-grid-react'
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-quartz.css'
 import type { CellContextMenuEvent, ColDef, IDatasource, IGetRowsParams, RowClickedEvent } from 'ag-grid-community'
-import { Box, MenuItem, Paper, Popper, Select, Stack, Typography, useTheme } from '@mui/material'
+import { Alert, Box, Button, CircularProgress, MenuItem, Paper, Popper, Select, Stack, Typography, useTheme } from '@mui/material'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { TagChip } from '../common/TagChip'
 import { formatCurrency, formatNumber, formatShortDate } from '../../lib/format'
@@ -14,6 +14,7 @@ import {
   type TransactionsPageParams,
 } from '../../api/transactions'
 import type { Tag, TransactionView } from '../../api/types'
+import { medianOf, replaceQuickEditTarget, selectionRange } from '../../lib/transactionInteractions.mjs'
 import {
   QuickEditPopover,
   type QuickEditField,
@@ -68,9 +69,11 @@ type StatsColumnId = keyof Pick<
 interface NumericColumnStats {
   kind: 'numeric'
   count: number
+  empty: number
   sum: number
   min: number | null
   max: number | null
+  values: number[]
 }
 
 interface CategoryColumnStats {
@@ -107,7 +110,7 @@ function createStatsAccumulator(): StatsAccumulator {
   const columns = {} as Record<StatsColumnId, ColumnStats>
   for (const field of ['date', 'store', 'tagId', 'name', 'quantity', 'price', 'income', 'expense', 'balance', 'comment'] as StatsColumnId[]) {
     columns[field] = NUMERIC_COLUMNS.has(field)
-      ? { kind: 'numeric', count: 0, sum: 0, min: null, max: null }
+      ? { kind: 'numeric', count: 0, empty: 0, sum: 0, min: null, max: null, values: [] }
       : { kind: 'category', count: 0, empty: 0, unique: new Set(), frequencies: new Map(), topValue: null, topCount: 0 }
   }
   return { rowIds: new Set(), columns }
@@ -124,9 +127,13 @@ function addRowsToStats(accumulator: StatsAccumulator, rows: TransactionView[]):
       const stats = accumulator.columns[field]
       const rawValue = row[field]
       if (stats.kind === 'numeric') {
-        if (typeof rawValue !== 'number' || !Number.isFinite(rawValue)) continue
+        if (typeof rawValue !== 'number' || !Number.isFinite(rawValue)) {
+          stats.empty += 1
+          continue
+        }
         stats.count += 1
         stats.sum += rawValue
+        stats.values.push(rawValue)
         stats.min = stats.min === null ? rawValue : Math.min(stats.min, rawValue)
         stats.max = stats.max === null ? rawValue : Math.max(stats.max, rawValue)
         continue
@@ -164,6 +171,11 @@ function ColumnStatsPopover({
   loaded,
   total,
   tagsMap,
+  loadingAll,
+  loadAllError,
+  onLoadAll,
+  onClose,
+  onMouseEnter,
 }: {
   anchorEl: HTMLElement | null
   field: StatsColumnId | null
@@ -171,13 +183,29 @@ function ColumnStatsPopover({
   loaded: number
   total: number | null
   tagsMap: Map<string, Tag>
+  loadingAll: boolean
+  loadAllError: string | null
+  onLoadAll: () => void
+  onClose: () => void
+  onMouseEnter: () => void
 }) {
   if (!anchorEl || !field || !stats) return null
   const isCurrency = ['price', 'income', 'expense', 'balance'].includes(field)
   const formatValue = (value: number | null) => isCurrency ? formatCurrency(value) : formatNumber(value)
+  const median = stats.kind === 'numeric' ? medianOf(stats.values) : null
+  const exact = total !== null && loaded >= total
 
   return (
-    <Popper open anchorEl={anchorEl} placement="bottom-start" sx={{ zIndex: 20, pointerEvents: 'none' }} modifiers={[{ name: 'offset', options: { offset: [0, 8] } }]}>
+    <Popper
+      open
+      anchorEl={anchorEl}
+      placement="bottom-start"
+      data-column-stats-popover
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onClose}
+      sx={{ zIndex: 20 }}
+      modifiers={[{ name: 'offset', options: { offset: [0, 8] } }]}
+    >
       <Paper
         role="tooltip"
         elevation={8}
@@ -185,15 +213,17 @@ function ColumnStatsPopover({
       >
         <Typography variant="subtitle2" sx={{ mb: 0.25 }}>Статистика столбца</Typography>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.25 }}>
-          Загружено {loaded}{total !== null ? ` из ${total}` : ''}
+          {exact ? `По всем данным: ${loaded}` : `По загруженным: ${loaded}${total !== null ? ` из ${total}` : ''}`}
         </Typography>
         {loaded === 0 ? (
           <Typography variant="body2" color="text.secondary">Данные ещё загружаются</Typography>
         ) : stats.kind === 'numeric' ? (
           <Stack spacing={0.75}>
             <StatsLine label="Значений" value={formatNumber(stats.count)} />
-            <StatsLine label="Сумма" value={formatValue(stats.sum)} />
+            <StatsLine label="Пустых" value={formatNumber(stats.empty)} />
+            <StatsLine label="Сумма" value={stats.count ? formatValue(stats.sum) : '—'} />
             <StatsLine label="Среднее" value={stats.count ? formatValue(stats.sum / stats.count) : '—'} />
+            <StatsLine label="Медиана" value={formatValue(median)} />
             <StatsLine label="Минимум" value={formatValue(stats.min)} />
             <StatsLine label="Максимум" value={formatValue(stats.max)} />
           </Stack>
@@ -205,6 +235,20 @@ function ColumnStatsPopover({
             <StatsLine label="Встречается" value={stats.topValue === null ? '—' : formatNumber(stats.topCount)} />
             <StatsLine label="Пустых" value={formatNumber(stats.empty)} />
           </Stack>
+        )}
+        {loadAllError && <Alert severity="error" sx={{ mt: 1.25 }}>{loadAllError}</Alert>}
+        {!exact && total !== null && total > 0 && (
+          <Button
+            size="small"
+            fullWidth
+            variant="outlined"
+            sx={{ mt: 1.25 }}
+            disabled={loadingAll}
+            onClick={onLoadAll}
+            startIcon={loadingAll ? <CircularProgress size={14} /> : undefined}
+          >
+            {loadingAll ? 'Загружаем все…' : 'Загрузить всё для точной статистики'}
+          </Button>
         )}
       </Paper>
     </Popper>
@@ -316,6 +360,8 @@ interface TransactionsGridProps {
   onTotalChange: (total: number) => void
   /** Выбранные строки (по чекбоксам) — живой список, вызывается при изменении. */
   onSelectionChange?: (ids: string[]) => void
+  /** Изменение значения снимает внутреннее выделение AG Grid. */
+  selectionResetRevision?: number
   /** Двойной клик по строке — редактирование. */
   onEdit?: (tx: TransactionView) => void
 }
@@ -334,6 +380,7 @@ export function TransactionsGrid({
   total,
   onTotalChange,
   onSelectionChange,
+  selectionResetRevision = 0,
   onEdit,
 }: TransactionsGridProps) {
   const theme = useTheme()
@@ -345,6 +392,7 @@ export function TransactionsGrid({
   const statsAccumulatorRef = useRef<StatsAccumulator>(createStatsAccumulator())
   const statsGenerationRef = useRef(0)
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const statsCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hoveredHeaderRef = useRef<HTMLElement | null>(null)
   const selectionAnchorRef = useRef<number | null>(null)
 
@@ -353,6 +401,8 @@ export function TransactionsGrid({
   const [statsAnchor, setStatsAnchor] = useState<HTMLElement | null>(null)
   const [statsField, setStatsField] = useState<StatsColumnId | null>(null)
   const [quickEditTarget, setQuickEditTarget] = useState<QuickEditTarget | null>(null)
+  const [statsLoadingAll, setStatsLoadingAll] = useState(false)
+  const [statsLoadError, setStatsLoadError] = useState<string | null>(null)
 
   // Свежие значения для замыкания datasource (без пересоздания на каждый рендер)
   const onTotalChangeRef = useRef(onTotalChange)
@@ -370,6 +420,8 @@ export function TransactionsGrid({
     setStatsRevision((revision) => revision + 1)
     setStatsAnchor(null)
     setStatsField(null)
+    setStatsLoadingAll(false)
+    setStatsLoadError(null)
     selectionAnchorRef.current = null
     const api = gridRef.current?.api
     if (!api) return
@@ -378,7 +430,13 @@ export function TransactionsGrid({
 
   useEffect(() => () => {
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+    if (statsCloseTimerRef.current) clearTimeout(statsCloseTimerRef.current)
   }, [])
+
+  useEffect(() => {
+    gridRef.current?.api?.deselectAll()
+    selectionAnchorRef.current = null
+  }, [selectionResetRevision])
 
   // Infinite-источник: блоки запрашиваются по мере прокрутки; sortModel
   // приходит от AG Grid при клике по заголовку — пробрасывается на бэкенд.
@@ -438,8 +496,10 @@ export function TransactionsGrid({
     const header = target?.closest<HTMLElement>('.ag-header-cell[col-id]') ?? null
     if (!header || !gridWrapperRef.current?.contains(header)) return
     const field = header.getAttribute('col-id') as StatsColumnId | null
-    if (!field || !(field in statsAccumulatorRef.current.columns) || hoveredHeaderRef.current === header) return
-
+    if (!field || !(field in statsAccumulatorRef.current.columns)) return
+    if (statsCloseTimerRef.current) clearTimeout(statsCloseTimerRef.current)
+    statsCloseTimerRef.current = null
+    if (hoveredHeaderRef.current === header) return
     hoveredHeaderRef.current = header
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
     hoverTimerRef.current = setTimeout(() => {
@@ -454,11 +514,50 @@ export function TransactionsGrid({
     if (!header) return
     const relatedTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null
     if (relatedTarget && header.contains(relatedTarget)) return
+    if (relatedTarget instanceof Element && relatedTarget.closest('[data-column-stats-popover]')) return
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
     hoverTimerRef.current = null
+    if (statsCloseTimerRef.current) clearTimeout(statsCloseTimerRef.current)
+    statsCloseTimerRef.current = setTimeout(() => {
+      hoveredHeaderRef.current = null
+      setStatsAnchor(null)
+      setStatsField(null)
+    }, 140)
+  }
+
+  const closeStats = () => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
+    hoverTimerRef.current = null
+    if (statsCloseTimerRef.current) clearTimeout(statsCloseTimerRef.current)
+    statsCloseTimerRef.current = null
     hoveredHeaderRef.current = null
     setStatsAnchor(null)
     setStatsField(null)
+  }
+
+  const loadAllStats = async () => {
+    if (statsLoadingAll || total === null) return
+    const generation = statsGenerationRef.current
+    setStatsLoadingAll(true)
+    setStatsLoadError(null)
+    try {
+      for (let offset = 0; offset < total; offset += 100) {
+        const page = await queryClient.fetchQuery({
+          queryKey: ['txPage', paramsRef.current, 'stats', 100, offset],
+          queryFn: () => fetchTransactionsPage({ limit: 100, offset, ...paramsRef.current, sort_by: 'date', sort_dir: 'asc' }),
+          staleTime: 30_000,
+        })
+        if (generation !== statsGenerationRef.current) return
+        if (addRowsToStats(statsAccumulatorRef.current, page.items.map(toTransactionView))) {
+          setStatsRevision((revision) => revision + 1)
+        }
+        if (page.items.length === 0) break
+      }
+    } catch {
+      if (generation === statsGenerationRef.current) setStatsLoadError('Не удалось загрузить все данные. Попробуйте ещё раз.')
+    } finally {
+      if (generation === statsGenerationRef.current) setStatsLoadingAll(false)
+    }
   }
 
   const handleRowClicked = (event: RowClickedEvent<TransactionView>) => {
@@ -470,7 +569,7 @@ export function TransactionsGrid({
       const end = event.node.rowIndex
       const start = selectionAnchorRef.current ?? end
       event.api.deselectAll()
-      for (let index = Math.min(start, end); index <= Math.max(start, end); index += 1) {
+      for (const index of selectionRange(start, end)) {
         const node = event.api.getDisplayedRowAtIndex(index)
         if (node?.data) node.setSelected(true, false)
       }
@@ -491,7 +590,21 @@ export function TransactionsGrid({
     mouseEvent.preventDefault()
     const field = event.column.getColId() as QuickEditField
     if (!QUICK_EDIT_FIELDS.has(field)) return
-    setQuickEditTarget({ tx: event.data, field, x: mouseEvent.clientX, y: mouseEvent.clientY })
+    setQuickEditTarget((current) => replaceQuickEditTarget(current, { tx: event.data!, field, x: mouseEvent.clientX, y: mouseEvent.clientY }))
+  }
+
+  const handleQuickEditContextMenuThrough = (x: number, y: number, overlay: HTMLElement) => {
+    const previousPointerEvents = overlay.style.pointerEvents
+    overlay.style.pointerEvents = 'none'
+    const underlying = document.elementFromPoint(x, y)
+    overlay.style.pointerEvents = previousPointerEvents
+    const cell = underlying?.closest<HTMLElement>('.ag-cell[col-id]')
+    const row = cell?.closest<HTMLElement>('.ag-row[row-index]')
+    const field = cell?.getAttribute('col-id') as QuickEditField | null
+    const rowIndex = Number(row?.getAttribute('row-index'))
+    const tx = Number.isInteger(rowIndex) ? gridRef.current?.api.getDisplayedRowAtIndex(rowIndex)?.data : undefined
+    if (!tx || !field || !QUICK_EDIT_FIELDS.has(field)) return
+    setQuickEditTarget((current) => replaceQuickEditTarget(current, { tx, field, x, y }))
   }
 
   // The revision state above turns the mutable accumulator into a render snapshot.
@@ -549,7 +662,7 @@ export function TransactionsGrid({
           rowHeight={48}
           headerHeight={42}
           suppressCellFocus
-          rowSelection={{ mode: 'multiRow', checkboxes: true, enableClickSelection: false }}
+          rowSelection={{ mode: 'multiRow', checkboxes: true, headerCheckbox: false, enableClickSelection: false }}
           selectionColumnDef={{
             width: 44,
             minWidth: 44,
@@ -639,6 +752,14 @@ export function TransactionsGrid({
         loaded={loadedCount}
         total={total}
         tagsMap={tagsMap}
+        loadingAll={statsLoadingAll}
+        loadAllError={statsLoadError}
+        onLoadAll={() => void loadAllStats()}
+        onClose={closeStats}
+        onMouseEnter={() => {
+          if (statsCloseTimerRef.current) clearTimeout(statsCloseTimerRef.current)
+          statsCloseTimerRef.current = null
+        }}
       />
 
       <QuickEditPopover
@@ -646,6 +767,7 @@ export function TransactionsGrid({
         target={quickEditTarget}
         tags={[...tagsMap.values()]}
         onClose={() => setQuickEditTarget(null)}
+        onContextMenuThrough={handleQuickEditContextMenuThrough}
       />
     </Box>
   )
