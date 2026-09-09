@@ -46,7 +46,16 @@ function NavButton({
         textDecoration: 'none',
         color: 'text.secondary',
         WebkitTapHighlightColor: 'transparent',
+        transition: 'color 180ms ease, background-color 220ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms ease',
+        '&:active': { transform: 'scale(0.97)' },
         '&.active': { color: softFg(theme), bgcolor: softBg(theme) },
+        '&.active svg': { transform: 'translateY(-1px)' },
+        '& svg': { transition: 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)' },
+        '@media (prefers-reduced-motion: reduce)': {
+          transition: 'color 80ms ease, background-color 80ms ease',
+          '&:active': { transform: 'none' },
+          '&.active svg': { transform: 'none' },
+        },
       }}
     >
       <Icon sx={{ fontSize: 21 }} />
@@ -123,7 +132,13 @@ export function BottomNav() {
               color: 'primary.contrastText',
               borderRadius: '10px',
               boxShadow: '0 8px 20px rgba(108,92,231,0.35)',
+              transition: 'transform 120ms ease, background-color 180ms ease, box-shadow 180ms ease',
               '&:hover': { bgcolor: 'primary.dark' },
+              '&:active': { transform: 'scale(0.94)', boxShadow: '0 4px 12px rgba(108,92,231,0.28)' },
+              '@media (prefers-reduced-motion: reduce)': {
+                transition: 'background-color 80ms ease',
+                '&:active': { transform: 'none' },
+              },
             }}
           >
             <AddIcon sx={{ fontSize: 28 }} />
@@ -150,6 +165,12 @@ export function BottomNav() {
             color: moreActive ? softFg(theme) : 'text.secondary',
             fontFamily: 'inherit',
             WebkitTapHighlightColor: 'transparent',
+            transition: 'color 180ms ease, background-color 220ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms ease',
+            '&:active': { transform: 'scale(0.97)' },
+            '@media (prefers-reduced-motion: reduce)': {
+              transition: 'color 80ms ease, background-color 80ms ease',
+              '&:active': { transform: 'none' },
+            },
           }}
           aria-label="Открыть дополнительную навигацию"
           aria-expanded={moreOpen}

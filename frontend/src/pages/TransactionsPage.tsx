@@ -133,7 +133,22 @@ export function TransactionsPage() {
     const [mobileLoadingMore, setMobileLoadingMore] = useState(false)
     const [mobileLoadError, setMobileLoadError] = useState(false)
     const [mobileSwipeId, setMobileSwipeId] = useState<string | null>(null)
+    const [highlightedMobileId, setHighlightedMobileId] = useState<string | null>(null)
     const mobileSentinelRef = useRef<HTMLDivElement | null>(null)
+    const highlightTimerRef = useRef<number | null>(null)
+
+    useEffect(() => () => {
+        if (highlightTimerRef.current !== null) window.clearTimeout(highlightTimerRef.current)
+    }, [])
+
+    const handleTransactionSaved = useCallback((id: string) => {
+        setHighlightedMobileId(id)
+        if (highlightTimerRef.current !== null) window.clearTimeout(highlightTimerRef.current)
+        highlightTimerRef.current = window.setTimeout(() => {
+            setHighlightedMobileId(null)
+            highlightTimerRef.current = null
+        }, 1600)
+    }, [])
 
     // Смена фильтров/периода → сброс списка и первая страница.
     useEffect(() => {
@@ -344,7 +359,7 @@ export function TransactionsPage() {
                     <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Сбросить</Box>
                 </Button>
                 {hasTableFilters ? (
-                    <Badge color="primary" variant="dot">
+                    <Badge className="active-filter-badge" color="primary" variant="dot">
                         <Button
                             variant="outlined"
                             color="inherit"
@@ -402,12 +417,14 @@ export function TransactionsPage() {
                         <LoadingState label="Загружаем операции…" />
                     ) : (
                         <>
-                            {mobileRows.map((t) => (
+                            {mobileRows.map((t, index) => (
                                 <TransactionCard
                                     key={t.id}
                                     tx={t}
                                     tagsMap={tagsMap}
                                     swipeOpen={mobileSwipeId === t.id}
+                                    animationIndex={index}
+                                    highlighted={highlightedMobileId === t.id}
                                     onSwipeOpen={setMobileSwipeId}
                                     onEdit={setEditingTx}
                                 />
@@ -499,7 +516,11 @@ export function TransactionsPage() {
             <FilterSheet tags={tags} stores={stores} />
 
             {/* Редактирование транзакции */}
-            <EditTransactionDialog tx={editingTx} onClose={() => setEditingTx(null)} />
+            <EditTransactionDialog
+                tx={editingTx}
+                onClose={() => setEditingTx(null)}
+                onSaved={handleTransactionSaved}
+            />
 
             {/* Подтверждение массового удаления */}
             <ConfirmDialog

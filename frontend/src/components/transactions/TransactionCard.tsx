@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Box, ButtonBase, Card, Collapse, Typography, useTheme } from '@mui/material'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
@@ -11,6 +11,8 @@ interface TransactionCardProps {
   tx: TransactionView
   tagsMap: Map<string, Tag>
   swipeOpen: boolean
+  animationIndex: number
+  highlighted: boolean
   onSwipeOpen: (id: string | null) => void
   onEdit: (tx: TransactionView) => void
 }
@@ -18,7 +20,15 @@ interface TransactionCardProps {
 /**
  * Mobile transaction card — expandable details + swipe-left reveal of Edit.
  */
-export function TransactionCard({ tx, tagsMap, swipeOpen, onSwipeOpen, onEdit }: TransactionCardProps) {
+export function TransactionCard({
+  tx,
+  tagsMap,
+  swipeOpen,
+  animationIndex,
+  highlighted,
+  onSwipeOpen,
+  onEdit,
+}: TransactionCardProps) {
   const theme = useTheme()
   const [expanded, setExpanded] = useState(false)
   const [offset, setOffset] = useState(0)
@@ -29,6 +39,7 @@ export function TransactionCard({ tx, tagsMap, swipeOpen, onSwipeOpen, onEdit }:
   const isExpense = tx.expense !== null && tx.expense !== undefined
   const amount = isExpense ? tx.expense : tx.income
   const amountColor = isExpense ? colors.red : colors.green
+  const revealProgress = Math.min(1, Math.abs(offset) / 88)
 
   useEffect(() => {
     if (!swipeOpen && !dragging.current) setOffset(0)
@@ -53,7 +64,12 @@ export function TransactionCard({ tx, tagsMap, swipeOpen, onSwipeOpen, onEdit }:
   }
 
   return (
-    <Box sx={{ position: 'relative', borderRadius: '8px', overflow: 'hidden' }} onTouchEnd={endSwipe}>
+    <Box
+      className="mobile-transaction-card"
+      style={{ '--mobile-card-delay': `${Math.min(animationIndex, 5) * 30}ms` } as CSSProperties}
+      sx={{ position: 'relative', borderRadius: '8px', overflow: 'hidden' }}
+      onTouchEnd={endSwipe}
+    >
       <ButtonBase
         onClick={(event) => {
           event.stopPropagation()
@@ -78,17 +94,31 @@ export function TransactionCard({ tx, tagsMap, swipeOpen, onSwipeOpen, onEdit }:
           borderRadius: 0,
         }}
       >
-        <EditOutlinedIcon fontSize="small" />
-        <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 600 }}>
-          Изменить
-        </Typography>
+        <Box
+          className="mobile-swipe-action-content"
+          sx={{
+            display: 'grid',
+            placeItems: 'center',
+            gap: 0.5,
+            opacity: 0.35 + revealProgress * 0.65,
+            transform: `scale(${0.9 + revealProgress * 0.1})`,
+          }}
+        >
+          <EditOutlinedIcon fontSize="small" />
+          <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 600 }}>
+            Изменить
+          </Typography>
+        </Box>
       </ButtonBase>
 
       <Card
+        className={`mobile-transaction-surface${highlighted ? ' mobile-transaction-surface--saved' : ''}`}
         sx={{
           p: 1.75,
           transform: `translateX(${offset}px)`,
-          transition: dragging.current ? 'none' : 'transform 0.2s ease',
+          transition: dragging.current ? 'none' : 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
+          willChange: dragging.current ? 'transform' : 'auto',
+          touchAction: 'pan-y',
           cursor: 'pointer',
         }}
         onTouchStart={onTouchStart}
@@ -124,6 +154,7 @@ export function TransactionCard({ tx, tagsMap, swipeOpen, onSwipeOpen, onEdit }:
             {tx.name}
           </Typography>
           <ExpandMoreIcon
+            className="mobile-expand-icon"
             sx={{
               gridColumn: 2,
               gridRow: tag ? 3 : 2,
@@ -132,7 +163,7 @@ export function TransactionCard({ tx, tagsMap, swipeOpen, onSwipeOpen, onEdit }:
               fontSize: 18,
               color: colors.textSecondary,
               transform: expanded ? 'rotate(180deg)' : 'none',
-              transition: 'transform 0.2s',
+              transition: 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           />
 
@@ -143,8 +174,13 @@ export function TransactionCard({ tx, tagsMap, swipeOpen, onSwipeOpen, onEdit }:
           )}
         </Box>
 
-        <Collapse in={expanded}>
+        <Collapse
+          in={expanded}
+          timeout={{ enter: 260, exit: 180 }}
+          easing={{ enter: 'cubic-bezier(0.16, 1, 0.3, 1)', exit: 'cubic-bezier(0.4, 0, 1, 1)' }}
+        >
           <Box
+            className="mobile-card-details"
             sx={{
               mt: 1.5,
               pt: 1.25,
@@ -152,6 +188,9 @@ export function TransactionCard({ tx, tagsMap, swipeOpen, onSwipeOpen, onEdit }:
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
               gap: 1,
+              opacity: expanded ? 1 : 0,
+              transform: expanded ? 'translateY(0)' : 'translateY(-4px)',
+              transition: 'opacity 180ms ease, transform 240ms cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           >
             <Detail label="Кол-во" value={tx.quantity !== null && tx.quantity !== undefined ? String(tx.quantity) : '—'} />

@@ -23,6 +23,18 @@ export function BottomSheet({ open, onClose, title, children, maxWidth = 640, ma
       // оставляет на ней focus-visible подсветку после Enter/клика.
       disableRestoreFocus
       slotProps={{
+        transition: {
+          timeout: { enter: 320, exit: 210 },
+          easing: {
+            enter: 'cubic-bezier(0.16, 1, 0.3, 1)',
+            exit: 'cubic-bezier(0.4, 0, 1, 1)',
+          },
+        },
+        backdrop: {
+          sx: {
+            transition: 'opacity 220ms ease !important',
+          },
+        },
         paper: {
           sx: {
             maxWidth,
@@ -37,6 +49,9 @@ export function BottomSheet({ open, onClose, title, children, maxWidth = 640, ma
             height,
             overflowY: 'auto',
             overscrollBehavior: 'contain',
+            '@media (prefers-reduced-motion: reduce)': {
+              transitionDuration: '80ms !important',
+            },
           },
         },
       }}

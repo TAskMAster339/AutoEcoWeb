@@ -32,10 +32,11 @@ import type { AliasScope, Store, TransactionUpdatePatch, TransactionView } from 
 interface EditTransactionDialogProps {
     tx: TransactionView | null
     onClose: () => void
+    onSaved?: (id: string) => void
 }
 
 /** Редактирование повторяет форму добавления, но отправляет PATCH и позволяет удалить транзакцию. */
-export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProps) {
+export function EditTransactionDialog({ tx, onClose, onSaved }: EditTransactionDialogProps) {
     const { data: tags } = useTags()
     const { data: stores } = useStores()
     const updateTx = useUpdateTransaction()
@@ -125,6 +126,7 @@ export function EditTransactionDialog({ tx, onClose }: EditTransactionDialogProp
 
         try {
             await updateTx.mutateAsync({ id: tx.id, patch })
+            onSaved?.(tx.id)
             onClose()
         } catch (error) {
             setFormError(messageFromError(error))
