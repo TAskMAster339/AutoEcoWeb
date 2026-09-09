@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Box, Drawer, IconButton, Typography } from '@mui/material'
+import { Box, IconButton, SwipeableDrawer, Typography } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 
 interface BottomSheetProps {
@@ -15,15 +15,24 @@ interface BottomSheetProps {
 /** Mobile-first bottom sheet (rounded top, drag-free, Esc/backdrop closes). */
 export function BottomSheet({ open, onClose, title, children, maxWidth = 640, maxHeight, height }: BottomSheetProps) {
   return (
-    <Drawer
+    <SwipeableDrawer
       anchor="bottom"
       open={open}
       onClose={onClose}
+      onOpen={() => undefined}
+      disableSwipeToOpen
+      hysteresis={0.25}
+      minFlingVelocity={450}
+      // All panels use an explicit trigger, so keep the closed modal out of
+      // the DOM and avoid mounting every form on mobile. Swipe-to-close still
+      // works while the panel is open.
+      ModalProps={{ keepMounted: false }}
       // Не возвращаем фокус на кнопку-триггер после закрытия: иначе MUI
       // оставляет на ней focus-visible подсветку после Enter/клика.
       disableRestoreFocus
       slotProps={{
         transition: {
+          appear: true,
           timeout: { enter: 320, exit: 210 },
           easing: {
             enter: 'cubic-bezier(0.16, 1, 0.3, 1)',
@@ -50,7 +59,7 @@ export function BottomSheet({ open, onClose, title, children, maxWidth = 640, ma
             overflowY: 'auto',
             overscrollBehavior: 'contain',
             '@media (prefers-reduced-motion: reduce)': {
-              transitionDuration: '80ms !important',
+              transitionDuration: '140ms !important',
             },
           },
         },
@@ -64,6 +73,6 @@ export function BottomSheet({ open, onClose, title, children, maxWidth = 640, ma
         </IconButton>
       </Box>
       {children}
-    </Drawer>
+    </SwipeableDrawer>
   )
 }

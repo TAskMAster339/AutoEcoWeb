@@ -109,7 +109,7 @@ export function TransactionCard({
 
   return (
     <Box
-      className="mobile-transaction-card"
+      className={`mobile-transaction-card${animationIndex < 6 ? ' mobile-transaction-card--enter' : ''}`}
       data-mobile-transaction-id={tx.id}
       style={{ '--mobile-card-delay': `${Math.min(animationIndex, 5) * 30}ms` } as CSSProperties}
       sx={{ position: 'relative', borderRadius: '8px', overflow: 'hidden' }}
@@ -176,7 +176,7 @@ export function TransactionCard({
         aria-label={`${tx.store ?? 'Без магазина'}, ${tx.name}. Enter — подробности, F2 — изменить`}
         sx={{
           p: 1.75,
-          transform: `translateX(${offset}px)`,
+          transform: `translate3d(${offset}px, 0, 0)`,
           transition: dragging.current ? 'none' : 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
           willChange: dragging.current ? 'transform' : 'auto',
           touchAction: 'pan-y',

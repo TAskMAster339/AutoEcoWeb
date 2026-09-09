@@ -93,6 +93,11 @@ interface StatsAccumulator {
   columns: Record<StatsColumnId, ColumnStats>
 }
 
+interface StatsTarget {
+  anchor: HTMLElement
+  field: StatsColumnId
+}
+
 const NUMERIC_COLUMNS = new Set<StatsColumnId>(['quantity', 'price', 'income', 'expense', 'balance'])
 const QUICK_EDIT_FIELDS = new Set<QuickEditField>([
   'date',
@@ -398,8 +403,7 @@ export function TransactionsGrid({
 
   const [pageSize, setPageSize] = useState(50)
   const [, setStatsRevision] = useState(0)
-  const [statsAnchor, setStatsAnchor] = useState<HTMLElement | null>(null)
-  const [statsField, setStatsField] = useState<StatsColumnId | null>(null)
+  const [statsTarget, setStatsTarget] = useState<StatsTarget | null>(null)
   const [quickEditTarget, setQuickEditTarget] = useState<QuickEditTarget | null>(null)
   const [statsLoadingAll, setStatsLoadingAll] = useState(false)
   const [statsLoadError, setStatsLoadError] = useState<string | null>(null)
@@ -418,8 +422,7 @@ export function TransactionsGrid({
     statsGenerationRef.current += 1
     statsAccumulatorRef.current = createStatsAccumulator()
     setStatsRevision((revision) => revision + 1)
-    setStatsAnchor(null)
-    setStatsField(null)
+    setStatsTarget(null)
     setStatsLoadingAll(false)
     setStatsLoadError(null)
     selectionAnchorRef.current = null
@@ -503,8 +506,7 @@ export function TransactionsGrid({
     hoveredHeaderRef.current = header
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
     hoverTimerRef.current = setTimeout(() => {
-      setStatsField(field)
-      setStatsAnchor(header)
+      setStatsTarget({ field, anchor: header })
     }, 180)
   }
 
@@ -520,8 +522,7 @@ export function TransactionsGrid({
     if (statsCloseTimerRef.current) clearTimeout(statsCloseTimerRef.current)
     statsCloseTimerRef.current = setTimeout(() => {
       hoveredHeaderRef.current = null
-      setStatsAnchor(null)
-      setStatsField(null)
+      setStatsTarget(null)
     }, 140)
   }
 
@@ -531,8 +532,7 @@ export function TransactionsGrid({
     if (statsCloseTimerRef.current) clearTimeout(statsCloseTimerRef.current)
     statsCloseTimerRef.current = null
     hoveredHeaderRef.current = null
-    setStatsAnchor(null)
-    setStatsField(null)
+    setStatsTarget(null)
   }
 
   const loadAllStats = async () => {
@@ -608,8 +608,8 @@ export function TransactionsGrid({
   }
 
   // The revision state above turns the mutable accumulator into a render snapshot.
-  const activeStats = statsField
-    ? statsAccumulatorRef.current.columns[statsField]
+  const activeStats = statsTarget
+    ? statsAccumulatorRef.current.columns[statsTarget.field]
     : null
   const loadedCount = statsAccumulatorRef.current.rowIds.size
 
@@ -746,8 +746,9 @@ export function TransactionsGrid({
       </Box>
 
       <ColumnStatsPopover
-        anchorEl={statsAnchor}
-        field={statsField}
+        key={statsTarget?.field ?? 'closed'}
+        anchorEl={statsTarget?.anchor ?? null}
+        field={statsTarget?.field ?? null}
         stats={activeStats}
         loaded={loadedCount}
         total={total}

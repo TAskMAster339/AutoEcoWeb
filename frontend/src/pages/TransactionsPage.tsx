@@ -161,9 +161,13 @@ export function TransactionsPage() {
     const [highlightedMobileId, setHighlightedMobileId] = useState<string | null>(null)
     const mobileSentinelRef = useRef<HTMLDivElement | null>(null)
     const highlightTimerRef = useRef<number | null>(null)
+    const editOpenFrameRef = useRef<number | null>(null)
+    const editOpenRef = useRef(false)
+    const editingTxIdRef = useRef<string | null>(null)
 
     useEffect(() => () => {
         if (highlightTimerRef.current !== null) window.clearTimeout(highlightTimerRef.current)
+        if (editOpenFrameRef.current !== null) window.cancelAnimationFrame(editOpenFrameRef.current)
     }, [])
 
     useEffect(() => {
@@ -268,8 +272,40 @@ export function TransactionsPage() {
     const [bulkEditOpen, setBulkEditOpen] = useState(false)
     const [selectionResetRevision, setSelectionResetRevision] = useState(0)
     const [bulkError, setBulkError] = useState<string | null>(null)
-    // Транзакция для модалки редактирования (null = закрыта).
+    // Данные остаются смонтированными во время закрытия, чтобы Drawer мог
+    // доиграть exit-анимацию вместо мгновенного удаления из DOM.
     const [editingTx, setEditingTx] = useState<TransactionView | null>(null)
+    const [editOpen, setEditOpen] = useState(false)
+
+    const openTransactionEditor = useCallback((tx: TransactionView) => {
+        // Touch browsers can emit pointerup and a synthetic click for the same
+        // tap. Do not restart the Drawer transition when it is already opening
+        // or open for this transaction.
+        if (editingTxIdRef.current === tx.id && (editOpenRef.current || editOpenFrameRef.current !== null)) return
+        if (editOpenFrameRef.current !== null) window.cancelAnimationFrame(editOpenFrameRef.current)
+        editingTxIdRef.current = tx.id
+        setEditingTx(tx)
+        if (editOpenRef.current) {
+            editOpenRef.current = false
+            setEditOpen(false)
+        }
+        // Один закрытый кадр гарантирует enter-анимацию даже при первом
+        // открытии; это быстрее порога восприятия задержки.
+        editOpenFrameRef.current = window.requestAnimationFrame(() => {
+            editOpenFrameRef.current = null
+            editOpenRef.current = true
+            setEditOpen(true)
+        })
+    }, [])
+
+    const closeTransactionEditor = useCallback(() => {
+        if (editOpenFrameRef.current !== null) {
+            window.cancelAnimationFrame(editOpenFrameRef.current)
+            editOpenFrameRef.current = null
+        }
+        editOpenRef.current = false
+        setEditOpen(false)
+    }, [])
 
     const bulkDelete = async () => {
         setBulkError(null)
@@ -502,7 +538,7 @@ export function TransactionsPage() {
                                         animationIndex={index}
                                         highlighted={highlightedMobileId === t.id}
                                         onSwipeOpen={handleSwipeOpen}
-                                        onEdit={setEditingTx}
+                                        onEdit={openTransactionEditor}
                                     />
                                 )}
                             />
@@ -595,7 +631,7 @@ export function TransactionsPage() {
                             onTotalChange={setTotal}
                             onSelectionChange={setSelectedIds}
                             selectionResetRevision={selectionResetRevision}
-                            onEdit={setEditingTx}
+                            onEdit={openTransactionEditor}
                         />
                     </Suspense>
                 </Box>
@@ -606,7 +642,8 @@ export function TransactionsPage() {
             {/* Редактирование транзакции */}
             <EditTransactionDialog
                 tx={editingTx}
-                onClose={() => setEditingTx(null)}
+                open={editOpen}
+                onClose={closeTransactionEditor}
                 onSaved={handleTransactionSaved}
             />
 

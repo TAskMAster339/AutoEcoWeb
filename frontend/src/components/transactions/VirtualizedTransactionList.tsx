@@ -26,6 +26,7 @@ export function VirtualizedTransactionList<T extends Identifiable>({
   overscan = 6,
 }: VirtualizedTransactionListProps<T>) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const listOriginRef = useRef<number | null>(null)
   const measuredHeightsRef = useRef(new Map<string, number>())
   const [measurementRevision, setMeasurementRevision] = useState(0)
   const [viewport, setViewport] = useState({ top: 0, height: 800 })
@@ -46,14 +47,7 @@ export function VirtualizedTransactionList<T extends Identifiable>({
     return { offsets, totalHeight: Math.max(0, totalHeight - gap) }
   }, [estimatedItemHeight, gap, items, measurementRevision])
 
-  const updateViewport = useCallback(() => {
-    const container = containerRef.current
-    const scrollRoot = document.querySelector<HTMLElement>('main')
-    if (!container || !scrollRoot) return
-    const containerRect = container.getBoundingClientRect()
-    const rootRect = scrollRoot.getBoundingClientRect()
-    const nextTop = Math.max(0, rootRect.top - containerRect.top)
-    const nextHeight = scrollRoot.clientHeight
+  const commitViewport = useCallback((nextTop: number, nextHeight: number) => {
     // Overscan safely covers the small interval between updates, so a render
     // is needed only after half an estimated card rather than on every pixel.
     setViewport((current) => (
@@ -63,25 +57,40 @@ export function VirtualizedTransactionList<T extends Identifiable>({
     ))
   }, [estimatedItemHeight])
 
+  const updateViewport = useCallback(() => {
+    const scrollRoot = document.querySelector<HTMLElement>('main')
+    if (!scrollRoot || listOriginRef.current === null) return
+    const nextTop = Math.max(0, scrollRoot.scrollTop - listOriginRef.current)
+    commitViewport(nextTop, scrollRoot.clientHeight)
+  }, [commitViewport])
+
+  const measureLayout = useCallback(() => {
+    const container = containerRef.current
+    const scrollRoot = document.querySelector<HTMLElement>('main')
+    if (!container || !scrollRoot) return
+    const containerRect = container.getBoundingClientRect()
+    const rootRect = scrollRoot.getBoundingClientRect()
+    listOriginRef.current = containerRect.top - rootRect.top + scrollRoot.scrollTop
+    updateViewport()
+  }, [updateViewport])
+
   useLayoutEffect(() => {
     const scrollRoot = document.querySelector<HTMLElement>('main')
-    updateViewport()
+    measureLayout()
     scrollRoot?.addEventListener('scroll', updateViewport, { passive: true })
-    // Capture also covers app shells where the scrolling element is swapped
-    // responsively or a programmatic scroll does not target the first <main>.
-    document.addEventListener('scroll', updateViewport, { passive: true, capture: true })
-    window.addEventListener('resize', updateViewport, { passive: true })
-    const resizeObserver = new ResizeObserver(updateViewport)
+    window.addEventListener('resize', measureLayout, { passive: true })
+    const resizeObserver = new ResizeObserver(measureLayout)
     if (scrollRoot) resizeObserver.observe(scrollRoot)
     return () => {
       scrollRoot?.removeEventListener('scroll', updateViewport)
-      document.removeEventListener('scroll', updateViewport, true)
-      window.removeEventListener('resize', updateViewport)
+      window.removeEventListener('resize', measureLayout)
       resizeObserver.disconnect()
     }
-  }, [updateViewport])
+  }, [measureLayout, updateViewport])
 
-  useLayoutEffect(updateViewport, [items.length, layout.totalHeight, updateViewport])
+  // Also remeasure after parent layout changes (for example when the swipe
+  // hint disappears). Scroll events themselves now avoid forced layout reads.
+  useLayoutEffect(measureLayout)
 
   const visibleRange = useMemo(() => {
     if (items.length === 0) return { start: 0, end: 0 }
@@ -140,9 +149,10 @@ function MeasuredItem({
   useLayoutEffect(() => {
     const element = itemRef.current
     if (!element) return
-    const measure = () => onHeight(itemId, Math.ceil(element.getBoundingClientRect().height))
-    measure()
-    const observer = new ResizeObserver(measure)
+    onHeight(itemId, Math.ceil(element.offsetHeight))
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) onHeight(itemId, Math.ceil(entry.contentRect.height))
+    })
     observer.observe(element)
     return () => observer.disconnect()
   }, [itemId, onHeight])

@@ -31,12 +31,13 @@ import type { AliasScope, Store, TransactionUpdatePatch, TransactionView } from 
 
 interface EditTransactionDialogProps {
     tx: TransactionView | null
+    open: boolean
     onClose: () => void
     onSaved?: (id: string) => void
 }
 
 /** Редактирование повторяет форму добавления, но отправляет PATCH и позволяет удалить транзакцию. */
-export function EditTransactionDialog({ tx, onClose, onSaved }: EditTransactionDialogProps) {
+export function EditTransactionDialog({ tx, open, onClose, onSaved }: EditTransactionDialogProps) {
     const { data: tags } = useTags()
     const { data: stores } = useStores()
     const updateTx = useUpdateTransaction()
@@ -56,8 +57,6 @@ export function EditTransactionDialog({ tx, onClose, onSaved }: EditTransactionD
     const [deleteError, setDeleteError] = useState<string | null>(null)
     const [confirmOpen, setConfirmOpen] = useState(false)
     const [aliasScope, setAliasScope] = useState<AliasScope | null>(null)
-
-    const open = tx !== null
 
     useEffect(() => {
         if (!tx) return
@@ -190,7 +189,6 @@ export function EditTransactionDialog({ tx, onClose, onSaved }: EditTransactionD
                             onChange={(event) => setName(event.target.value)}
                             fullWidth
                             required
-                            autoFocus
                             placeholder="Например: Кофе, проезд, зарплата"
                             sx={{ '& .MuiInputBase-root': { height: 56 } }}
                         />

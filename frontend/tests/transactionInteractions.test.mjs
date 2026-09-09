@@ -58,12 +58,12 @@ test('period alone does not enable the filter dot', () => {
   assert.equal(hasActiveTableFilters({ ...empty, search: 'кофе' }), true)
 })
 
-test('reduced-motion stylesheet disables transaction animations', async () => {
+test('reduced-motion stylesheet keeps feedback without spatial movement', async () => {
   const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8')
   const mediaBlock = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'))
-  assert.match(mediaBlock, /mobile-transaction-card/)
-  assert.match(mediaBlock, /animation:\s*none\s*!important/)
-  assert.match(mediaBlock, /transition-duration:\s*0\.01ms\s*!important/)
+  assert.match(mediaBlock, /mobile-transaction-card--enter/)
+  assert.match(mediaBlock, /mobile-card-fade/)
+  assert.match(mediaBlock, /transition-duration:\s*100ms\s*!important/)
 })
 
 test('vertical movement does not hijack page scrolling', () => {
