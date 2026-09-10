@@ -39,6 +39,8 @@ interface UiState {
   receiptSheetOpen: boolean
   transactionSheetOpen: boolean
   filterSheetOpen: boolean
+  /** Mobile transaction selection temporarily replaces the bottom navigation. */
+  transactionSelectionMode: boolean
   /** Desktop sidebar collapsed to a narrow icon rail. */
   sidebarCollapsed: boolean
   setThemeMode: (mode: ThemeMode) => void
@@ -73,6 +75,7 @@ interface UiState {
   closeTransactionSheet: () => void
   openFilterSheet: () => void
   closeFilterSheet: () => void
+  setTransactionSelectionMode: (active: boolean) => void
   resetFilters: () => void
 }
 
@@ -100,6 +103,7 @@ export const useUiStore = create<UiState>()(
       receiptSheetOpen: false,
       transactionSheetOpen: false,
       filterSheetOpen: false,
+      transactionSelectionMode: false,
       sidebarCollapsed: false,
 
       setThemeMode: (themeMode) => set({ themeMode }),
@@ -129,6 +133,7 @@ export const useUiStore = create<UiState>()(
       closeTransactionSheet: () => set({ transactionSheetOpen: false }),
       openFilterSheet: () => set({ filterSheetOpen: true }),
       closeFilterSheet: () => set({ filterSheetOpen: false }),
+      setTransactionSelectionMode: (transactionSelectionMode) => set({ transactionSelectionMode }),
       resetFilters: () =>
         set({ search: '', tagFilterIds: [], untaggedOnly: false, storeFilters: [], amountMin: '', amountMax: '', operationFilter: 'all' }),
     }),

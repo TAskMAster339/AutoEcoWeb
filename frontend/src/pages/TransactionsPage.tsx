@@ -4,8 +4,10 @@ import {
     Box,
     Button,
     CircularProgress,
+    Collapse,
     Grid2 as Grid,
     Skeleton,
+    Slide,
     Stack,
     IconButton,
     Typography,
@@ -118,6 +120,7 @@ function SummaryCards() {
 export function TransactionsPage() {
     const theme = useTheme()
     const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+    const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
     const online = useOnline()
     const queryClient = useQueryClient()
 
@@ -125,6 +128,7 @@ export function TransactionsPage() {
     const amountMin = useUiStore((s) => s.amountMin)
     const amountMax = useUiStore((s) => s.amountMax)
     const operationFilter = useUiStore((s) => s.operationFilter)
+    const setTransactionSelectionMode = useUiStore((s) => s.setTransactionSelectionMode)
     const { data: txRevision } = useQuery({ queryKey: ['txRevision'], queryFn: () => 0 })
 
     // Параметры фильтров (период/тег/поиск/магазин) — применяет бэкенд.
@@ -279,6 +283,14 @@ export function TransactionsPage() {
     const [selectionResetRevision, setSelectionResetRevision] = useState(0)
     const [bulkError, setBulkError] = useState<string | null>(null)
     const mobileSelectionMode = isMobile && mobileSelectionActive
+
+    useEffect(() => {
+        setTransactionSelectionMode(mobileSelectionMode)
+    }, [mobileSelectionMode, setTransactionSelectionMode])
+
+    useEffect(() => () => {
+        setTransactionSelectionMode(false)
+    }, [setTransactionSelectionMode])
     // Данные остаются смонтированными во время закрытия, чтобы Drawer мог
     // доиграть exit-анимацию вместо мгновенного удаления из DOM.
     const [editingTx, setEditingTx] = useState<TransactionView | null>(null)
@@ -567,65 +579,54 @@ export function TransactionsPage() {
                         <LoadingState label="Загружаем операции…" />
                     ) : (
                         <>
-                            {mobileSelectionMode && (
-                                <Box
-                                    role="toolbar"
-                                    aria-label="Действия с выбранными транзакциями"
-                                    sx={{
-                                        position: 'sticky',
-                                        top: 0,
-                                        zIndex: 8,
-                                        display: 'grid',
-                                        gap: 0.75,
-                                        px: 1,
-                                        py: 0.75,
-                                        border: '1px solid',
-                                        borderColor: 'primary.main',
-                                        borderRadius: '8px',
-                                        bgcolor: 'background.paper',
-                                        boxShadow: theme.shadows[4],
-                                    }}
+                            <Box sx={{ position: 'sticky', top: 0, zIndex: 8 }}>
+                                <Collapse
+                                    in={mobileSelectionMode}
+                                    timeout={reduceMotion ? 100 : { enter: 240, exit: 160 }}
+                                    unmountOnExit
                                 >
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <IconButton onClick={closeMobileSelection} aria-label="Выйти из режима выбора">
-                                            <CloseIcon />
-                                        </IconButton>
-                                        <Typography sx={{ flex: 1, fontWeight: 700 }}>
-                                            Выбрано: {selectedIds.length}
-                                        </Typography>
+                                    <Box
+                                        role="toolbar"
+                                        aria-label="Управление режимом выбора"
+                                        sx={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
+                                            alignItems: 'center',
+                                            gap: 0.5,
+                                            px: 1,
+                                            py: 0.75,
+                                            border: '1px solid',
+                                            borderColor: 'primary.main',
+                                            borderRadius: '8px',
+                                            bgcolor: 'background.paper',
+                                            boxShadow: theme.shadows[4],
+                                        }}
+                                    >
                                         <Button
                                             size="small"
                                             startIcon={<SelectAllIcon />}
                                             onClick={() => setSelectedIds(mobileRows.map((row) => row.id))}
                                             disabled={selectedIds.length === mobileRows.length}
+                                            sx={{ justifySelf: 'start', minWidth: 0, px: 0.75, whiteSpace: 'nowrap', fontSize: 12 }}
                                         >
                                             Все показанные
                                         </Button>
-                                    </Box>
-                                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-                                        <Button
-                                            variant="contained"
-                                            startIcon={<EditOutlinedIcon />}
-                                            onClick={() => setBulkEditOpen(true)}
-                                            disabled={selectedIds.length === 0}
+                                        <Typography
+                                            aria-live="polite"
+                                            sx={{ textAlign: 'center', fontWeight: 700, whiteSpace: 'nowrap' }}
                                         >
-                                            Изменить ({selectedIds.length})
-                                        </Button>
-                                        <Button
-                                            variant="outlined"
-                                            color="error"
-                                            startIcon={<DeleteOutlineIcon />}
-                                            onClick={() => {
-                                                setBulkError(null)
-                                                setConfirmDeleteOpen(true)
-                                            }}
-                                            disabled={selectedIds.length === 0}
+                                            Выбрано: {selectedIds.length}
+                                        </Typography>
+                                        <IconButton
+                                            onClick={closeMobileSelection}
+                                            aria-label="Выйти из режима выбора"
+                                            sx={{ justifySelf: 'end' }}
                                         >
-                                            Удалить
-                                        </Button>
+                                            <CloseIcon />
+                                        </IconButton>
                                     </Box>
-                                </Box>
-                            )}
+                                </Collapse>
+                            </Box>
                             {!mobileSelectionMode && showSwipeHint && mobileRows.length > 0 && (
                                 <Box
                                     role="status"
@@ -760,6 +761,60 @@ export function TransactionsPage() {
                     )}
                 </Box>
             )}
+
+            <Slide
+                in={mobileSelectionMode}
+                direction="up"
+                timeout={reduceMotion ? 0 : { enter: 260, exit: 170 }}
+                mountOnEnter
+                unmountOnExit
+            >
+                <Box
+                    role="toolbar"
+                    aria-label="Действия с выбранными транзакциями"
+                    sx={{
+                        position: 'fixed',
+                        zIndex: 1201,
+                        left: 12,
+                        right: 12,
+                        bottom: 'calc(12px + env(safe-area-inset-bottom))',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: 1,
+                        p: 0.5,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: '12px',
+                        bgcolor: 'background.paper',
+                        boxShadow: theme.palette.mode === 'dark'
+                            ? '0 12px 36px rgba(0,0,0,0.55)'
+                            : '0 12px 36px rgba(16,24,40,0.16)',
+                    }}
+                >
+                    <Button
+                        variant="outlined"
+                        color="error"
+                        startIcon={<DeleteOutlineIcon />}
+                        onClick={() => {
+                            setBulkError(null)
+                            setConfirmDeleteOpen(true)
+                        }}
+                        disabled={selectedIds.length === 0}
+                        sx={{ minHeight: 54 }}
+                    >
+                        Удалить
+                    </Button>
+                    <Button
+                        variant="contained"
+                        startIcon={<EditOutlinedIcon />}
+                        onClick={() => setBulkEditOpen(true)}
+                        disabled={selectedIds.length === 0}
+                        sx={{ minHeight: 54 }}
+                    >
+                        Изменить ({selectedIds.length})
+                    </Button>
+                </Box>
+            </Slide>
 
             <FilterSheet tags={tags} stores={stores} />
 
