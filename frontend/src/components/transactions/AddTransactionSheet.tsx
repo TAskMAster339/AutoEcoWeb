@@ -103,6 +103,7 @@ export function AddTransactionSheet() {
                 tag_id: selectedTag,
                 comment: comment.trim() || null,
             })
+            if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
             close()
         } catch (e) {
             setFormError(messageFromError(e))
@@ -116,20 +117,19 @@ export function AddTransactionSheet() {
             if (!createTx.isPending) close()
             return
         }
-        if (
-            event.key !== 'Enter' ||
-            event.shiftKey || event.altKey || event.ctrlKey || event.metaKey ||
-            event.target instanceof HTMLTextAreaElement ||
-            (event.target instanceof HTMLElement && event.target.getAttribute('role') === 'combobox')
-        ) return
-        event.preventDefault()
-        event.stopPropagation()
-        if (!createTx.isPending) void submit()
     }
 
     return (
         <BottomSheet open={open} onClose={close} title="Новая транзакция">
-            <Stack spacing={2} onKeyDown={handleFormKeyDown}>
+            <Stack
+                component="form"
+                spacing={2}
+                onKeyDown={handleFormKeyDown}
+                onSubmit={(event) => {
+                    event.preventDefault()
+                    if (!createTx.isPending) void submit()
+                }}
+            >
                 {formError && <Alert severity="error">{formError}</Alert>}
 
                 <ToggleButtonGroup
@@ -250,10 +250,10 @@ export function AddTransactionSheet() {
                     />
                 </Stack>
 
-                <TagAutocomplete tags={tags ?? []} value={selectedTag} onChange={setSelectedTag} />
+                <TagAutocomplete tags={tags ?? []} value={selectedTag} onChange={setSelectedTag} enterKeyHint="done" />
 
                 <Box sx={{ position: 'sticky', bottom: 0, zIndex: 1, pt: 1, pb: 'env(safe-area-inset-bottom)', bgcolor: 'background.paper' }}>
-                    <Button variant="contained" onClick={submit} disabled={createTx.isPending} size="large" fullWidth>
+                    <Button type="submit" variant="contained" disabled={createTx.isPending} size="large" fullWidth>
                         {createTx.isPending ? <CircularProgress size={20} color="inherit" /> : 'Сохранить транзакцию'}
                     </Button>
                 </Box>
