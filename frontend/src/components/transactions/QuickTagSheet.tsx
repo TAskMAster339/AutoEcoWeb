@@ -102,12 +102,13 @@ export function QuickTagSheet({ tx, tags, open, onClose, onSaved }: QuickTagShee
 
         {selectedTag !== null && (
           <Button
-            variant="text"
-            color="inherit"
+            fullWidth
+            variant="outlined"
+            color="primary"
             startIcon={<DeleteOutlineIcon />}
             onClick={() => setSelectedTag(null)}
             disabled={updateTx.isPending}
-            sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+            sx={{ minHeight: 48 }}
           >
             Убрать тег
           </Button>
