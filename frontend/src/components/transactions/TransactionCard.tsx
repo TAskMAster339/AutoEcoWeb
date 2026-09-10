@@ -73,6 +73,16 @@ export const TransactionCard = memo(function TransactionCard({
     if (!swipeOpen && !dragging.current) setOffset(0)
   }, [swipeOpen])
 
+  useEffect(() => {
+    if (!selectionMode) return
+    dragging.current = false
+    startX.current = null
+    startY.current = null
+    gestureAxis.current = null
+    cancelLongPress()
+    setOffset(0)
+  }, [selectionMode])
+
   useEffect(() => () => {
     if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
   }, [])
@@ -188,56 +198,58 @@ export const TransactionCard = memo(function TransactionCard({
         cancelLongPress()
       }}
     >
-      <ButtonBase
-        onClick={(event) => {
-          event.stopPropagation()
-          if (Date.now() - lastTouchEditRef.current < 700) return
-          openEditor()
-        }}
-        onPointerUp={(event) => {
-          if (event.pointerType === 'mouse') return
-          event.preventDefault()
-          event.stopPropagation()
-          lastTouchEditRef.current = Date.now()
-          openEditor()
-        }}
-        onTouchEnd={(event) => event.stopPropagation()}
-        tabIndex={swipeOpen ? 0 : -1}
-        aria-hidden={!swipeOpen}
-        aria-label={`Изменить транзакцию «${tx.name}»`}
-        sx={{
-          position: 'absolute',
-          top: 0,
-          bottom: 0,
-          right: 0,
-          width: SWIPE_ACTION_WIDTH,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 0.5,
-          alignItems: 'center',
-          justifyContent: 'center',
-          bgcolor: 'primary.main',
-          color: '#fff',
-          borderRadius: 0,
-          '&:focus-visible': { outline: '3px solid', outlineColor: 'common.white', outlineOffset: -4 },
-        }}
-      >
-        <Box
-          className="mobile-swipe-action-content"
+      {!selectionMode && (
+        <ButtonBase
+          onClick={(event) => {
+            event.stopPropagation()
+            if (Date.now() - lastTouchEditRef.current < 700) return
+            openEditor()
+          }}
+          onPointerUp={(event) => {
+            if (event.pointerType === 'mouse') return
+            event.preventDefault()
+            event.stopPropagation()
+            lastTouchEditRef.current = Date.now()
+            openEditor()
+          }}
+          onTouchEnd={(event) => event.stopPropagation()}
+          tabIndex={swipeOpen ? 0 : -1}
+          aria-hidden={!swipeOpen}
+          aria-label={`Изменить транзакцию «${tx.name}»`}
           sx={{
-            display: 'grid',
-            placeItems: 'center',
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            right: 0,
+            width: SWIPE_ACTION_WIDTH,
+            display: 'flex',
+            flexDirection: 'column',
             gap: 0.5,
-            opacity: 0.35 + revealProgress * 0.65,
-            transform: `scale(${0.9 + revealProgress * 0.1})`,
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'primary.main',
+            color: '#fff',
+            borderRadius: 0,
+            '&:focus-visible': { outline: '3px solid', outlineColor: 'common.white', outlineOffset: -4 },
           }}
         >
-          <EditOutlinedIcon fontSize="small" />
-          <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 600 }}>
-            Изменить
-          </Typography>
-        </Box>
-      </ButtonBase>
+          <Box
+            className="mobile-swipe-action-content"
+            sx={{
+              display: 'grid',
+              placeItems: 'center',
+              gap: 0.5,
+              opacity: 0.35 + revealProgress * 0.65,
+              transform: `scale(${0.9 + revealProgress * 0.1})`,
+            }}
+          >
+            <EditOutlinedIcon fontSize="small" />
+            <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 600 }}>
+              Изменить
+            </Typography>
+          </Box>
+        </ButtonBase>
+      )}
 
       <Card
         className={`mobile-transaction-surface${highlighted ? ' mobile-transaction-surface--saved' : ''}`}
@@ -245,13 +257,12 @@ export const TransactionCard = memo(function TransactionCard({
         sx={{
           position: 'relative',
           p: 1.75,
-          transform: `translate3d(${offset}px, 0, 0)`,
+          transform: `translate3d(${selectionMode ? 0 : offset}px, 0, 0)`,
           transition: dragging.current ? 'none' : 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
           willChange: dragging.current ? 'transform' : 'auto',
           touchAction: 'pan-y',
           WebkitTapHighlightColor: 'transparent',
           ...(selected ? {
-            bgcolor: 'action.selected',
             boxShadow: `inset 0 0 0 2px ${theme.palette.primary.main}`,
           } : {}),
         }}
