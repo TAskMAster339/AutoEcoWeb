@@ -171,6 +171,7 @@ export const TransactionCard = memo(function TransactionCard({
         className={`mobile-transaction-surface${highlighted ? ' mobile-transaction-surface--saved' : ''}`}
         component="article"
         sx={{
+          position: 'relative',
           p: 1.75,
           transform: `translate3d(${offset}px, 0, 0)`,
           transition: dragging.current ? 'none' : 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
@@ -190,20 +191,24 @@ export const TransactionCard = memo(function TransactionCard({
           }}
           onKeyDown={handleCardKeyDown}
           sx={{
-            width: '100%',
-            color: 'inherit',
-            textAlign: 'left',
-            borderRadius: '6px',
+            position: 'absolute',
+            inset: 0,
+            zIndex: 1,
+            borderRadius: 'inherit',
             WebkitTapHighlightColor: 'transparent',
+            '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.main', outlineOffset: -3 },
+          }}
+        />
+
+        <Box sx={{ position: 'relative', zIndex: 2, pointerEvents: 'none' }}>
+          <Box sx={{
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 1fr) auto',
             alignItems: 'center',
             columnGap: 1.5,
             rowGap: 0.25,
-            '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.main', outlineOffset: 3 },
-          }}
-        >
-          <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+          }}>
+            <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
               <Typography noWrap sx={{ minWidth: 0, fontWeight: 700, fontSize: 14.5 }}>
                 {tx.store ?? '—'}
               </Typography>
@@ -211,69 +216,78 @@ export const TransactionCard = memo(function TransactionCard({
                 {formatLongDate(tx.date)}
               </Typography>
           </Box>
-          <Typography
-            className="tnum"
-            sx={{ justifySelf: 'end', fontWeight: 700, fontSize: 15, color: amountColor }}
-          >
-            {isExpense ? '−' : '+'}
-            {formatCurrency(amount)}
-          </Typography>
+            <Typography
+              className="tnum"
+              sx={{ justifySelf: 'end', fontWeight: 700, fontSize: 15, color: amountColor }}
+            >
+              {isExpense ? '−' : '+'}
+              {formatCurrency(amount)}
+            </Typography>
 
-          <Typography variant="body2" color="text.secondary" noWrap sx={{ minWidth: 0 }}>
-            {tx.name}
-          </Typography>
-          <ExpandMoreIcon
-            className="mobile-expand-icon"
-            sx={{
-              gridColumn: 2,
-              gridRow: tag ? 3 : 2,
-              justifySelf: 'end',
-              alignSelf: tag ? 'end' : 'center',
-              fontSize: 18,
-              color: colors.textSecondary,
-              transform: expanded ? 'rotate(180deg)' : 'none',
-              transition: 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
-            }}
-          />
+            <Typography variant="body2" color="text.secondary" noWrap sx={{ minWidth: 0, gridColumn: '1 / -1', pr: 4 }}>
+              {tx.name}
+            </Typography>
 
-          {tag && (
-            <Box sx={{ gridColumn: 1, gridRow: 3, display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
-              <TagChip tag={tag} />
-            </Box>
-          )}
-        </ButtonBase>
-
-        {expanded && (
-          <Box
-            className="mobile-card-expanded-content"
-            sx={{
-              mt: 1.5,
-              pt: 1.25,
-              borderTop: `1px solid ${theme.palette.divider}`,
-            }}
-          >
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
-              <Detail label="Кол-во" value={tx.quantity !== null && tx.quantity !== undefined ? String(tx.quantity) : '—'} />
-              <Detail label="Цена" value={formatCurrency(tx.price)} />
-              <Detail label="Баланс" value={formatCurrency(tx.balance)} />
-            </Box>
-            {tx.comment && (
-              <Box sx={{ mt: 1.25, pt: 1.25, borderTop: `1px solid ${theme.palette.divider}` }}>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
-                  Комментарий
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                  {tx.comment}
-                </Typography>
+            {tag && (
+              <Box sx={{ gridColumn: '1 / -1', display: 'flex', gap: 0.5, mt: 0.5, pr: 4, flexWrap: 'wrap' }}>
+                <TagChip tag={tag} />
               </Box>
             )}
           </Box>
-        )}
+
+          {expanded && (
+            <Box
+              className="mobile-card-expanded-content"
+              sx={{
+                mt: 1.5,
+                pt: 1.25,
+                pr: 4,
+                borderTop: `1px solid ${theme.palette.divider}`,
+              }}
+            >
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
+                <Detail label="Кол-во" value={tx.quantity !== null && tx.quantity !== undefined ? String(tx.quantity) : '—'} />
+                <Detail label="Цена" value={formatCurrency(tx.price)} />
+                <Detail label="Баланс" value={formatCurrency(tx.balance)} />
+              </Box>
+              {tx.comment && (
+                <Box sx={{ mt: 1.25, pt: 1.25, borderTop: `1px solid ${theme.palette.divider}` }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+                    Комментарий
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {tx.comment}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          )}
+        </Box>
+
         {!tag && (
-          <Button size="small" variant="text" onClick={() => onTagEdit(tx)} sx={{ mt: 1, ml: -1, minHeight: 44 }}>
+          <Button
+            size="small"
+            variant="text"
+            onClick={() => onTagEdit(tx)}
+            sx={{ position: 'relative', zIndex: 3, mt: 1, ml: -1, minHeight: 44 }}
+          >
             Назначить тег
           </Button>
         )}
+        <ExpandMoreIcon
+          className="mobile-expand-icon"
+          sx={{
+            position: 'absolute',
+            zIndex: 2,
+            right: 12,
+            bottom: 12,
+            pointerEvents: 'none',
+            fontSize: 18,
+            color: colors.textSecondary,
+            transform: expanded ? 'rotate(180deg)' : 'none',
+            transition: 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
+        />
       </Card>
     </Box>
   )
