@@ -17,6 +17,7 @@ export function filterParams(
   dayDate: string | null,
   search: string,
   tagFilterIds: string[],
+  untaggedOnly: boolean,
   storeFilters: string[],
   amountMin: string,
   amountMax: string,
@@ -33,6 +34,7 @@ export function filterParams(
   const q = search.trim()
   if (q) params.search = q
   if (tagFilterIds.length) params.tag_ids = tagFilterIds
+  else if (untaggedOnly) params.untagged = true
   if (storeFilters.length) params.seller_names = storeFilters
   const normalizedMin = normalizeAmountFilter(amountMin)
   const normalizedMax = normalizeAmountFilter(amountMax)
@@ -50,7 +52,7 @@ export function usePeriodParams(): TransactionsPageParams {
   const monthYear = useUiStore((s) => s.monthYear)
   const dayDate = useUiStore((s) => s.dayDate)
   return useMemo(
-    () => filterParams(periodKey, customFrom, customTo, monthYear, dayDate, '', [], [], '', '', 'all'),
+    () => filterParams(periodKey, customFrom, customTo, monthYear, dayDate, '', [], false, [], '', '', 'all'),
     [periodKey, customFrom, customTo, monthYear, dayDate],
   )
 }
@@ -65,12 +67,13 @@ export function useFilterParams(): TransactionsPageParams {
   const dayDate = useUiStore((s) => s.dayDate)
   const search = useUiStore((s) => s.search)
   const tagFilterIds = useUiStore((s) => s.tagFilterIds)
+  const untaggedOnly = useUiStore((s) => s.untaggedOnly)
   const storeFilters = useUiStore((s) => s.storeFilters)
   const amountMin = useUiStore((s) => s.amountMin)
   const amountMax = useUiStore((s) => s.amountMax)
   const operationFilter = useUiStore((s) => s.operationFilter)
   return useMemo(
-    () => filterParams(periodKey, customFrom, customTo, monthYear, dayDate, search, tagFilterIds, storeFilters, amountMin, amountMax, operationFilter),
-    [periodKey, customFrom, customTo, monthYear, dayDate, search, tagFilterIds, storeFilters, amountMin, amountMax, operationFilter],
+    () => filterParams(periodKey, customFrom, customTo, monthYear, dayDate, search, tagFilterIds, untaggedOnly, storeFilters, amountMin, amountMax, operationFilter),
+    [periodKey, customFrom, customTo, monthYear, dayDate, search, tagFilterIds, untaggedOnly, storeFilters, amountMin, amountMax, operationFilter],
   )
 }

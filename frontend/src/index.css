@@ -89,6 +89,10 @@ a {
     transition: opacity 80ms linear, transform 80ms linear;
   }
 
+  .mobile-card-expanded-content {
+    animation: mobile-card-details-in 140ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
   .active-filter-badge .MuiBadge-badge {
     animation: mobile-filter-dot-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -127,6 +131,17 @@ a {
   }
 }
 
+@keyframes mobile-card-details-in {
+  from {
+    opacity: 0.25;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mobile-transaction-card--enter {
     animation: mobile-card-fade 120ms ease-out both !important;
@@ -141,10 +156,14 @@ a {
   }
 
   .mobile-transaction-surface,
-  .mobile-card-details,
+  .mobile-card-expanded-content,
   .mobile-swipe-action-content,
   .mobile-expand-icon {
     transition-duration: 100ms !important;
+  }
+
+  .mobile-card-expanded-content {
+    animation: mobile-filter-dot-fade 100ms ease-out both !important;
   }
 }
 

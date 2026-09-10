@@ -52,10 +52,11 @@ test('store and tag search are case-insensitive and support Cyrillic', () => {
 
 test('period alone does not enable the filter dot', () => {
   const empty = {
-    search: '', tagFilterIds: [], storeFilters: [], amountMin: '', amountMax: '', operationFilter: 'all',
+    search: '', tagFilterIds: [], untaggedOnly: false, storeFilters: [], amountMin: '', amountMax: '', operationFilter: 'all',
   }
   assert.equal(hasActiveTableFilters(empty), false)
   assert.equal(hasActiveTableFilters({ ...empty, search: 'кофе' }), true)
+  assert.equal(hasActiveTableFilters({ ...empty, untaggedOnly: true }), true)
 })
 
 test('reduced-motion stylesheet keeps feedback without spatial movement', async () => {

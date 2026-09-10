@@ -13,7 +13,7 @@ from src.repositories.seller import SellerRepository
 from src.repositories.tag import TagRepository
 from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
-from src.schemas.import_export import ImportRowIn
+from src.schemas.import_export import ImportPreview, ImportRowIn, ImportRowPreview
 from src.services.import_export import (
     ExportRow,
     ImportExportService,
@@ -397,6 +397,37 @@ async def test_import_rows_empty(session):
     result = await _service(session).import_rows(user, [])
     assert result.imported == 0
     assert result.tags_created == []
+
+
+async def test_import_marks_and_skips_exact_duplicates(session):
+    user = await _make_user(session)
+    service = _service(session)
+    original = _row(store="Пятёрочка")
+    first = await service.import_rows(user, [original])
+    assert first.imported == 1
+
+    preview_rows = [
+        ImportRowPreview(row_number=0, **original.model_dump(exclude={"allow_duplicate"})),
+        ImportRowPreview(row_number=1, **_row(description="Хлеб").model_dump(exclude={"allow_duplicate"})),
+        ImportRowPreview(row_number=2, **_row(description="Хлеб").model_dump(exclude={"allow_duplicate"})),
+    ]
+    preview = await service.mark_duplicates(
+        user,
+        ImportPreview(rows=preview_rows, total=3, valid=3, invalid=0),
+    )
+    assert preview.duplicates == 2  # existing milk + repeated bread
+    assert preview.rows[0].duplicate == "existing"
+    assert preview.rows[2].duplicate == "file"
+    assert preview.rows[2].duplicate_of == 1
+
+    skipped = await service.import_rows(user, [original])
+    assert skipped.imported == 0
+    assert skipped.skipped == 1
+
+    forced = original.model_copy(update={"allow_duplicate": True})
+    imported = await service.import_rows(user, [forced])
+    assert imported.imported == 1
+    assert imported.skipped == 0
 
 
 async def test_import_rows_standalone_are_visible_in_export(session):

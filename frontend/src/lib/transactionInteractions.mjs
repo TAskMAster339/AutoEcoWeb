@@ -32,6 +32,7 @@ export function hasActiveTableFilters(filters) {
   return Boolean(
     filters.search
     || filters.tagFilterIds.length
+    || filters.untaggedOnly
     || filters.storeFilters.length
     || filters.amountMin
     || filters.amountMax

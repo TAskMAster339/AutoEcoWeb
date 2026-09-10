@@ -157,6 +157,7 @@ export function TransactionsPage() {
     const [mobileLoadingMore, setMobileLoadingMore] = useState(false)
     const [mobileLoadError, setMobileLoadError] = useState(false)
     const [mobileSwipeId, setMobileSwipeId] = useState<string | null>(null)
+    const [expandedMobileId, setExpandedMobileId] = useState<string | null>(null)
     const [showSwipeHint, setShowSwipeHint] = useState(() => !hasSeenSwipeHint())
     const [highlightedMobileId, setHighlightedMobileId] = useState<string | null>(null)
     const mobileSentinelRef = useRef<HTMLDivElement | null>(null)
@@ -323,6 +324,7 @@ export function TransactionsPage() {
     const openAddMenu = useUiStore((s) => s.openAddMenu)
     const search = useUiStore((s) => s.search)
     const tagFilterIds = useUiStore((s) => s.tagFilterIds)
+    const untaggedOnly = useUiStore((s) => s.untaggedOnly)
     const periodKey = useUiStore((s) => s.periodKey)
     const customFrom = useUiStore((s) => s.customFrom)
     const customTo = useUiStore((s) => s.customTo)
@@ -343,6 +345,7 @@ export function TransactionsPage() {
         const state = useUiStore.getState()
         const urlSearch = query.get('search')
         const urlTags = query.getAll('tag')
+        const urlUntagged = query.get('untagged') === '1'
         const urlStores = query.getAll('store')
         const urlAmountMin = query.get('amountMin')
         const urlAmountMax = query.get('amountMax')
@@ -366,6 +369,7 @@ export function TransactionsPage() {
         state.applyFilters({
             search: urlSearch ?? state.search,
             tagFilterIds: urlTags.some(Boolean) ? urlTags.filter(Boolean) : state.tagFilterIds,
+            untaggedOnly: urlUntagged || (urlTags.some(Boolean) ? false : state.untaggedOnly),
             storeFilters: urlStores.some(Boolean) ? urlStores.filter(Boolean) : state.storeFilters,
             amountMin: invalidAmountRange ? '' : (normalizedMin ?? ''),
             amountMax: invalidAmountRange ? '' : (normalizedMax ?? ''),
@@ -384,6 +388,7 @@ export function TransactionsPage() {
         const query = new URLSearchParams()
         if (search) query.set('search', search)
         if (tagFilterIds.length) tagFilterIds.forEach((id) => query.append('tag', id))
+        else if (untaggedOnly) query.set('untagged', '1')
         if (storeFilters.length) storeFilters.forEach((store) => query.append('store', store))
         if (amountMin !== '') query.set('amountMin', amountMin)
         if (amountMax !== '') query.set('amountMax', amountMax)
@@ -400,12 +405,12 @@ export function TransactionsPage() {
         if (nextUrl !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
             window.history.replaceState(null, '', nextUrl)
         }
-    }, [search, tagFilterIds, storeFilters, amountMin, amountMax, operationFilter, periodKey, customFrom, customTo, monthYear, dayDate])
+    }, [search, tagFilterIds, untaggedOnly, storeFilters, amountMin, amountMax, operationFilter, periodKey, customFrom, customTo, monthYear, dayDate])
 
     const tagsMap = useMemo(() => new Map((tags ?? []).map((t) => [t.id, t])), [tags])
     // Период — отдельный глобальный срез в шапке, а не фильтр из панели.
     // Поэтому он не включает точку на кнопке и не активирует «Сбросить фильтры».
-    const hasTableFilters = hasActiveTableFilters({ search, tagFilterIds, storeFilters, amountMin, amountMax, operationFilter })
+    const hasTableFilters = hasActiveTableFilters({ search, tagFilterIds, untaggedOnly, storeFilters, amountMin, amountMax, operationFilter })
 
     const showNoTransactions = total === 0 && (allTimeTotal ?? 0) === 0 && !hasTableFilters
     const showNotFound = total === 0 && !showNoTransactions
@@ -535,9 +540,11 @@ export function TransactionsPage() {
                                         tx={t}
                                         tagsMap={tagsMap}
                                         swipeOpen={mobileSwipeId === t.id}
+                                        expanded={expandedMobileId === t.id}
                                         animationIndex={index}
                                         highlighted={highlightedMobileId === t.id}
                                         onSwipeOpen={handleSwipeOpen}
+                                        onExpandedChange={setExpandedMobileId}
                                         onEdit={openTransactionEditor}
                                     />
                                 )}

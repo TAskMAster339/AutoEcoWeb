@@ -14,6 +14,7 @@ function buildQuery(params: TransactionsPageParams): string {
   if (params.date_from) search.set('date_from', params.date_from)
   if (params.date_to) search.set('date_to', params.date_to)
   if (params.tag_ids?.length) params.tag_ids.forEach((id) => search.append('tag_ids', id))
+  else if (params.untagged) search.set('untagged', 'true')
   if (params.search) search.set('search', params.search)
   if (params.seller_names?.length)
     params.seller_names.forEach((name) => search.append('seller_names', name))

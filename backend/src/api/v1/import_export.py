@@ -25,6 +25,7 @@ _XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.
 @router.post("/preview", response_model=ImportPreview)
 async def preview_import(
     current_user: CurrentUser,
+    import_export_svc: ImportExportSvc,
     file: UploadFile = File(...),  # noqa: B008
 ) -> ImportPreview:
     """Разобрать файл и вернуть строки предпросмотра (без записи в БД)."""
@@ -32,7 +33,8 @@ async def preview_import(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail="Файл больше 10 МБ")
     try:
-        return parse_import_file(file.filename or "", content)
+        preview = parse_import_file(file.filename or "", content)
+        return await import_export_svc.mark_duplicates(current_user, preview)
     except ImportFormatError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

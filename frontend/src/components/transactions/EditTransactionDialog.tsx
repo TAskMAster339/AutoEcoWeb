@@ -272,6 +272,8 @@ export function EditTransactionDialog({ tx, open, onClose, onSaved }: EditTransa
                         </Tooltip>
                     </Stack>
 
+                    <TagAutocomplete tags={tags ?? []} value={selectedTag} onChange={setSelectedTag} />
+
                     <TextField
                         label="Комментарий (необязательно)"
                         value={comment}
@@ -318,8 +320,6 @@ export function EditTransactionDialog({ tx, open, onClose, onSaved }: EditTransa
                             helperText="Считается автоматически"
                         />
                     </Stack>
-
-                    <TagAutocomplete tags={tags ?? []} value={selectedTag} onChange={setSelectedTag} />
 
                     <Box sx={{ position: 'sticky', bottom: 0, zIndex: 1, pt: 1, pb: 'env(safe-area-inset-bottom)', bgcolor: 'background.paper' }}>
                         <Stack direction="row" spacing={1}>

@@ -9,6 +9,7 @@ export function selectionRange(anchor: number, end: number): number[]
 export interface TableFilterState {
   search: string
   tagFilterIds: readonly string[]
+  untaggedOnly: boolean
   storeFilters: readonly string[]
   amountMin: string
   amountMax: string

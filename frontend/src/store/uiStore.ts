@@ -29,6 +29,7 @@ interface UiState {
   priceChartSubmittedIsRegex: boolean
   /** Мультивыбор: пустой массив = без фильтра. */
   tagFilterIds: string[]
+  untaggedOnly: boolean
   storeFilters: string[]
   amountMin: string
   amountMax: string
@@ -57,6 +58,7 @@ interface UiState {
   applyFilters: (filters: {
     search: string
     tagFilterIds: string[]
+    untaggedOnly: boolean
     storeFilters: string[]
     amountMin: string
     amountMax: string
@@ -89,6 +91,7 @@ export const useUiStore = create<UiState>()(
       priceChartSubmittedName: '',
       priceChartSubmittedIsRegex: false,
       tagFilterIds: [],
+      untaggedOnly: false,
       storeFilters: [],
       amountMin: '',
       amountMax: '',
@@ -116,8 +119,8 @@ export const useUiStore = create<UiState>()(
         set({ priceChartSubmittedName, priceChartSubmittedIsRegex }),
       setTagFilterIds: (tagFilterIds) => set({ tagFilterIds }),
       setStoreFilters: (storeFilters) => set({ storeFilters }),
-      applyFilters: ({ search, tagFilterIds, storeFilters, amountMin, amountMax, operationFilter, periodKey }) =>
-        set({ search, tagFilterIds, storeFilters, amountMin, amountMax, operationFilter, periodKey }),
+      applyFilters: ({ search, tagFilterIds, untaggedOnly, storeFilters, amountMin, amountMax, operationFilter, periodKey }) =>
+        set({ search, tagFilterIds, untaggedOnly, storeFilters, amountMin, amountMax, operationFilter, periodKey }),
       openAddMenu: () => set({ addMenuOpen: true }),
       closeAddMenu: () => set({ addMenuOpen: false }),
       openReceiptSheet: () => set({ receiptSheetOpen: true }),
@@ -127,7 +130,7 @@ export const useUiStore = create<UiState>()(
       openFilterSheet: () => set({ filterSheetOpen: true }),
       closeFilterSheet: () => set({ filterSheetOpen: false }),
       resetFilters: () =>
-        set({ search: '', tagFilterIds: [], storeFilters: [], amountMin: '', amountMax: '', operationFilter: 'all' }),
+        set({ search: '', tagFilterIds: [], untaggedOnly: false, storeFilters: [], amountMin: '', amountMax: '', operationFilter: 'all' }),
     }),
     {
       name: 'autoeco-ui',

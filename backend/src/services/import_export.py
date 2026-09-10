@@ -449,6 +449,47 @@ def _tag_color(name: str) -> str:
     return _TAG_PALETTE[sum(ord(ch) for ch in name) % len(_TAG_PALETTE)]
 
 
+def _signature_text(value: str | None) -> str:
+    return re.sub(r"\s+", " ", value or "").strip().casefold()
+
+
+def _import_signature(row: ImportRowPreview | ImportRowIn) -> tuple[object, ...]:
+    kind = row.operation_kind or ("income" if (row.income or 0) > 0 else "expense")
+    amount = row.income if kind == "income" else row.expense
+    return (
+        row.date,
+        _signature_text(row.category),
+        _signature_text(row.store),
+        _signature_text(row.description),
+        row.quantity or Decimal("1"),
+        _signature_text(row.unit or "шт."),
+        row.price or amount or Decimal("0"),
+        _signature_text(row.comment),
+        kind,
+        amount or Decimal("0"),
+    )
+
+
+def _stored_signature(
+    tx: Transaction,
+    seller_name: str | None,
+    tag_name: str | None,
+) -> tuple[object, ...]:
+    is_income = tx.operation_type in (2, 3)
+    return (
+        tx.check_datetime.date(),
+        _signature_text(tag_name),
+        _signature_text(seller_name),
+        _signature_text(tx.name),
+        tx.quantity or Decimal("1"),
+        _signature_text(tx.unit or "шт."),
+        tx.price or tx.amount,
+        _signature_text(tx.comment),
+        "income" if is_income else "expense",
+        tx.amount,
+    )
+
+
 class ImportExportService:
     """Импорт подтверждённых строк и сборка данных для экспорта."""
 
@@ -466,20 +507,58 @@ class ImportExportService:
         self._alias_repo = alias_repo
         self._seller_service = seller_service
 
+    async def mark_duplicates(self, user: User, preview: ImportPreview) -> ImportPreview:
+        """Отмечает точные повторы внутри файла и среди операций пользователя."""
+        tags = {tag.id: tag.name for tag in await self._tag_repo.list_all(user.id)}
+        existing = {
+            _stored_signature(tx, seller_name, tags.get(tx.tag_id))
+            for tx, seller_name in await self._tx_repo.list_all(user.id)
+        }
+        first_rows: dict[tuple[object, ...], int] = {}
+        duplicate_count = 0
+        for row in preview.rows:
+            if row.errors:
+                continue
+            signature = _import_signature(row)
+            if signature in first_rows:
+                row.duplicate = "file"
+                row.duplicate_of = first_rows[signature]
+                duplicate_count += 1
+            elif signature in existing:
+                row.duplicate = "existing"
+                duplicate_count += 1
+            first_rows.setdefault(signature, row.row_number)
+        preview.duplicates = duplicate_count
+        return preview
+
     async def import_rows(self, user: User, rows: list[ImportRowIn]) -> ImportResult:
         """Валидированные строки → теги (авто-создание) + bulk-insert транзакций."""
         existing: dict[str, Tag] = {
             tag.name: tag for tag in await self._tag_repo.list_all(user.id)
         }
+        tag_names_by_id = {tag.id: tag.name for tag in existing.values()}
         tags_created: list[str] = []
         transactions: list[Transaction] = []
+        skipped = 0
         product_aliases = (
             await self._alias_repo.list_all(user.id, scope="product")
             if self._alias_repo is not None
             else []
         )
+        existing_signatures = {
+            _stored_signature(tx, seller_name, tag_names_by_id.get(tx.tag_id))
+            for tx, seller_name in await self._tx_repo.list_all(user.id)
+        }
+        accepted_signatures: set[tuple[object, ...]] = set()
 
         for row in rows:
+            signature = _import_signature(row)
+            if not row.allow_duplicate and (
+                signature in existing_signatures or signature in accepted_signatures
+            ):
+                skipped += 1
+                continue
+            accepted_signatures.add(signature)
             tag_id: UUID | None = None
             if row.category:
                 tag = existing.get(row.category)
@@ -537,6 +616,7 @@ class ImportExportService:
             await self._tx_repo.create_many_standalone(transactions)
         return ImportResult(
             imported=len(transactions),
+            skipped=skipped,
             errors=[],
             tags_created=tags_created,
         )

@@ -32,6 +32,7 @@ async def list_transactions(  # noqa: PLR0913
     date_from: date | None = Query(None),  # noqa: B008
     date_to: date | None = Query(None),  # noqa: B008
     tag_ids: list[UUID] | None = Query(None),  # noqa: B008
+    untagged: bool = Query(False),
     search: str | None = Query(None, max_length=255),
     seller_names: list[str] | None = Query(None, max_length=255),  # noqa: B008
     amount_min: Decimal | None = Query(None, ge=0),  # noqa: B008
@@ -59,6 +60,7 @@ async def list_transactions(  # noqa: PLR0913
         date_from=_day_bounds(date_from, end_of_day=False) if date_from else None,
         date_to=_day_bounds(date_to, end_of_day=True) if date_to else None,
         tag_ids=tag_ids,
+        untagged=untagged,
         search=search,
         seller_names=seller_names,
         amount_min=amount_min,
@@ -83,6 +85,7 @@ async def get_summary(  # noqa: PLR0913
     date_from: date | None = Query(None),  # noqa: B008
     date_to: date | None = Query(None),  # noqa: B008
     tag_ids: list[UUID] | None = Query(None),  # noqa: B008
+    untagged: bool = Query(False),
     search: str | None = Query(None, max_length=255),
     seller_names: list[str] | None = Query(None, max_length=255),  # noqa: B008
     amount_min: Decimal | None = Query(None, ge=0),  # noqa: B008
@@ -95,6 +98,7 @@ async def get_summary(  # noqa: PLR0913
         date_from=_day_bounds(date_from, end_of_day=False) if date_from else None,
         date_to=_day_bounds(date_to, end_of_day=True) if date_to else None,
         tag_ids=tag_ids,
+        untagged=untagged,
         search=search,
         seller_names=seller_names,
         amount_min=amount_min,

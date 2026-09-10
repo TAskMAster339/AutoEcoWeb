@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { KeyboardEvent } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
     Autocomplete,
     Box,
@@ -20,6 +21,7 @@ import { TagChip } from '../common/TagChip'
 import { useUiStore, type OperationFilter } from '../../store/uiStore'
 import { normalizeAmountFilter } from '../../lib/numbers'
 import type { Store, Tag } from '../../api/types'
+import { fetchTransactionsPage } from '../../api/transactions'
 
 interface FilterSheetProps {
     tags: Tag[] | undefined
@@ -35,6 +37,7 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
     const open = useUiStore((state) => state.filterSheetOpen)
     const close = useUiStore((state) => state.closeFilterSheet)
     const tagFilterIds = useUiStore((state) => state.tagFilterIds)
+    const untaggedOnly = useUiStore((state) => state.untaggedOnly)
     const storeFilters = useUiStore((state) => state.storeFilters)
     const amountMin = useUiStore((state) => state.amountMin)
     const amountMax = useUiStore((state) => state.amountMax)
@@ -43,12 +46,18 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
     const resetFilters = useUiStore((state) => state.resetFilters)
 
     const [localTagFilterIds, setLocalTagFilterIds] = useState<string[]>(tagFilterIds)
+    const [localUntaggedOnly, setLocalUntaggedOnly] = useState(untaggedOnly)
     const [localStoreFilters, setLocalStoreFilters] = useState<string[]>(storeFilters)
     const [localAmountMin, setLocalAmountMin] = useState(amountMin)
     const [localAmountMax, setLocalAmountMax] = useState(amountMax)
     const [localOperationFilter, setLocalOperationFilter] = useState<OperationFilter>(operationFilter)
     const [storeInput, setStoreInput] = useState('')
     const [tagInput, setTagInput] = useState('')
+    const { data: untaggedPage } = useQuery({
+        queryKey: ['transactions', 'untagged-total'],
+        queryFn: () => fetchTransactionsPage({ limit: 1, untagged: true }),
+        staleTime: 30_000,
+    })
 
     const uniqueStores = useMemo(() => {
         const byDisplayName = new Map<string, Store>()
@@ -88,13 +97,14 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
     useEffect(() => {
         if (!open) return
         setLocalTagFilterIds(tagFilterIds)
+        setLocalUntaggedOnly(untaggedOnly)
         setLocalStoreFilters(storeFilters)
         setLocalAmountMin(amountMin)
         setLocalAmountMax(amountMax)
         setLocalOperationFilter(operationFilter)
         setStoreInput('')
         setTagInput('')
-    }, [amountMax, amountMin, open, operationFilter, storeFilters, tagFilterIds])
+    }, [amountMax, amountMin, open, operationFilter, storeFilters, tagFilterIds, untaggedOnly])
 
     const normalizedMin = normalizeAmountFilter(localAmountMin)
     const normalizedMax = normalizeAmountFilter(localAmountMax)
@@ -117,6 +127,7 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
         )
     }, [])
     const toggleTag = useCallback((tag: Tag) => {
+        setLocalUntaggedOnly(false)
         setLocalTagFilterIds((current) =>
             current.includes(tag.id) ? current.filter((id) => id !== tag.id) : [...current, tag.id],
         )
@@ -127,6 +138,7 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
         applyFilters({
             search: useUiStore.getState().search,
             tagFilterIds: localTagFilterIds,
+            untaggedOnly: localUntaggedOnly,
             storeFilters: localStoreFilters,
             amountMin: normalizedMin,
             amountMax: normalizedMax,
@@ -135,10 +147,11 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
         })
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
         close()
-    }, [amountFilterInvalid, applyFilters, close, localOperationFilter, localStoreFilters, localTagFilterIds, normalizedMax, normalizedMin])
+    }, [amountFilterInvalid, applyFilters, close, localOperationFilter, localStoreFilters, localTagFilterIds, localUntaggedOnly, normalizedMax, normalizedMin])
 
     const reset = useCallback(() => {
         setLocalTagFilterIds([])
+        setLocalUntaggedOnly(false)
         setLocalStoreFilters([])
         setLocalAmountMin('')
         setLocalAmountMax('')
@@ -269,7 +282,21 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
                         <LocalOfferOutlinedIcon color="primary" fontSize="small" />
                         <Typography variant="subtitle2">Теги</Typography>
                     </Stack>
+                    <Button
+                        variant={localUntaggedOnly ? 'contained' : 'outlined'}
+                        size="small"
+                        onClick={() => {
+                            setLocalUntaggedOnly((current) => !current)
+                            setLocalTagFilterIds([])
+                            setTagInput('')
+                        }}
+                        aria-pressed={localUntaggedOnly}
+                        sx={{ mb: 1.25 }}
+                    >
+                        Без тега · {untaggedPage?.total ?? '—'}
+                    </Button>
                     <Autocomplete
+                        disabled={localUntaggedOnly}
                         options={matchingTags}
                         value={null}
                         inputValue={tagInput}
@@ -295,8 +322,8 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
                         renderInput={(params) => (
                             <TextField
                                 {...params}
-                                label="Найти тег"
-                                placeholder="Начните вводить название"
+                                label={localUntaggedOnly ? 'Выключите фильтр «Без тега»' : 'Найти тег'}
+                                placeholder={localUntaggedOnly ? undefined : 'Начните вводить название'}
                                 onKeyDownCapture={(event) => handleAutocompleteKeyDown(event, () => {
                                     const tag = matchingTags[0]
                                     if (tag) {

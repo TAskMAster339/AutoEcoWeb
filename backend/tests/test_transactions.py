@@ -823,6 +823,22 @@ async def test_list_page_filters_by_multiple_tags(session):
     assert total == 2  # noqa: PLR2004
     assert {row[0].id for row in rows} == {tx_food.id, tx_fun.id}
 
+    rows, total = await service.list_page(user, limit=50, offset=0, untagged=True)
+    assert total == 1
+    assert rows[0][0].name == "Без тега"
+
+    summary = await service.summary(
+        user,
+        date_from=None,
+        date_to=None,
+        tag_ids=None,
+        search=None,
+        seller_names=None,
+        untagged=True,
+    )
+    assert summary.transactions == 1
+    assert summary.expenses == Decimal("30.00")
+
 
 async def test_list_page_search_covers_comment_and_store(session):
     user = await _make_user(session)

@@ -73,6 +73,7 @@ def _filters(  # noqa: PLR0913
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     tag_ids: list[UUID] | None = None,
+    untagged: bool = False,
     search: str | None = None,
     seller_names: list[str] | None = None,
     amount_min: Decimal | None = None,
@@ -99,6 +100,8 @@ def _filters(  # noqa: PLR0913
         conditions.append(Transaction.check_datetime <= date_to)  # type: ignore[arg-type]
     if tag_ids:
         conditions.append(Transaction.tag_id.in_(tag_ids))  # type: ignore[arg-type]
+    elif untagged:
+        conditions.append(Transaction.tag_id.is_(None))  # type: ignore[arg-type]
     if seller_names:
         conditions.append(
             _store_expr(own_seller, receipt_seller).in_(seller_names),
@@ -217,6 +220,7 @@ class TransactionRepository:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         tag_ids: list[UUID] | None = None,
+        untagged: bool = False,
         search: str | None = None,
         seller_names: list[str] | None = None,
         amount_min: Decimal | None = None,
@@ -237,6 +241,7 @@ class TransactionRepository:
                 date_from=date_from,
                 date_to=date_to,
                 tag_ids=tag_ids,
+                untagged=untagged,
                 search=search,
                 seller_names=seller_names,
                 amount_min=amount_min,
@@ -308,6 +313,7 @@ class TransactionRepository:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         tag_ids: list[UUID] | None = None,
+        untagged: bool = False,
         search: str | None = None,
         seller_names: list[str] | None = None,
         amount_min: Decimal | None = None,
@@ -340,6 +346,7 @@ class TransactionRepository:
                     date_from=date_from,
                     date_to=date_to,
                     tag_ids=tag_ids,
+                    untagged=untagged,
                     search=search,
                     seller_names=seller_names,
                 ),
@@ -385,6 +392,7 @@ class TransactionRepository:
         date_from: datetime | None = None,
         date_to: datetime | None = None,
         tag_ids: list[UUID] | None = None,
+        untagged: bool = False,
         search: str | None = None,
         seller_names: list[str] | None = None,
         amount_min: Decimal | None = None,
@@ -418,6 +426,7 @@ class TransactionRepository:
                     date_from=date_from,
                     date_to=date_to,
                     tag_ids=tag_ids,
+                    untagged=untagged,
                     search=search,
                     seller_names=seller_names,
                 ),

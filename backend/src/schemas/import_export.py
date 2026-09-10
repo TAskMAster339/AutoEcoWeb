@@ -60,6 +60,8 @@ class ImportRowPreview(BaseModel):
     expense: Decimal | None = None
     operation_kind: Literal["income", "expense"] | None = None
     errors: list[str] = Field(default_factory=list)
+    duplicate: Literal["file", "existing"] | None = None
+    duplicate_of: int | None = None
 
 
 class ImportPreview(BaseModel):
@@ -73,6 +75,7 @@ class ImportPreview(BaseModel):
     total: int
     valid: int
     invalid: int
+    duplicates: int = 0
 
 
 # Явное имя для клиентов, которым нужен более описательный вариант схемы.
@@ -102,6 +105,7 @@ class ImportRowIn(BaseModel):
         decimal_places=2,
     )
     operation_kind: Literal["income", "expense"] | None = None
+    allow_duplicate: bool = False
 
     @model_validator(mode="before")
     @classmethod

@@ -20,6 +20,8 @@ export interface ImportRowPreview {
   expense: string
   operation_kind: 'income' | 'expense'
   errors: string[]
+  duplicate: 'file' | 'existing' | null
+  duplicate_of: number | null
 }
 
 export interface ImportPreview {
@@ -27,6 +29,7 @@ export interface ImportPreview {
   total: number
   valid: number
   invalid: number
+  duplicates: number
 }
 
 export interface ImportRowIn {
@@ -41,11 +44,13 @@ export interface ImportRowIn {
   income: string
   expense: string
   operation_kind: 'income' | 'expense'
+  allow_duplicate?: boolean
 }
 
 export interface ImportResult {
   imported: number
-  errors: { index: number; message: string }[]
+  skipped: number
+  errors: string[]
   tags_created: string[]
 }
 

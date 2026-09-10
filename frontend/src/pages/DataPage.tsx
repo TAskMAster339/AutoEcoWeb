@@ -86,7 +86,7 @@ export function DataPage() {
         try {
             const nextPreview = await previewImport(file)
             setPreview(nextPreview)
-            setSelected(new Set(nextPreview.rows.filter((row) => row.errors.length === 0).map((row) => row.row_number)))
+            setSelected(new Set(nextPreview.rows.filter((row) => row.errors.length === 0 && !row.duplicate).map((row) => row.row_number)))
             setStage('preview')
         } catch (caught) {
             setError(messageFromError(caught))
@@ -119,6 +119,7 @@ export function DataPage() {
                 income: row.income,
                 expense: row.expense,
                 operation_kind: row.operation_kind,
+                allow_duplicate: row.duplicate !== null,
             }))
         setStage('importing')
         setError(null)
@@ -333,7 +334,7 @@ function TablePlaceholder({ loading, onPickFile }: { loading: boolean; onPickFil
     )
 }
 
-type RowFilter = 'all' | 'valid' | 'invalid'
+type RowFilter = 'all' | 'ready' | 'duplicate' | 'invalid'
 
 function PreviewBlock({
     preview,
@@ -364,7 +365,8 @@ function PreviewBlock({
     const errorRows = useMemo(() => preview.rows.filter((row) => row.errors.length > 0), [preview.rows])
     const query = deferredSearch.trim().toLocaleLowerCase()
     const visibleRows = useMemo(() => preview.rows.filter((row) => {
-        if (filter === 'valid' && row.errors.length > 0) return false
+        if (filter === 'ready' && (row.errors.length > 0 || row.duplicate)) return false
+        if (filter === 'duplicate' && !row.duplicate) return false
         if (filter === 'invalid' && row.errors.length === 0) return false
         if (!query) return true
         return [row.date, row.category, row.store, row.description, row.quantity, row.unit, row.price, row.comment, row.income, row.expense, ...row.errors]
@@ -414,6 +416,11 @@ function PreviewBlock({
     return (
         <Stack>
             {result && <ImportResultBanner result={result} />}
+            {!result && preview.duplicates > 0 && (
+                <Alert severity="warning" sx={{ borderRadius: 0 }}>
+                    Найдено дубликатов: {preview.duplicates}. Они не выбраны для импорта; отметьте строку вручную, если повтор нужен намеренно.
+                </Alert>
+            )}
             <Stack
                 direction={{ xs: 'column', md: 'row' }}
                 spacing={1.25}
@@ -429,7 +436,8 @@ function PreviewBlock({
                 />
                 <Stack direction="row" spacing={0.75} sx={{ overflowX: 'auto', pb: 0.25 }}>
                     <FilterButton active={filter === 'all'} onClick={() => { setFilter('all'); setPage(0) }}>Все {preview.total}</FilterButton>
-                    <FilterButton active={filter === 'valid'} onClick={() => { setFilter('valid'); setPage(0) }}>Без ошибок {preview.valid}</FilterButton>
+                    <FilterButton active={filter === 'ready'} onClick={() => { setFilter('ready'); setPage(0) }}>Готово {preview.valid - preview.duplicates}</FilterButton>
+                    <FilterButton active={filter === 'duplicate'} warning onClick={() => { setFilter('duplicate'); setPage(0) }}>Дубликаты {preview.duplicates}</FilterButton>
                     <FilterButton active={filter === 'invalid'} error onClick={showErrors}>С ошибками {preview.invalid}</FilterButton>
                 </Stack>
                 <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.25} sx={{ flexShrink: 0 }}>
@@ -530,9 +538,10 @@ function PreviewBlock({
     )
 }
 
-function FilterButton({ active, error = false, onClick, children }: {
+function FilterButton({ active, error = false, warning = false, onClick, children }: {
     active: boolean
     error?: boolean
+    warning?: boolean
     onClick: () => void
     children: React.ReactNode
 }) {
@@ -540,7 +549,7 @@ function FilterButton({ active, error = false, onClick, children }: {
         <Button
             size="small"
             variant={active ? 'contained' : 'outlined'}
-            color={error && active ? 'error' : 'primary'}
+            color={error && active ? 'error' : warning && active ? 'warning' : 'primary'}
             onClick={onClick}
             sx={{ flexShrink: 0, whiteSpace: 'nowrap', boxShadow: 'none' }}
         >
@@ -558,13 +567,16 @@ function PreviewTableRow({ row, checked, highlighted, onToggle, setRef }: {
 }) {
     const theme = useTheme()
     const hasErrors = row.errors.length > 0
+    const isDuplicate = Boolean(row.duplicate)
     const amount = rowAmount(row)
     return (
         <TableRow
             ref={setRef}
             selected={highlighted}
             sx={{
-                bgcolor: hasErrors ? (theme.palette.mode === 'dark' ? 'rgba(220,38,38,0.12)' : colors.redSoft) : undefined,
+                bgcolor: hasErrors
+                    ? (theme.palette.mode === 'dark' ? 'rgba(220,38,38,0.12)' : colors.redSoft)
+                    : isDuplicate ? (theme.palette.mode === 'dark' ? 'rgba(245,158,11,0.12)' : colors.amberSoft) : undefined,
                 '&.Mui-selected, &.Mui-selected:hover': { bgcolor: hasErrors ? 'rgba(220, 38, 38, 0.2)' : undefined },
                 '& td': { borderColor: 'divider', verticalAlign: 'top' },
             }}
@@ -576,9 +588,7 @@ function PreviewTableRow({ row, checked, highlighted, onToggle, setRef }: {
             <TableCell>{row.store || '—'}</TableCell>
             <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontWeight: 700, color: amount.income ? colors.green : 'text.primary' }}>{amount.value}</TableCell>
             <TableCell sx={{ minWidth: 180 }}>
-                {hasErrors
-                    ? <Typography variant="caption" sx={{ color: colors.red }}>{row.errors.join('; ')}</Typography>
-                    : <Typography variant="caption" sx={{ color: colors.green, fontWeight: 600 }}>Готово к импорту</Typography>}
+                <RowStatus row={row} />
             </TableCell>
         </TableRow>
     )
@@ -593,6 +603,7 @@ function PreviewMobileRow({ row, checked, highlighted, onToggle, setRef }: {
 }) {
     const theme = useTheme()
     const hasErrors = row.errors.length > 0
+    const isDuplicate = Boolean(row.duplicate)
     const amount = rowAmount(row)
     return (
         <Box
@@ -603,7 +614,9 @@ function PreviewMobileRow({ row, checked, highlighted, onToggle, setRef }: {
                 border: '1px solid',
                 borderColor: highlighted ? 'error.main' : 'divider',
                 borderRadius: '8px',
-                bgcolor: hasErrors ? (theme.palette.mode === 'dark' ? 'rgba(220,38,38,0.12)' : colors.redSoft) : 'background.paper',
+                bgcolor: hasErrors
+                    ? (theme.palette.mode === 'dark' ? 'rgba(220,38,38,0.12)' : colors.redSoft)
+                    : isDuplicate ? (theme.palette.mode === 'dark' ? 'rgba(245,158,11,0.12)' : colors.amberSoft) : 'background.paper',
                 boxShadow: highlighted ? `0 0 0 2px ${theme.palette.error.main}22` : 'none',
             }}
         >
@@ -619,9 +632,7 @@ function PreviewMobileRow({ row, checked, highlighted, onToggle, setRef }: {
                         {row.category && <Chip label={row.category} size="small" />}
                         {row.store && <Chip label={row.store} size="small" variant="outlined" />}
                     </Stack>
-                    {hasErrors
-                        ? <Typography variant="caption" sx={{ display: 'block', color: colors.red, mt: 1 }}>{row.errors.join('; ')}</Typography>
-                        : <Typography variant="caption" sx={{ display: 'block', color: colors.green, fontWeight: 600, mt: 1 }}>Готово к импорту</Typography>}
+                    <Box sx={{ mt: 1 }}><RowStatus row={row} /></Box>
                 </Box>
             </Stack>
         </Box>
@@ -642,7 +653,21 @@ function ImportResultBanner({ result }: { result: ImportResult }) {
                     {result.tags_created.map((name) => <Chip key={name} label={name} size="small" />)}
                 </Stack>
             )}
+            {result.skipped > 0 && <Typography variant="caption" color="text.secondary">Пропущено дубликатов: {result.skipped}</Typography>}
             {result.errors.length > 0 && <Typography variant="caption" color="error">Пропущено строк: {result.errors.length}</Typography>}
         </Stack>
     )
+}
+
+function RowStatus({ row }: { row: ImportRowPreview }) {
+    if (row.errors.length > 0) {
+        return <Typography variant="caption" sx={{ display: 'block', color: colors.red }}>{row.errors.join('; ')}</Typography>
+    }
+    if (row.duplicate === 'file') {
+        return <Typography variant="caption" sx={{ display: 'block', color: 'warning.dark', fontWeight: 600 }}>Повтор строки {Number(row.duplicate_of) + 1} в этом файле</Typography>
+    }
+    if (row.duplicate === 'existing') {
+        return <Typography variant="caption" sx={{ display: 'block', color: 'warning.dark', fontWeight: 600 }}>Такая операция уже есть в AutoEco</Typography>
+    }
+    return <Typography variant="caption" sx={{ display: 'block', color: colors.green, fontWeight: 600 }}>Готово к импорту</Typography>
 }

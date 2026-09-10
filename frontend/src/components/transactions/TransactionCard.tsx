@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { Box, ButtonBase, Card, Collapse, Typography, useTheme } from '@mui/material'
+import { memo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { Box, Button, ButtonBase, Card, Typography, useTheme } from '@mui/material'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { TagChip } from '../common/TagChip'
@@ -18,26 +18,29 @@ interface TransactionCardProps {
   tx: TransactionView
   tagsMap: Map<string, Tag>
   swipeOpen: boolean
+  expanded: boolean
   animationIndex: number
   highlighted: boolean
   onSwipeOpen: (id: string | null) => void
+  onExpandedChange: (id: string | null) => void
   onEdit: (tx: TransactionView) => void
 }
 
 /**
  * Mobile transaction card — expandable details + swipe-left reveal of Edit.
  */
-export function TransactionCard({
+export const TransactionCard = memo(function TransactionCard({
   tx,
   tagsMap,
   swipeOpen,
+  expanded,
   animationIndex,
   highlighted,
   onSwipeOpen,
+  onExpandedChange,
   onEdit,
 }: TransactionCardProps) {
   const theme = useTheme()
-  const [expanded, setExpanded] = useState(false)
   const [offset, setOffset] = useState(0)
   const startX = useRef<number | null>(null)
   const startY = useRef<number | null>(null)
@@ -99,11 +102,6 @@ export function TransactionCard({
     if (event.key === 'F2') {
       event.preventDefault()
       openEditor()
-      return
-    }
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      setExpanded((value) => !value)
     }
   }
 
@@ -170,34 +168,37 @@ export function TransactionCard({
       <Card
         className={`mobile-transaction-surface${highlighted ? ' mobile-transaction-surface--saved' : ''}`}
         component="article"
-        tabIndex={0}
-        role="button"
-        aria-expanded={expanded}
-        aria-label={`${tx.store ?? 'Без магазина'}, ${tx.name}. Enter — подробности, F2 — изменить`}
         sx={{
           p: 1.75,
           transform: `translate3d(${offset}px, 0, 0)`,
           transition: dragging.current ? 'none' : 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
           willChange: dragging.current ? 'transform' : 'auto',
           touchAction: 'pan-y',
-          cursor: 'pointer',
-          '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.main', outlineOffset: -3 },
+          WebkitTapHighlightColor: 'transparent',
         }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
-        onClick={() => {
-          if (Date.now() - lastHorizontalSwipeRef.current < 500) return
-          setExpanded((value) => !value)
-        }}
-        onKeyDown={handleCardKeyDown}
       >
-        <Box
+        <ButtonBase
+          aria-expanded={expanded}
+          aria-label={`${tx.store ?? 'Без магазина'}, ${tx.name}. Enter — подробности, F2 — изменить`}
+          onClick={() => {
+            if (Date.now() - lastHorizontalSwipeRef.current < 500) return
+            onExpandedChange(expanded ? null : tx.id)
+          }}
+          onKeyDown={handleCardKeyDown}
           sx={{
+            width: '100%',
+            color: 'inherit',
+            textAlign: 'left',
+            borderRadius: '6px',
+            WebkitTapHighlightColor: 'transparent',
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 1fr) auto',
             alignItems: 'center',
             columnGap: 1.5,
             rowGap: 0.25,
+            '&:focus-visible': { outline: '3px solid', outlineColor: 'primary.main', outlineOffset: 3 },
           }}
         >
           <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -238,46 +239,43 @@ export function TransactionCard({
               <TagChip tag={tag} />
             </Box>
           )}
-        </Box>
+        </ButtonBase>
 
-        <Collapse
-          in={expanded}
-          timeout={{ enter: 260, exit: 180 }}
-          easing={{ enter: 'cubic-bezier(0.16, 1, 0.3, 1)', exit: 'cubic-bezier(0.4, 0, 1, 1)' }}
-        >
+        {expanded && (
           <Box
-            className="mobile-card-details"
+            className="mobile-card-expanded-content"
             sx={{
               mt: 1.5,
               pt: 1.25,
               borderTop: `1px solid ${theme.palette.divider}`,
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: 1,
-              opacity: expanded ? 1 : 0,
-              transform: expanded ? 'translateY(0)' : 'translateY(-4px)',
-              transition: 'opacity 180ms ease, transform 240ms cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           >
-            <Detail label="Кол-во" value={tx.quantity !== null && tx.quantity !== undefined ? String(tx.quantity) : '—'} />
-            <Detail label="Цена" value={formatCurrency(tx.price)} />
-            <Detail label="Баланс" value={formatCurrency(tx.balance)} />
-          </Box>
-          {tx.comment && (
-            <Box sx={{ mt: 1.25, pt: 1.25, borderTop: `1px solid ${theme.palette.divider}` }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
-                Комментарий
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {tx.comment}
-              </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
+              <Detail label="Кол-во" value={tx.quantity !== null && tx.quantity !== undefined ? String(tx.quantity) : '—'} />
+              <Detail label="Цена" value={formatCurrency(tx.price)} />
+              <Detail label="Баланс" value={formatCurrency(tx.balance)} />
             </Box>
-          )}
-        </Collapse>
+            {tx.comment && (
+              <Box sx={{ mt: 1.25, pt: 1.25, borderTop: `1px solid ${theme.palette.divider}` }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+                  Комментарий
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {tx.comment}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        )}
+        {!tag && (
+          <Button size="small" variant="text" onClick={() => onEdit(tx)} sx={{ mt: 1, ml: -1 }}>
+            Назначить тег
+          </Button>
+        )}
       </Card>
     </Box>
   )
-}
+})
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
