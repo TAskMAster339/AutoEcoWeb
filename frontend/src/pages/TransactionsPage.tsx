@@ -562,7 +562,7 @@ export function TransactionsPage() {
                     }}
                 />
             ) : isMobile ? (
-                <Stack spacing={1.25} sx={{ pb: mobileSelectionMode ? 10 : 0 }}>
+                <Stack spacing={1.25}>
                     {mobileLoading ? (
                         <LoadingState label="Загружаем операции…" />
                     ) : (
@@ -575,9 +575,8 @@ export function TransactionsPage() {
                                         position: 'sticky',
                                         top: 0,
                                         zIndex: 8,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 1,
+                                        display: 'grid',
+                                        gap: 0.75,
                                         px: 1,
                                         py: 0.75,
                                         border: '1px solid',
@@ -587,20 +586,44 @@ export function TransactionsPage() {
                                         boxShadow: theme.shadows[4],
                                     }}
                                 >
-                                    <IconButton onClick={closeMobileSelection} aria-label="Выйти из режима выбора">
-                                        <CloseIcon />
-                                    </IconButton>
-                                    <Typography sx={{ flex: 1, fontWeight: 700 }}>
-                                        Выбрано: {selectedIds.length}
-                                    </Typography>
-                                    <Button
-                                        size="small"
-                                        startIcon={<SelectAllIcon />}
-                                        onClick={() => setSelectedIds(mobileRows.map((row) => row.id))}
-                                        disabled={selectedIds.length === mobileRows.length}
-                                    >
-                                        Все показанные
-                                    </Button>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                        <IconButton onClick={closeMobileSelection} aria-label="Выйти из режима выбора">
+                                            <CloseIcon />
+                                        </IconButton>
+                                        <Typography sx={{ flex: 1, fontWeight: 700 }}>
+                                            Выбрано: {selectedIds.length}
+                                        </Typography>
+                                        <Button
+                                            size="small"
+                                            startIcon={<SelectAllIcon />}
+                                            onClick={() => setSelectedIds(mobileRows.map((row) => row.id))}
+                                            disabled={selectedIds.length === mobileRows.length}
+                                        >
+                                            Все показанные
+                                        </Button>
+                                    </Box>
+                                    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+                                        <Button
+                                            variant="contained"
+                                            startIcon={<EditOutlinedIcon />}
+                                            onClick={() => setBulkEditOpen(true)}
+                                            disabled={selectedIds.length === 0}
+                                        >
+                                            Изменить ({selectedIds.length})
+                                        </Button>
+                                        <Button
+                                            variant="outlined"
+                                            color="error"
+                                            startIcon={<DeleteOutlineIcon />}
+                                            onClick={() => {
+                                                setBulkError(null)
+                                                setConfirmDeleteOpen(true)
+                                            }}
+                                            disabled={selectedIds.length === 0}
+                                        >
+                                            Удалить
+                                        </Button>
+                                    </Box>
                                 </Box>
                             )}
                             {!mobileSelectionMode && showSwipeHint && mobileRows.length > 0 && (
@@ -675,32 +698,38 @@ export function TransactionsPage() {
                         minWidth: 0,
                     }}
                 >
-                    {/* Панель удаления выделенных строк — плавающая поверх таблицы,
-              не толкает её вниз (absolute, не в потоке) */}
+                    <Suspense fallback={<LoadingState label="Загружаем таблицу…" />}>
+                        <TransactionsGrid
+                            params={params}
+                            tagsMap={tagsMap}
+                            total={total}
+                            onTotalChange={setTotal}
+                            onSelectionChange={setSelectedIds}
+                            selectionResetRevision={selectionResetRevision}
+                            onEdit={openTransactionEditor}
+                        />
+                    </Suspense>
                     {selectedIds.length > 0 && (
                         <Box
+                            role="toolbar"
+                            aria-label="Действия с выбранными транзакциями"
                             sx={{
-                                position: 'absolute',
-                                bottom: 60,
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                zIndex: 10,
+                                flexShrink: 0,
                                 display: 'flex',
                                 alignItems: 'center',
-                                marginBottom: '10px',
+                                justifyContent: 'flex-end',
                                 gap: 1.5,
+                                mt: 1,
                                 px: 1.75,
                                 py: 1,
                                 borderRadius: '8px',
-                                border: `1px solid ${theme.palette.divider}`,
                                 bgcolor: 'background.paper',
-                                boxShadow: theme.shadows[6],
+                                boxShadow: theme.shadows[2],
                             }}
                         >
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" color="text.secondary" sx={{ mr: 'auto' }}>
                                 Выбрано: {selectedIds.length}
                             </Typography>
-                            <Box sx={{ flex: 1 }} />
                             <Button
                                 variant="contained"
                                 size="small"
@@ -729,59 +758,6 @@ export function TransactionsPage() {
                             </Button>
                         </Box>
                     )}
-                    <Suspense fallback={<LoadingState label="Загружаем таблицу…" />}>
-                        <TransactionsGrid
-                            params={params}
-                            tagsMap={tagsMap}
-                            total={total}
-                            onTotalChange={setTotal}
-                            onSelectionChange={setSelectedIds}
-                            selectionResetRevision={selectionResetRevision}
-                            onEdit={openTransactionEditor}
-                        />
-                    </Suspense>
-                </Box>
-            )}
-
-            {mobileSelectionMode && (
-                <Box
-                    sx={{
-                        position: 'fixed',
-                        zIndex: 1200,
-                        left: 12,
-                        right: 12,
-                        bottom: 'calc(72px + env(safe-area-inset-bottom))',
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 1fr',
-                        gap: 1,
-                        p: 1,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        borderRadius: '10px',
-                        bgcolor: 'background.paper',
-                        boxShadow: theme.shadows[8],
-                    }}
-                >
-                    <Button
-                        variant="contained"
-                        startIcon={<EditOutlinedIcon />}
-                        onClick={() => setBulkEditOpen(true)}
-                        disabled={selectedIds.length === 0}
-                    >
-                        Изменить ({selectedIds.length})
-                    </Button>
-                    <Button
-                        variant="outlined"
-                        color="error"
-                        startIcon={<DeleteOutlineIcon />}
-                        onClick={() => {
-                            setBulkError(null)
-                            setConfirmDeleteOpen(true)
-                        }}
-                        disabled={selectedIds.length === 0}
-                    >
-                        Удалить
-                    </Button>
                 </Box>
             )}
 

@@ -166,8 +166,14 @@ export const TransactionCard = memo(function TransactionCard({
     <Box
       className={`mobile-transaction-card${animationIndex < 6 ? ' mobile-transaction-card--enter' : ''}`}
       data-mobile-transaction-id={tx.id}
+      data-selection-mode={selectionMode ? 'true' : 'false'}
       style={{ '--mobile-card-delay': `${Math.min(animationIndex, 5) * 30}ms` } as CSSProperties}
-      sx={{ position: 'relative', borderRadius: '8px', overflow: 'hidden' }}
+      sx={{
+        position: 'relative',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        bgcolor: selectionMode ? 'transparent' : 'primary.main',
+      }}
       onTouchEnd={endSwipe}
       onTouchCancel={endSwipe}
       onContextMenu={(event) => {
@@ -200,6 +206,7 @@ export const TransactionCard = memo(function TransactionCard({
     >
       {!selectionMode && (
         <ButtonBase
+          className="mobile-swipe-edit-action"
           onClick={(event) => {
             event.stopPropagation()
             if (Date.now() - lastTouchEditRef.current < 700) return
