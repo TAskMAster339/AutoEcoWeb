@@ -604,12 +604,13 @@ export function TransactionsPage() {
                                     >
                                         <Button
                                             size="small"
+                                            variant="outlined"
                                             startIcon={<SelectAllIcon />}
                                             onClick={() => setSelectedIds(mobileRows.map((row) => row.id))}
                                             disabled={selectedIds.length === mobileRows.length}
                                             sx={{ justifySelf: 'start', minWidth: 0, px: 0.75, whiteSpace: 'nowrap', fontSize: 12 }}
                                         >
-                                            Все показанные
+                                            Выбрать всё
                                         </Button>
                                         <Typography
                                             aria-live="polite"
