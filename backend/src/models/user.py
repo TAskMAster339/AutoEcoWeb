@@ -1,8 +1,13 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import Enum, Index, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.core.enums.user_role import UserRole
 from src.core.enums.user_status import UserStatus
 from src.models.base import BaseModel
+
+if TYPE_CHECKING:
+    from src.models.user_limits import UserLimits
 
 
 def _enum_values(enum_cls: type) -> list[str]:
@@ -41,4 +46,12 @@ class User(BaseModel):
     proverkacheka_token: Mapped[str | None] = mapped_column(
         String(256),
         nullable=True,
+    )
+
+    limits: Mapped["UserLimits"] = relationship(
+        "UserLimits",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="joined",
+        uselist=False,
     )

@@ -7,6 +7,7 @@ from .seller import Seller
 from .tag import Tag
 from .transaction import Transaction
 from .user import User
+from .user_limits import UserLimits
 
 __all__ = [
     "Alias",
@@ -18,4 +19,5 @@ __all__ = [
     "Tag",
     "Transaction",
     "User",
+    "UserLimits",
 ]

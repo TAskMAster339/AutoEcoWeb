@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.enums.user_role import UserRole
 from src.core.enums.user_status import UserStatus
 from src.models.user import User
+from src.models.user_limits import UserLimits
 
 
 class UserRepository:
@@ -14,6 +15,7 @@ class UserRepository:
 
     async def create(self, email: str, password_hash: str) -> User:
         user = User(email=email, password_hash=password_hash)
+        user.limits = UserLimits()
         self._session.add(user)
         await self._session.commit()
         await self._session.refresh(user)

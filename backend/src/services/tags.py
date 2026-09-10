@@ -5,11 +5,17 @@ from src.models.tag import Tag
 from src.models.user import User
 from src.repositories.tag import TagRepository
 from src.schemas.tag import TagCreate, TagUpdate
+from src.services.user_limits import UserLimitsService
 
 
 class TagService:
-    def __init__(self, repo: TagRepository) -> None:
+    def __init__(
+        self,
+        repo: TagRepository,
+        limits_service: UserLimitsService | None = None,
+    ) -> None:
         self._repo = repo
+        self._limits = limits_service
 
     async def list_all(self, user: User) -> list[tuple[Tag, int]]:
         return await self._repo.list_all_with_counts(user.id)
@@ -27,6 +33,8 @@ class TagService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Тег с таким названием уже существует",  # noqa: RUF001
             )
+        if self._limits is not None:
+            await self._limits.ensure_tags(user.id)
         return await self._repo.create(
             user_id=user.id,
             name=name,

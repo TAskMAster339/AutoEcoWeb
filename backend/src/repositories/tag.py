@@ -24,6 +24,22 @@ class TagRepository:
         await self._session.refresh(tag)
         return tag
 
+    async def create_many(
+        self,
+        *,
+        user_id: UUID,
+        items: list[tuple[str, str, str | None]],
+    ) -> list[Tag]:
+        tags = [
+            Tag(user_id=user_id, name=name, color=color, icon=icon)
+            for name, color, icon in items
+        ]
+        if not tags:
+            return []
+        self._session.add_all(tags)
+        await self._session.commit()
+        return tags
+
     async def get(self, user_id: UUID, tag_id: UUID) -> Tag | None:
         stmt = select(Tag).where(Tag.id == tag_id, Tag.user_id == user_id)
         return await self._session.scalar(stmt)

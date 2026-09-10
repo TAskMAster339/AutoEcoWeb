@@ -1,12 +1,13 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from src.core.dependencies import CurrentAdmin, UserRepo, get_current_admin
+from src.core.dependencies import CurrentAdmin, UserLimitsSvc, UserRepo, get_current_admin
 from src.core.enums.user_role import UserRole
 from src.core.enums.user_status import UserStatus
 from src.models.user import User
 from src.schemas.pagination import CursorPage
 from src.schemas.user import AdminUserUpdate, UserAdminResponse
+from src.schemas.user_limits import UserLimitsResponse, UserLimitsUpdate
 from src.services.user import AdminUserService
 
 router = APIRouter(
@@ -60,6 +61,19 @@ async def update_user(
 ) -> User:
     target = await _get_user_or_404(repo, user_id)
     return await AdminUserService(repo).update_user(current_admin, target, data)
+
+
+@router.patch("/users/{user_id}/limits", response_model=UserLimitsResponse)
+async def update_user_limits(
+    user_id: UUID,
+    data: UserLimitsUpdate,
+    _current_admin: CurrentAdmin,
+    repo: UserRepo,
+    limits_service: UserLimitsSvc,
+) -> UserLimitsResponse:
+    await _get_user_or_404(repo, user_id)
+    limits = await limits_service.update(user_id, data)
+    return UserLimitsResponse.model_validate(limits)
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

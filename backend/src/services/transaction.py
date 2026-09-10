@@ -32,6 +32,7 @@ from src.schemas.transaction import (
 from src.services.aliases import AliasService
 from src.services.receipt_parser import ReceiptItemData, normalize_product_name
 from src.services.sellers import SellerService
+from src.services.user_limits import UserLimitsService
 
 # NOT NULL колонки transactions: явный null в PATCH → 422.
 # tag_id НЕ входит в набор — явный null снимает тег.  # noqa: RUF003
@@ -118,12 +119,14 @@ class TransactionService:
         tag_repo: TagRepository,
         alias_repo: AliasRepository,
         seller_service: SellerService,
+        limits_service: UserLimitsService | None = None,
     ) -> None:
         self._tx_repo = tx_repo
         self._receipt_repo = receipt_repo
         self._tag_repo = tag_repo
         self._alias_repo = alias_repo
         self._seller_service = seller_service
+        self._limits = limits_service
 
     # ---------- применение алиасов при создании ----------
 
@@ -166,6 +169,8 @@ class TransactionService:
         receipt: Receipt,
         items: list[ReceiptItemData],
     ) -> list[Transaction]:
+        if self._limits is not None:
+            await self._limits.ensure_receipt_batch(receipt.user_id, len(items))
         # товарные алиасы применяются к позициям ДО сохранения
         aliases = (
             await self._alias_repo.list_all(receipt.user_id, scope=_SCOPE_PRODUCT)
@@ -213,6 +218,8 @@ class TransactionService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Чек не найден",
             )
+        if self._limits is not None:
+            await self._limits.ensure_receipt_item(user.id, receipt_id)
         existing = await self._tx_repo.list_by_receipt(receipt_id)
         position = (
             max((t.position for t in existing if t.position is not None), default=-1)
@@ -275,7 +282,15 @@ class TransactionService:
             tag_id=data.tag_id,
             comment=data.comment,
         )
+        if self._limits is not None:
+            # Resolving a new seller can commit, so quota locking belongs
+            # immediately before the transaction insert.
+            await self._limits.ensure_transactions(user.id)
         return await self._tx_repo.create(tx)
+
+    async def ensure_new_receipt(self, user_id: UUID, item_count: int) -> None:
+        if self._limits is not None:
+            await self._limits.ensure_receipt(user_id, item_count)
 
     # ---------- чтение / агрегаты / обновление / удаление ----------
 
