@@ -28,6 +28,7 @@ function invalidateAfterAliasChange(queryClient: ReturnType<typeof useQueryClien
   void queryClient.invalidateQueries({ queryKey: ['summary'] })
   void queryClient.invalidateQueries({ queryKey: ['analytics'] })
   void queryClient.invalidateQueries({ queryKey: ['stores'] })
+  void queryClient.invalidateQueries({ queryKey: ['user-limits'] })
 }
 
 function updateSellerFilterAfterAlias(scope: AliasScope, originalName: string, aliasName: string) {

@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
 from src.core.enums.user_role import UserRole
 from src.core.enums.user_status import UserStatus
+from src.schemas.user_limits import UserLimitsResponse
 
 
 class UserCreate(BaseModel):
@@ -52,3 +53,4 @@ class AdminUserUpdate(BaseModel):
 class UserAdminResponse(UserResponse):
     created_at: datetime
     updated_at: datetime
+    limits: UserLimitsResponse

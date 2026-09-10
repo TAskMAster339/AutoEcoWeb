@@ -36,6 +36,30 @@ export interface User {
 export interface AdminUser extends User {
   created_at: string
   updated_at: string
+  limits: UserLimits
+}
+
+export interface UserLimits {
+  max_tags: number
+  max_seller_aliases: number
+  max_product_aliases: number
+  max_receipts: number
+  max_transactions: number
+  max_receipt_items: number
+  max_import_rows: number
+}
+
+export interface UserUsage {
+  tags: number
+  seller_aliases: number
+  product_aliases: number
+  receipts: number
+  transactions: number
+}
+
+export interface UserLimitsOverview {
+  limits: UserLimits
+  usage: UserUsage
 }
 
 /** Offset-based page envelope — mirrors backend src/schemas/pagination.py.

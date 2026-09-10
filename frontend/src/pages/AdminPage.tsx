@@ -24,6 +24,7 @@ import {
 } from '@mui/material'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import SearchIcon from '@mui/icons-material/Search'
+import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined'
 import { messageFromError } from '../api/client'
 import type { AdminUser, UserRole, UserStatus } from '../api/types'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
@@ -33,6 +34,7 @@ import { formatLongDate } from '../lib/format'
 import { useAuthStore } from '../store/authStore'
 import { colors } from '../theme'
 import { FeedbackAdminPanel } from './FeedbackPage'
+import { UserLimitsSheet } from '../components/admin/UserLimitsSheet'
 
 const STATUS_COLORS: Record<UserStatus, string> = {
     active: colors.green,
@@ -95,10 +97,11 @@ interface AdminUserRowProps {
     onRoleChange: (role: UserRole) => void
     onStatusChange: (status: UserStatus) => void
     onDelete: () => void
+    onLimits: () => void
 }
 
 /** Mobile card: email, role/status selects, registration date, delete. */
-function AdminUserCard({ user, isMe, disabled, onRoleChange, onStatusChange, onDelete }: AdminUserRowProps) {
+function AdminUserCard({ user, isMe, disabled, onRoleChange, onStatusChange, onDelete, onLimits }: AdminUserRowProps) {
     return (
         <Card sx={{ p: 1.5 }}>
             <Stack spacing={1.5}>
@@ -107,9 +110,14 @@ function AdminUserCard({ user, isMe, disabled, onRoleChange, onStatusChange, onD
                         <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }}>{user.email}</Typography>
                         <Typography variant="caption" color="text.secondary">Регистрация: {formatLongDate(user.created_at)}</Typography>
                     </Box>
-                    {isMe ? (
-                        <Chip size="small" label="Это вы" sx={{ flexShrink: 0 }} />
-                    ) : (
+                    <Tooltip title="Изменить лимиты">
+                        <span>
+                            <IconButton disabled={disabled} onClick={onLimits} aria-label={`Изменить лимиты пользователя ${user.email}`} sx={{ border: '1px solid', borderColor: 'divider' }}>
+                                <TuneOutlinedIcon fontSize="small" />
+                            </IconButton>
+                        </span>
+                    </Tooltip>
+                    {isMe ? <Chip size="small" label="Это вы" sx={{ flexShrink: 0, alignSelf: 'center' }} /> : (
                         <Tooltip title="Удалить">
                             <span>
                                 <IconButton disabled={disabled} onClick={onDelete} aria-label={`Удалить пользователя ${user.email}`} sx={{ color: colors.red, border: '1px solid', borderColor: 'divider' }}>
@@ -136,6 +144,7 @@ export function AdminPage() {
     const [status, setStatus] = useState<UserStatus | ''>('')
     const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
     const [actionError, setActionError] = useState<string | null>(null)
+    const [limitsTarget, setLimitsTarget] = useState<AdminUser | null>(null)
     const debouncedQ = useDebounced(q, 300)
 
     const filters = useMemo(
@@ -291,6 +300,7 @@ export function AdminPage() {
                             onRoleChange={(r) => changeRole(u, r)}
                             onStatusChange={(s) => changeStatus(u, s)}
                             onDelete={() => handleDelete(u)}
+                            onLimits={() => setLimitsTarget(u)}
                         />
                     ))}
                 </Stack>
@@ -350,6 +360,19 @@ export function AdminPage() {
                                     </TableCell>
                                     <TableCell sx={{ color: 'text.secondary', fontSize: 13 }}>{formatLongDate(u.created_at)}</TableCell>
                                     <TableCell align="right">
+                                        <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
+                                            <Tooltip title="Изменить лимиты">
+                                                <span>
+                                                    <IconButton
+                                                        size="small"
+                                                        disabled={anyActionPending}
+                                                        onClick={() => setLimitsTarget(u)}
+                                                        aria-label={`Изменить лимиты пользователя ${u.email}`}
+                                                    >
+                                                        <TuneOutlinedIcon fontSize="small" />
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
                                         {u.id === me?.id ? null : (
                                             <Tooltip title="Удалить">
                                                 <span>
@@ -364,6 +387,7 @@ export function AdminPage() {
                                                 </span>
                                             </Tooltip>
                                         )}
+                                        </Stack>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -399,6 +423,7 @@ export function AdminPage() {
                 onConfirm={confirmDelete}
                 onClose={() => setDeleteTarget(null)}
             />
+            <UserLimitsSheet user={limitsTarget} onClose={() => setLimitsTarget(null)} />
         </Stack>
     )
 }

@@ -132,6 +132,7 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
                 refreshRows: !updateInPlace || dateChanged,
             })
             onSaved?.(updated, patch)
+            if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
             onClose()
         } catch (error) {
             setFormError(messageFromError(error))
@@ -160,20 +161,20 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
             close()
             return
         }
-        if (
-            event.key !== 'Enter' ||
-            !event.shiftKey || event.altKey || event.ctrlKey || event.metaKey ||
-            confirmOpen || aliasScope !== null
-        ) return
-        event.preventDefault()
-        event.stopPropagation()
-        if (!updateTx.isPending && !deleteTx.isPending) void submit()
     }
 
     return (
         <>
             <BottomSheet open={open} onClose={close} title="Изменить транзакцию">
-                <Stack spacing={2} onKeyDown={handleFormKeyDown}>
+                <Stack
+                    component="form"
+                    spacing={2}
+                    onKeyDown={handleFormKeyDown}
+                    onSubmit={(event) => {
+                        event.preventDefault()
+                        if (!confirmOpen && aliasScope === null && !updateTx.isPending && !deleteTx.isPending) void submit()
+                    }}
+                >
                     {formError && <Alert severity="error">{formError}</Alert>}
 
                     <ToggleButtonGroup
@@ -278,7 +279,7 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
                         </Tooltip>
                     </Stack>
 
-                    <TagAutocomplete tags={tags ?? []} value={selectedTag} onChange={setSelectedTag} />
+                    <TagAutocomplete tags={tags ?? []} value={selectedTag} onChange={setSelectedTag} enterKeyHint="done" />
 
                     <TextField
                         label="Комментарий (необязательно)"
@@ -330,6 +331,7 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
                     <Box sx={{ position: 'sticky', bottom: 0, zIndex: 1, pt: 1, pb: 'env(safe-area-inset-bottom)', bgcolor: 'background.paper' }}>
                         <Stack direction="row" spacing={1}>
                             <Button
+                                type="button"
                                 variant="outlined"
                                 color="error"
                                 startIcon={<DeleteOutlineIcon />}
@@ -340,8 +342,8 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
                                 Удалить
                             </Button>
                             <Button
+                                type="submit"
                                 variant="contained"
-                                onClick={() => void submit()}
                                 disabled={updateTx.isPending || deleteTx.isPending}
                                 sx={{ flex: 1, minWidth: 0, minHeight: 48 }}
                             >

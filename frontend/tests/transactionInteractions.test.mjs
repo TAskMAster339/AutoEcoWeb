@@ -13,7 +13,9 @@ import {
   selectionRange,
   settleSwipe,
   swipeEditAction,
+  toggleSelectedId,
 } from '../src/lib/transactionInteractions.mjs'
+import { getKeyboardViewport } from '../src/lib/visualViewport.mjs'
 
 const transactionView = (id, balance, expense) => ({
   id,
@@ -47,6 +49,30 @@ test('a right swipe closes an already open action', () => {
 
 test('edit action closes swipe and requests editor immediately', () => {
   assert.deepEqual(swipeEditAction(), { openSwipeId: null, shouldEdit: true })
+})
+
+test('mobile selection toggles cards without changing the remaining order', () => {
+  assert.deepEqual(toggleSelectedId(['a', 'c'], 'b'), ['a', 'c', 'b'])
+  assert.deepEqual(toggleSelectedId(['a', 'c', 'b'], 'c'), ['a', 'b'])
+  assert.deepEqual(toggleSelectedId(['a'], 'a'), [])
+})
+
+test('keyboard viewport handles overlay and resized mobile browsers without double offset', () => {
+  assert.deepEqual(getKeyboardViewport(800, 480, 0, 800), {
+    keyboardOpen: true,
+    bottomInset: 320,
+    maxHeight: 472,
+  })
+  assert.deepEqual(getKeyboardViewport(480, 480, 0, 800), {
+    keyboardOpen: true,
+    bottomInset: 0,
+    maxHeight: 472,
+  })
+  assert.deepEqual(getKeyboardViewport(800, 760, 0, 800), {
+    keyboardOpen: false,
+    bottomInset: 0,
+    maxHeight: 752,
+  })
 })
 
 test('an in-place transaction update preserves order and adjusts following balances', () => {

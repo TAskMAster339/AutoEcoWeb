@@ -76,9 +76,18 @@ class ReceiptService:
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Этот чек уже добавлен",
                 )
+        await self._transaction_service.ensure_new_receipt(
+            user.id,
+            len(normalized.items),
+        )
         seller = await self._seller_service.get_or_create_required(
             user.id,
             normalized.seller_name,
+        )
+        # Seller creation can commit and release the first quota lock.
+        await self._transaction_service.ensure_new_receipt(
+            user.id,
+            len(normalized.items),
         )
 
         receipt = await self._repo.create(
@@ -95,7 +104,12 @@ class ReceiptService:
             raw_json=normalized.raw_json,
         )
         # транзакции — ответственность TransactionService
-        await self._transaction_service.create_for_receipt(receipt, normalized.items)
+        try:
+            await self._transaction_service.create_for_receipt(receipt, normalized.items)
+        except Exception:
+            await self._repo.delete(receipt)
+            await self._seller_service.delete_if_unused(user.id, seller.id)
+            raise
         return receipt
 
     async def create_manual(
@@ -108,9 +122,17 @@ class ReceiptService:
         Транзакции маппятся в ReceiptItemData и создаются TransactionService
         (конструирование ORM — только там).
         """
+        await self._transaction_service.ensure_new_receipt(
+            user.id,
+            len(data.transactions or []),
+        )
         seller = await self._seller_service.get_or_create_required(
             user.id,
             data.seller_name,
+        )
+        await self._transaction_service.ensure_new_receipt(
+            user.id,
+            len(data.transactions or []),
         )
 
         receipt = await self._repo.create(
@@ -127,10 +149,15 @@ class ReceiptService:
             raw_json={},
         )
         # транзакции ручного чека — ответственность TransactionService
-        await self._transaction_service.create_manual_for_receipt(
-            receipt,
-            data.transactions or [],
-        )
+        try:
+            await self._transaction_service.create_manual_for_receipt(
+                receipt,
+                data.transactions or [],
+            )
+        except Exception:
+            await self._repo.delete(receipt)
+            await self._seller_service.delete_if_unused(user.id, seller.id)
+            raise
         return receipt
 
     async def update(

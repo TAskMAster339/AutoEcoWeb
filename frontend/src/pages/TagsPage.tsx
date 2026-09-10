@@ -23,6 +23,7 @@ import { useOnline } from '../hooks/useOnline'
 import { PageSearch } from '../components/common/PageSearch'
 import { useNavigate } from 'react-router-dom'
 import type { Tag } from '../api/types'
+import { useUserLimits } from '../hooks/useUserLimits'
 
 const PALETTE = ['#16A34A', '#3B82F6', '#8B5CF6', '#F97316', '#06B6D4', '#F59E0B', '#EF4444', '#65A30D']
 const ICONS = ['🛒', '🍽️', '☕', '🚗', '🏠', '💊', '🎁', '✈️', '🎓', '💼', '🎮', '🐾', '❤️']
@@ -33,6 +34,7 @@ export function TagsPage() {
     const theme = useTheme()
     const navigate = useNavigate()
     const infiniteTags = useInfiniteTags()
+    const limitsQuery = useUserLimits()
 
     const createTag = useCreateTag()
     const deleteTag = useDeleteTag()
@@ -48,6 +50,7 @@ export function TagsPage() {
     const [deleteTarget, setDeleteTarget] = useState<Tag | null>(null)
 
     const openCreate = () => {
+        if (tagLimitReached) return
         setEditingTag(null)
         setName('')
         setColor(PALETTE[0] ?? '#16A34A')
@@ -94,6 +97,9 @@ export function TagsPage() {
     }
 
     const tags = infiniteTags.data?.pages.flatMap((page) => page.items) ?? []
+    const tagUsage = limitsQuery.data?.usage.tags
+    const tagLimit = limitsQuery.data?.limits.max_tags
+    const tagLimitReached = tagUsage !== undefined && tagLimit !== undefined && tagUsage >= tagLimit
     const [search, setSearch] = useState('')
     const visibleTags = tags.filter((tag) => tag.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
     const isLoading = infiniteTags.isLoading
@@ -126,10 +132,21 @@ export function TagsPage() {
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     <PageSearch value={search} onChange={setSearch} placeholder="Поиск по имени тега" ariaLabel="Поиск по имени тега" width="100%" />
                 </Box>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={{ flexShrink: 0 }}>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} disabled={tagLimitReached} sx={{ flexShrink: 0 }}>
                     Добавить
                 </Button>
             </Stack>
+
+            {tagUsage !== undefined && tagLimit !== undefined && (
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="caption" color={tagLimitReached ? 'error.main' : 'text.secondary'}>
+                        Использовано тегов: {tagUsage} из {tagLimit}
+                    </Typography>
+                    {tagLimitReached && (
+                        <Typography variant="caption" color="error.main">Удалите тег, чтобы создать новый</Typography>
+                    )}
+                </Stack>
+            )}
 
             {visibleTags.length === 0 ? (
                 <EmptyState

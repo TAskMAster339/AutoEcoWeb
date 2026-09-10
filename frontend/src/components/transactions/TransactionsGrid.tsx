@@ -746,7 +746,7 @@ export function TransactionsGrid({
       </Box>
 
       <ColumnStatsPopover
-        key={statsTarget?.field ?? 'closed'}
+        key={statsTarget ? `stats:${statsTarget.field}` : 'stats:closed'}
         anchorEl={statsTarget?.anchor ?? null}
         field={statsTarget?.field ?? null}
         stats={activeStats}
@@ -764,7 +764,9 @@ export function TransactionsGrid({
       />
 
       <QuickEditPopover
-        key={quickEditTarget ? `${quickEditTarget.tx.id}:${quickEditTarget.field}` : 'closed'}
+        key={quickEditTarget
+          ? `quick-edit:${quickEditTarget.tx.id}:${quickEditTarget.field}`
+          : 'quick-edit:closed'}
         target={quickEditTarget}
         tags={[...tagsMap.values()]}
         onClose={() => setQuickEditTarget(null)}

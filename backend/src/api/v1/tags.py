@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Query, status
-from src.core.dependencies import CurrentUser, TagRepo
+from src.core.dependencies import CurrentUser, TagRepo, UserLimitsSvc
 from src.models.tag import Tag
 from src.schemas.pagination import CursorPage
 from src.schemas.tag import TagCreate, TagResponse, TagUpdate
@@ -50,8 +50,9 @@ async def create_tag(
     data: TagCreate,
     current_user: CurrentUser,
     repo: TagRepo,
+    limits_service: UserLimitsSvc,
 ) -> TagResponse:
-    tag = await TagService(repo).create(current_user, data)
+    tag = await TagService(repo, limits_service).create(current_user, data)
     return _response(tag)
 
 

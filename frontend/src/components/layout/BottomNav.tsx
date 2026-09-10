@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Box, IconButton, Paper, Typography, useTheme } from '@mui/material'
+import { useEffect, useMemo, useState } from 'react'
+import { Box, IconButton, Paper, Slide, Typography, useMediaQuery, useTheme } from '@mui/material'
 import { NavLink, useLocation } from 'react-router-dom'
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined'
@@ -70,7 +70,13 @@ export function BottomNav() {
   const role = useAuthStore((s) => s.user?.role)
   const isVerifiedOnly = useAuthStore((s) => s.user?.status === 'verified')
   const openAddMenu = useUiStore((s) => s.openAddMenu)
+  const transactionSelectionMode = useUiStore((s) => s.transactionSelectionMode)
+  const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const [moreOpen, setMoreOpen] = useState(false)
+
+  useEffect(() => {
+    if (transactionSelectionMode) setMoreOpen(false)
+  }, [transactionSelectionMode])
 
   const moreItems = useMemo(
     () => [
@@ -93,92 +99,100 @@ export function BottomNav() {
 
   return (
     <>
-      <Paper
-        elevation={0}
-        component="nav"
-        sx={{
-          position: 'fixed',
-          bottom: 'calc(12px + env(safe-area-inset-bottom))',
-          left: 12,
-          right: 12,
-          zIndex: 1200,
-          border: `1px solid ${theme.palette.divider}`,
-          borderRadius: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          px: 0.5,
-          py: 0.5,
-          bgcolor: alpha(theme.palette.background.paper, 0.94),
-          backdropFilter: 'blur(18px)',
-          boxShadow:
-            theme.palette.mode === 'dark'
-              ? '0 12px 36px rgba(0,0,0,0.55)'
-              : '0 12px 36px rgba(16,24,40,0.16)',
-        }}
-        aria-label="Мобильная навигация"
+      <Slide
+        in={!transactionSelectionMode}
+        direction="up"
+        timeout={reduceMotion ? 0 : { enter: 260, exit: 170 }}
+        mountOnEnter
+        unmountOnExit
       >
-        <NavButton to="/receipt" label="Чеки" icon={ReceiptLongOutlinedIcon} />
-        <NavButton to="/analytics" label="Аналитика" icon={BarChartOutlinedIcon} />
+        <Paper
+          elevation={0}
+          component="nav"
+          sx={{
+            position: 'fixed',
+            bottom: 'calc(12px + env(safe-area-inset-bottom))',
+            left: 12,
+            right: 12,
+            zIndex: 1200,
+            border: `1px solid ${theme.palette.divider}`,
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            px: 0.5,
+            py: 0.5,
+            bgcolor: alpha(theme.palette.background.paper, 0.94),
+            backdropFilter: 'blur(18px)',
+            boxShadow:
+              theme.palette.mode === 'dark'
+                ? '0 12px 36px rgba(0,0,0,0.55)'
+                : '0 12px 36px rgba(16,24,40,0.16)',
+          }}
+          aria-label="Мобильная навигация"
+        >
+          <NavButton to="/receipt" label="Чеки" icon={ReceiptLongOutlinedIcon} />
+          <NavButton to="/analytics" label="Аналитика" icon={BarChartOutlinedIcon} />
 
-        <Box sx={{ flex: 1, display: 'grid', placeItems: 'center' }}>
-          <IconButton
-            color="primary"
-            onClick={openAddMenu}
-            aria-label="Добавить чек или транзакцию"
+          <Box sx={{ flex: 1, display: 'grid', placeItems: 'center' }}>
+            <IconButton
+              color="primary"
+              onClick={openAddMenu}
+              aria-label="Добавить чек или транзакцию"
+              sx={{
+                width: 48,
+                height: 48,
+                bgcolor: 'primary.main',
+                color: 'primary.contrastText',
+                borderRadius: '10px',
+                boxShadow: '0 8px 20px rgba(108,92,231,0.35)',
+                transition: 'transform 120ms ease, background-color 180ms ease, box-shadow 180ms ease',
+                '&:hover': { bgcolor: 'primary.dark' },
+                '&:active': { transform: 'scale(0.94)', boxShadow: '0 4px 12px rgba(108,92,231,0.28)' },
+                '@media (prefers-reduced-motion: reduce)': {
+                  transition: 'background-color 80ms ease',
+                  '&:active': { transform: 'none' },
+                },
+              }}
+            >
+              <AddIcon sx={{ fontSize: 28 }} />
+            </IconButton>
+          </Box>
+
+          <NavButton to="/transactions" label="Таблица" icon={TableChartOutlinedIcon} />
+          <Box
+            component="button"
+            type="button"
+            onClick={() => setMoreOpen(true)}
             sx={{
-              width: 48,
-              height: 48,
-              bgcolor: 'primary.main',
-              color: 'primary.contrastText',
-              borderRadius: '10px',
-              boxShadow: '0 8px 20px rgba(108,92,231,0.35)',
-              transition: 'transform 120ms ease, background-color 180ms ease, box-shadow 180ms ease',
-              '&:hover': { bgcolor: 'primary.dark' },
-              '&:active': { transform: 'scale(0.94)', boxShadow: '0 4px 12px rgba(108,92,231,0.28)' },
+              flex: 1,
+              height: 54,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 0.25,
+              borderRadius: '8px',
+              border: 'none',
+              bgcolor: moreActive ? softBg(theme) : 'transparent',
+              cursor: 'pointer',
+              color: moreActive ? softFg(theme) : 'text.secondary',
+              fontFamily: 'inherit',
+              WebkitTapHighlightColor: 'transparent',
+              transition: 'color 180ms ease, background-color 220ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms ease',
+              '&:active': { transform: 'scale(0.97)' },
               '@media (prefers-reduced-motion: reduce)': {
-                transition: 'background-color 80ms ease',
+                transition: 'color 80ms ease, background-color 80ms ease',
                 '&:active': { transform: 'none' },
               },
             }}
+            aria-label="Открыть дополнительную навигацию"
+            aria-expanded={moreOpen}
           >
-            <AddIcon sx={{ fontSize: 28 }} />
-          </IconButton>
-        </Box>
-
-        <NavButton to="/transactions" label="Таблица" icon={TableChartOutlinedIcon} />
-        <Box
-          component="button"
-          type="button"
-          onClick={() => setMoreOpen(true)}
-          sx={{
-            flex: 1,
-            height: 54,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 0.25,
-            borderRadius: '8px',
-            border: 'none',
-            bgcolor: moreActive ? softBg(theme) : 'transparent',
-            cursor: 'pointer',
-            color: moreActive ? softFg(theme) : 'text.secondary',
-            fontFamily: 'inherit',
-            WebkitTapHighlightColor: 'transparent',
-            transition: 'color 180ms ease, background-color 220ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms ease',
-            '&:active': { transform: 'scale(0.97)' },
-            '@media (prefers-reduced-motion: reduce)': {
-              transition: 'color 80ms ease, background-color 80ms ease',
-              '&:active': { transform: 'none' },
-            },
-          }}
-          aria-label="Открыть дополнительную навигацию"
-          aria-expanded={moreOpen}
-        >
-          <MoreHorizIcon sx={{ fontSize: 21 }} />
-          <Typography sx={{ fontSize: 10, fontWeight: 650, lineHeight: 1.15 }}>Ещё</Typography>
-        </Box>
-      </Paper>
+            <MoreHorizIcon sx={{ fontSize: 21 }} />
+            <Typography sx={{ fontSize: 10, fontWeight: 650, lineHeight: 1.15 }}>Ещё</Typography>
+          </Box>
+        </Paper>
+      </Slide>
 
       <BottomSheet open={moreOpen} onClose={() => setMoreOpen(false)} title="Ещё">
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1 }}>

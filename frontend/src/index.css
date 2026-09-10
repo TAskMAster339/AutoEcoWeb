@@ -89,6 +89,10 @@ a {
     transition: opacity 80ms linear, transform 80ms linear;
   }
 
+  .mobile-transaction-card[data-selection-mode='true'] .mobile-swipe-edit-action {
+    display: none !important;
+  }
+
   .mobile-card-expanded-content {
     animation: mobile-card-details-in 140ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }

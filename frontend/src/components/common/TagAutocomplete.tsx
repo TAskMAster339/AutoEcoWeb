@@ -6,10 +6,11 @@ interface TagAutocompleteProps {
   tags: Tag[]
   value: string | null
   onChange: (tagId: string | null) => void
+  enterKeyHint?: 'enter' | 'done' | 'go' | 'next' | 'previous' | 'search' | 'send'
 }
 
 /** Поисковый выбор тега с цветом — единый для форм создания и редактирования. */
-export function TagAutocomplete({ tags, value, onChange }: TagAutocompleteProps) {
+export function TagAutocomplete({ tags, value, onChange, enterKeyHint }: TagAutocompleteProps) {
   const selectedTag = tags.find((tag) => tag.id === value) ?? null
 
   return (
@@ -72,6 +73,10 @@ export function TagAutocomplete({ tags, value, onChange }: TagAutocompleteProps)
           placeholder="Найти тег по названию"
           fullWidth
           slotProps={{
+            htmlInput: {
+              ...params.inputProps,
+              enterKeyHint,
+            },
             input: {
               ...params.InputProps,
               endAdornment: (

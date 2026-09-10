@@ -101,6 +101,7 @@ export function BulkEditSheet({
     try {
       await bulkUpdate.mutateAsync({ ids: selectedIds, patch })
       onSaved()
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
       onClose()
     } catch (submitError) {
       setError(messageFromError(submitError))
@@ -109,7 +110,14 @@ export function BulkEditSheet({
 
   return (
     <BottomSheet open={open} onClose={resetAndClose} title="Изменить выбранные" maxWidth={560}>
-      <Stack spacing={2}>
+      <Stack
+        component="form"
+        spacing={2}
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (!bulkUpdate.isPending) void submit()
+        }}
+      >
         <Box sx={{ p: 1.5, borderRadius: '8px', bgcolor: 'action.hover' }}>
           <Typography variant="subtitle2">
             Будет изменено: {selectedIds.length}
@@ -220,12 +228,12 @@ export function BulkEditSheet({
         />
 
         <Stack direction="row" spacing={1} justifyContent="space-between">
-          <Button color="inherit" onClick={resetAndClose} disabled={bulkUpdate.isPending}>Отмена</Button>
+          <Button type="button" color="inherit" onClick={resetAndClose} disabled={bulkUpdate.isPending}>Отмена</Button>
           <Button
+            type="submit"
             variant="contained"
             startIcon={bulkUpdate.isPending ? <CircularProgress size={16} color="inherit" /> : <SaveOutlinedIcon />}
             disabled={!hasChanges || invalidStore || invalidTag || bulkUpdate.isPending || selectedIds.length === 0}
-            onClick={() => void submit()}
           >
             Применить к {selectedIds.length}
           </Button>

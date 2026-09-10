@@ -45,6 +45,7 @@ from src.schemas.import_export import (
 from src.services.aliases import AliasService
 from src.services.receipt_parser import normalize_product_name
 from src.services.sellers import SellerService
+from src.services.user_limits import UserLimitsService
 
 __all__ = [
     "ExportRow",
@@ -500,12 +501,14 @@ class ImportExportService:
         tag_repo: TagRepository,
         alias_repo: AliasRepository,
         seller_service: SellerService,
+        limits_service: UserLimitsService | None = None,
     ) -> None:
         self._session = session
         self._tx_repo = tx_repo
         self._tag_repo = tag_repo
         self._alias_repo = alias_repo
         self._seller_service = seller_service
+        self._limits = limits_service
 
     async def mark_duplicates(self, user: User, preview: ImportPreview) -> ImportPreview:
         """Отмечает точные повторы внутри файла и среди операций пользователя."""
@@ -533,6 +536,8 @@ class ImportExportService:
 
     async def import_rows(self, user: User, rows: list[ImportRowIn]) -> ImportResult:
         """Валидированные строки → теги (авто-создание) + bulk-insert транзакций."""
+        if self._limits is not None:
+            await self._limits.ensure_import_rows(user.id, len(rows))
         existing: dict[str, Tag] = {
             tag.name: tag for tag in await self._tag_repo.list_all(user.id)
         }
@@ -550,6 +555,7 @@ class ImportExportService:
             for tx, seller_name in await self._tx_repo.list_all(user.id)
         }
         accepted_signatures: set[tuple[object, ...]] = set()
+        accepted_rows: list[ImportRowIn] = []
 
         for row in rows:
             signature = _import_signature(row)
@@ -559,19 +565,31 @@ class ImportExportService:
                 skipped += 1
                 continue
             accepted_signatures.add(signature)
+            accepted_rows.append(row)
+
+        missing_categories = {
+            row.category
+            for row in accepted_rows
+            if row.category and row.category not in existing
+        }
+        if self._limits is not None:
+            await self._limits.ensure_transactions(user.id, len(accepted_rows))
+            if missing_categories:
+                await self._limits.ensure_tags(user.id, len(missing_categories))
+
+        ordered_categories = sorted(missing_categories)
+        created_tags = await self._tag_repo.create_many(
+            user_id=user.id,
+            items=[(category, _tag_color(category), None) for category in ordered_categories],
+        )
+        for category, tag in zip(ordered_categories, created_tags, strict=True):
+            existing[category] = tag
+            tags_created.append(category)
+
+        for row in accepted_rows:
             tag_id: UUID | None = None
             if row.category:
-                tag = existing.get(row.category)
-                if tag is None:
-                    tag = await self._tag_repo.create(
-                        user_id=user.id,
-                        name=row.category,
-                        color=_tag_color(row.category),
-                        icon=None,
-                    )
-                    existing[row.category] = tag
-                    tags_created.append(row.category)
-                tag_id = tag.id
+                tag_id = existing[row.category].id
 
             is_income = row.operation_kind == "income" or (
                 row.operation_kind is None and row.income > 0
@@ -613,6 +631,10 @@ class ImportExportService:
             )
 
         if transactions:
+            if self._limits is not None:
+                # Seller creation may commit while building rows, so lock and
+                # re-check immediately before the transaction batch is stored.
+                await self._limits.ensure_transactions(user.id, len(transactions))
             await self._tx_repo.create_many_standalone(transactions)
         return ImportResult(
             imported=len(transactions),

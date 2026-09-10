@@ -88,14 +88,10 @@ export function DashboardPage() {
                     sx={{
                         display: 'grid',
                         gap: { xs: 1.5, sm: 2 },
-                        mx: 'auto',
                         width: '100%',
-                        maxWidth: 1100,
                         gridTemplateColumns: {
-                            xs: '1fr',
-                            sm: 'repeat(2, 1fr)',
-                            md: 'repeat(3, 1fr)',
-                            lg: 'repeat(4, 1fr)',
+                            xs: 'minmax(0, 1fr)',
+                            sm: 'repeat(auto-fill, minmax(240px, 1fr))',
                         },
                     }}
                 >

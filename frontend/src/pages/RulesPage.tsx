@@ -26,6 +26,7 @@ import { useOnline } from '../hooks/useOnline'
 import type { Alias, AliasScope } from '../api/types'
 import { PageSearch } from '../components/common/PageSearch'
 import { RegexBuilder } from '../components/common/RegexBuilder'
+import { useUserLimits } from '../hooks/useUserLimits'
 
 const SCOPE_LABEL: Record<AliasScope, string> = {
     seller: 'магазина',
@@ -106,6 +107,7 @@ export function RulesPage() {
     const updateAlias = useUpdateAlias()
     const deleteAlias = useDeleteAlias()
     const applyAliases = useApplyAliases()
+    const limitsQuery = useUserLimits()
 
     const [scope, setScope] = useState<AliasScope>('seller')
     const [sheetOpen, setSheetOpen] = useState(false)
@@ -132,6 +134,12 @@ export function RulesPage() {
     }
 
     const openCreate = (nextScope: AliasScope) => {
+        const overview = limitsQuery.data
+        if (overview) {
+            const used = nextScope === 'seller' ? overview.usage.seller_aliases : overview.usage.product_aliases
+            const limit = nextScope === 'seller' ? overview.limits.max_seller_aliases : overview.limits.max_product_aliases
+            if (used >= limit) return
+        }
         setScope(nextScope)
         setEditingAlias(null)
         setOriginal('')
@@ -226,6 +234,13 @@ export function RulesPage() {
                     const config = SCOPE_CONFIG[columnScope]
                     const query = queries[columnScope]
                     const items = columnScope === 'seller' ? sellerItems : productItems
+                    const used = columnScope === 'seller'
+                        ? limitsQuery.data?.usage.seller_aliases
+                        : limitsQuery.data?.usage.product_aliases
+                    const limit = columnScope === 'seller'
+                        ? limitsQuery.data?.limits.max_seller_aliases
+                        : limitsQuery.data?.limits.max_product_aliases
+                    const limitReached = used !== undefined && limit !== undefined && used >= limit
                     return (
                         <Stack key={columnScope} spacing={1.5} sx={columnScope === 'product' ? { borderLeft: { md: '1px solid' }, borderColor: 'divider', pl: { md: 2 } } : undefined}>
                             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -233,12 +248,20 @@ export function RulesPage() {
                                     {config.icon}
                                 </Box>
                                 <Typography sx={{ fontWeight: 700, minWidth: 0 }}>{config.title}</Typography>
-                                <Typography variant="caption" color="text.secondary">{items.length}</Typography>
+                                <Typography variant="caption" color={limitReached ? 'error.main' : 'text.secondary'}>
+                                    {used !== undefined && limit !== undefined ? `${used} / ${limit}` : items.length}
+                                </Typography>
                                 <Box sx={{ flex: 1 }} />
-                                <Button variant="contained" startIcon={<AddIcon />} onClick={() => openCreate(columnScope)} sx={{ flexShrink: 0 }}>
+                                <Button variant="contained" startIcon={<AddIcon />} onClick={() => openCreate(columnScope)} disabled={limitReached} sx={{ flexShrink: 0 }}>
                                     Добавить
                                 </Button>
                             </Stack>
+
+                            {limitReached && (
+                                <Typography variant="caption" color="error.main">
+                                    Лимит исчерпан. Удалите правило, чтобы создать новое.
+                                </Typography>
+                            )}
 
                             {items.length === 0 ? (
                                 <EmptyState title={config.emptyTitle} subtitle={config.emptySubtitle} actionLabel="Создать правило" onAction={() => openCreate(columnScope)} />

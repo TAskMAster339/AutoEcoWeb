@@ -45,6 +45,7 @@ export function QuickTagSheet({ tx, tags, open, onClose, onSaved }: QuickTagShee
       const patch = { tag_id: selectedTag }
       const updated = await updateTx.mutateAsync({ id: tx.id, patch, refreshRows: false })
       onSaved?.(updated, patch)
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
       onClose()
     } catch (caught) {
       setError(messageFromError(caught))
@@ -66,7 +67,15 @@ export function QuickTagSheet({ tx, tags, open, onClose, onSaved }: QuickTagShee
       maxWidth={480}
       maxHeight="60dvh"
     >
-      <Stack spacing={2} onKeyDown={handleKeyDown}>
+      <Stack
+        component="form"
+        spacing={2}
+        onKeyDown={handleKeyDown}
+        onSubmit={(event) => {
+          event.preventDefault()
+          void save()
+        }}
+      >
         {error && <Alert severity="error">{error}</Alert>}
 
         <Box
@@ -98,11 +107,12 @@ export function QuickTagSheet({ tx, tags, open, onClose, onSaved }: QuickTagShee
           </Box>
         </Box>
 
-        <TagAutocomplete tags={tags} value={selectedTag} onChange={setSelectedTag} />
+        <TagAutocomplete tags={tags} value={selectedTag} onChange={setSelectedTag} enterKeyHint="done" />
 
         {selectedTag !== null && (
           <Button
             fullWidth
+            type="button"
             variant="outlined"
             color="primary"
             startIcon={<DeleteOutlineIcon />}
@@ -117,8 +127,8 @@ export function QuickTagSheet({ tx, tags, open, onClose, onSaved }: QuickTagShee
         <Box sx={{ position: 'sticky', bottom: 0, pt: 1, pb: 'env(safe-area-inset-bottom)', bgcolor: 'background.paper' }}>
           <Button
             fullWidth
+            type="submit"
             variant="contained"
-            onClick={() => void save()}
             disabled={!changed || updateTx.isPending}
             sx={{ minHeight: 48 }}
           >

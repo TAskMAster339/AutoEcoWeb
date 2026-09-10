@@ -15,6 +15,7 @@ from src.repositories.receipt import ReceiptRepository
 from src.repositories.transaction import TransactionRepository
 from src.schemas.alias import AliasApplyResult, AliasCreate, AliasUpdate
 from src.services.receipt_parser import normalize_product_name
+from src.services.user_limits import UserLimitsService
 
 # Значения scope (совпадают с src/core/enums/alias_scope.py)  # noqa: RUF003
 _SCOPE_PRODUCT = "product"
@@ -36,11 +37,13 @@ class AliasService:
         seller_service: SellerService,
         tx_repo: TransactionRepository | None = None,
         receipt_repo: ReceiptRepository | None = None,
+        limits_service: UserLimitsService | None = None,
     ) -> None:
         self._repo = repo
         self._tx_repo = tx_repo
         self._receipt_repo = receipt_repo
         self._seller_service = seller_service
+        self._limits = limits_service
 
     async def list_all(self, user: User) -> list[Alias]:
         return await self._repo.list_all(user.id)
@@ -85,6 +88,8 @@ class AliasService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Такой алиас уже существует",
             )
+        if self._limits is not None:
+            await self._limits.ensure_aliases(user.id, data.scope)
         alias = await self._repo.create(
             user_id=user.id,
             scope=data.scope,

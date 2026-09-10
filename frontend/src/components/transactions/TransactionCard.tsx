@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { Box, Button, ButtonBase, Card, Typography, useTheme } from '@mui/material'
+import { Box, Button, ButtonBase, Card, Checkbox, Typography, useTheme } from '@mui/material'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { TagChip } from '../common/TagChip'
@@ -21,10 +21,14 @@ interface TransactionCardProps {
   expanded: boolean
   animationIndex: number
   highlighted: boolean
+  selected: boolean
+  selectionMode: boolean
   onSwipeOpen: (id: string | null) => void
   onExpandedChange: (id: string | null) => void
   onEdit: (tx: TransactionView) => void
   onTagEdit: (tx: TransactionView) => void
+  onSelectionStart: (id: string) => void
+  onSelectionToggle: (id: string) => void
 }
 
 /**
@@ -37,20 +41,27 @@ export const TransactionCard = memo(function TransactionCard({
   expanded,
   animationIndex,
   highlighted,
+  selected,
+  selectionMode,
   onSwipeOpen,
   onExpandedChange,
   onEdit,
   onTagEdit,
+  onSelectionStart,
+  onSelectionToggle,
 }: TransactionCardProps) {
   const theme = useTheme()
   const [offset, setOffset] = useState(0)
   const startX = useRef<number | null>(null)
   const startY = useRef<number | null>(null)
   const startOffset = useRef(0)
+  const pointerStart = useRef<{ x: number; y: number } | null>(null)
   const gestureAxis = useRef<'horizontal' | 'vertical' | null>(null)
   const dragging = useRef(false)
   const lastTouchEditRef = useRef(0)
   const lastHorizontalSwipeRef = useRef(0)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressTriggeredRef = useRef(false)
 
   const tag = tx.tagId ? tagsMap.get(tx.tagId) : undefined
   const isExpense = tx.expense !== null && tx.expense !== undefined
@@ -62,18 +73,56 @@ export const TransactionCard = memo(function TransactionCard({
     if (!swipeOpen && !dragging.current) setOffset(0)
   }, [swipeOpen])
 
+  useEffect(() => {
+    if (!selectionMode) return
+    dragging.current = false
+    startX.current = null
+    startY.current = null
+    gestureAxis.current = null
+    cancelLongPress()
+    setOffset(0)
+  }, [selectionMode])
+
+  useEffect(() => () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+  }, [])
+
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+    longPressTimerRef.current = null
+  }
+
+  const beginLongPress = () => {
+    cancelLongPress()
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null
+      longPressTriggeredRef.current = true
+      dragging.current = false
+      setOffset(0)
+      onSwipeOpen(null)
+      onSelectionStart(tx.id)
+    }, 450)
+  }
+
   const onTouchStart = (e: React.TouchEvent) => {
+    longPressTriggeredRef.current = false
+    if (selectionMode) {
+      dragging.current = false
+      return
+    }
     if (!swipeOpen) onSwipeOpen(null)
     startX.current = e.touches[0]?.clientX ?? null
     startY.current = e.touches[0]?.clientY ?? null
     startOffset.current = swipeOpen ? -SWIPE_ACTION_WIDTH : offset
     gestureAxis.current = null
     dragging.current = true
+    beginLongPress()
   }
   const onTouchMove = (e: React.TouchEvent) => {
     if (!dragging.current || startX.current === null || startY.current === null) return
     const dx = (e.touches[0]?.clientX ?? startX.current) - startX.current
     const dy = (e.touches[0]?.clientY ?? startY.current) - startY.current
+    if (Math.max(Math.abs(dx), Math.abs(dy)) >= 7) cancelLongPress()
     if (gestureAxis.current === null && Math.max(Math.abs(dx), Math.abs(dy)) >= 7) {
       gestureAxis.current = detectSwipeAxis(dx, dy)
     }
@@ -81,6 +130,11 @@ export const TransactionCard = memo(function TransactionCard({
     setOffset(clampSwipeOffset(startOffset.current, dx))
   }
   const endSwipe = () => {
+    cancelLongPress()
+    if (longPressTriggeredRef.current || selectionMode) {
+      dragging.current = false
+      return
+    }
     if (!dragging.current) return
     const wasHorizontal = gestureAxis.current === 'horizontal'
     if (wasHorizontal) lastHorizontalSwipeRef.current = Date.now()
@@ -101,6 +155,7 @@ export const TransactionCard = memo(function TransactionCard({
   }
 
   const handleCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (selectionMode) return
     if (event.key === 'F2') {
       event.preventDefault()
       openEditor()
@@ -111,61 +166,97 @@ export const TransactionCard = memo(function TransactionCard({
     <Box
       className={`mobile-transaction-card${animationIndex < 6 ? ' mobile-transaction-card--enter' : ''}`}
       data-mobile-transaction-id={tx.id}
+      data-selection-mode={selectionMode ? 'true' : 'false'}
       style={{ '--mobile-card-delay': `${Math.min(animationIndex, 5) * 30}ms` } as CSSProperties}
-      sx={{ position: 'relative', borderRadius: '8px', overflow: 'hidden' }}
+      sx={{
+        position: 'relative',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        bgcolor: selectionMode ? 'transparent' : 'primary.main',
+      }}
       onTouchEnd={endSwipe}
       onTouchCancel={endSwipe}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        if (!selectionMode) {
+          longPressTriggeredRef.current = true
+          onSelectionStart(tx.id)
+        }
+      }}
+      onPointerDown={(event) => {
+        if (selectionMode || event.button !== 0) return
+        longPressTriggeredRef.current = false
+        pointerStart.current = { x: event.clientX, y: event.clientY }
+        beginLongPress()
+      }}
+      onPointerMove={(event) => {
+        if (!pointerStart.current) return
+        const dx = event.clientX - pointerStart.current.x
+        const dy = event.clientY - pointerStart.current.y
+        if (Math.max(Math.abs(dx), Math.abs(dy)) >= 7) cancelLongPress()
+      }}
+      onPointerUp={() => {
+        pointerStart.current = null
+        cancelLongPress()
+      }}
+      onPointerCancel={() => {
+        pointerStart.current = null
+        cancelLongPress()
+      }}
     >
-      <ButtonBase
-        onClick={(event) => {
-          event.stopPropagation()
-          if (Date.now() - lastTouchEditRef.current < 700) return
-          openEditor()
-        }}
-        onPointerUp={(event) => {
-          if (event.pointerType === 'mouse') return
-          event.preventDefault()
-          event.stopPropagation()
-          lastTouchEditRef.current = Date.now()
-          openEditor()
-        }}
-        onTouchEnd={(event) => event.stopPropagation()}
-        tabIndex={swipeOpen ? 0 : -1}
-        aria-hidden={!swipeOpen}
-        aria-label={`Изменить транзакцию «${tx.name}»`}
-        sx={{
-          position: 'absolute',
-          top: 0,
-          bottom: 0,
-          right: 0,
-          width: SWIPE_ACTION_WIDTH,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 0.5,
-          alignItems: 'center',
-          justifyContent: 'center',
-          bgcolor: 'primary.main',
-          color: '#fff',
-          borderRadius: 0,
-          '&:focus-visible': { outline: '3px solid', outlineColor: 'common.white', outlineOffset: -4 },
-        }}
-      >
-        <Box
-          className="mobile-swipe-action-content"
+      {!selectionMode && (
+        <ButtonBase
+          className="mobile-swipe-edit-action"
+          onClick={(event) => {
+            event.stopPropagation()
+            if (Date.now() - lastTouchEditRef.current < 700) return
+            openEditor()
+          }}
+          onPointerUp={(event) => {
+            if (event.pointerType === 'mouse') return
+            event.preventDefault()
+            event.stopPropagation()
+            lastTouchEditRef.current = Date.now()
+            openEditor()
+          }}
+          onTouchEnd={(event) => event.stopPropagation()}
+          tabIndex={swipeOpen ? 0 : -1}
+          aria-hidden={!swipeOpen}
+          aria-label={`Изменить транзакцию «${tx.name}»`}
           sx={{
-            display: 'grid',
-            placeItems: 'center',
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            right: 0,
+            width: SWIPE_ACTION_WIDTH,
+            display: 'flex',
+            flexDirection: 'column',
             gap: 0.5,
-            opacity: 0.35 + revealProgress * 0.65,
-            transform: `scale(${0.9 + revealProgress * 0.1})`,
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'primary.main',
+            color: '#fff',
+            borderRadius: 0,
+            '&:focus-visible': { outline: '3px solid', outlineColor: 'common.white', outlineOffset: -4 },
           }}
         >
-          <EditOutlinedIcon fontSize="small" />
-          <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 600 }}>
-            Изменить
-          </Typography>
-        </Box>
-      </ButtonBase>
+          <Box
+            className="mobile-swipe-action-content"
+            sx={{
+              display: 'grid',
+              placeItems: 'center',
+              gap: 0.5,
+              opacity: 0.35 + revealProgress * 0.65,
+              transform: `scale(${0.9 + revealProgress * 0.1})`,
+            }}
+          >
+            <EditOutlinedIcon fontSize="small" />
+            <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 600 }}>
+              Изменить
+            </Typography>
+          </Box>
+        </ButtonBase>
+      )}
 
       <Card
         className={`mobile-transaction-surface${highlighted ? ' mobile-transaction-surface--saved' : ''}`}
@@ -173,19 +264,33 @@ export const TransactionCard = memo(function TransactionCard({
         sx={{
           position: 'relative',
           p: 1.75,
-          transform: `translate3d(${offset}px, 0, 0)`,
+          transform: `translate3d(${selectionMode ? 0 : offset}px, 0, 0)`,
           transition: dragging.current ? 'none' : 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
           willChange: dragging.current ? 'transform' : 'auto',
           touchAction: 'pan-y',
           WebkitTapHighlightColor: 'transparent',
+          ...(selected ? {
+            boxShadow: `inset 0 0 0 2px ${theme.palette.primary.main}`,
+          } : {}),
         }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
       >
         <ButtonBase
-          aria-expanded={expanded}
-          aria-label={`${tx.store ?? 'Без магазина'}, ${tx.name}. Enter — подробности, F2 — изменить`}
+          aria-expanded={selectionMode ? undefined : expanded}
+          aria-pressed={selectionMode ? selected : undefined}
+          aria-label={selectionMode
+            ? `${selected ? 'Снять выделение' : 'Выбрать'}: ${tx.store ?? 'Без магазина'}, ${tx.name}`
+            : `${tx.store ?? 'Без магазина'}, ${tx.name}. Enter — подробности, F2 — изменить`}
           onClick={() => {
+            if (longPressTriggeredRef.current) {
+              longPressTriggeredRef.current = false
+              return
+            }
+            if (selectionMode) {
+              onSelectionToggle(tx.id)
+              return
+            }
             if (Date.now() - lastHorizontalSwipeRef.current < 500) return
             onExpandedChange(expanded ? null : tx.id)
           }}
@@ -268,7 +373,14 @@ export const TransactionCard = memo(function TransactionCard({
           <Button
             size="small"
             variant="text"
-            onClick={() => onTagEdit(tx)}
+            onClick={() => {
+              if (longPressTriggeredRef.current) {
+                longPressTriggeredRef.current = false
+                return
+              }
+              if (selectionMode) onSelectionToggle(tx.id)
+              else onTagEdit(tx)
+            }}
             sx={{ position: 'relative', zIndex: 3, mt: 1, ml: -1, minHeight: 44 }}
           >
             Назначить тег
@@ -284,10 +396,30 @@ export const TransactionCard = memo(function TransactionCard({
             pointerEvents: 'none',
             fontSize: 18,
             color: colors.textSecondary,
+            display: selectionMode ? 'none' : undefined,
             transform: expanded ? 'rotate(180deg)' : 'none',
             transition: 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
           }}
         />
+        {selectionMode && (
+          <Checkbox
+            checked={selected}
+            tabIndex={-1}
+            disableRipple
+            inputProps={{ 'aria-hidden': true }}
+            sx={{
+              position: 'absolute',
+              zIndex: 2,
+              right: 8,
+              bottom: 8,
+              width: 40,
+              height: 40,
+              pointerEvents: 'none',
+              color: 'text.secondary',
+              '&.Mui-checked': { color: 'primary.main' },
+            }}
+          />
+        )}
       </Card>
     </Box>
   )

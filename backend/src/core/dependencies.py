@@ -18,12 +18,14 @@ from src.repositories.refresh_token import RefreshTokenRepository
 from src.repositories.tag import TagRepository
 from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
+from src.repositories.user_limits import UserLimitsRepository
 from src.services.aliases import AliasService
 from src.services.email import EmailService
 from src.services.import_export import ImportExportService
 from src.services.proverkacheka import ProverkachekaClient
 from src.services.sellers import SellerService
 from src.services.transaction import TransactionService
+from src.services.user_limits import UserLimitsService
 
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 
@@ -33,6 +35,13 @@ async def get_user_repo(session: DBSession) -> UserRepository:
 
 
 UserRepo = Annotated[UserRepository, Depends(get_user_repo)]
+
+
+async def get_user_limits_service(session: DBSession) -> UserLimitsService:
+    return UserLimitsService(UserLimitsRepository(session))
+
+
+UserLimitsSvc = Annotated[UserLimitsService, Depends(get_user_limits_service)]
 
 
 async def get_refresh_repo(session: DBSession) -> RefreshTokenRepository:
@@ -90,6 +99,7 @@ async def get_transaction_service(
     session: DBSession,
     receipt_repo: ReceiptRepo,
     seller_service: SellerSvc,
+    limits_service: UserLimitsSvc,
 ) -> TransactionService:
     return TransactionService(
         TransactionRepository(session),
@@ -97,6 +107,7 @@ async def get_transaction_service(
         TagRepository(session),
         AliasRepository(session),
         seller_service,
+        limits_service,
     )
 
 
@@ -113,6 +124,7 @@ TagRepo = Annotated[TagRepository, Depends(get_tag_repo)]
 async def get_import_export_service(
     session: DBSession,
     seller_service: SellerSvc,
+    limits_service: UserLimitsSvc,
 ) -> ImportExportService:
     return ImportExportService(
         session,
@@ -120,6 +132,7 @@ async def get_import_export_service(
         TagRepository(session),
         AliasRepository(session),
         seller_service,
+        limits_service,
     )
 
 
@@ -136,6 +149,7 @@ AliasRepo = Annotated[AliasRepository, Depends(get_alias_repo)]
 async def get_alias_service(
     session: DBSession,
     seller_service: SellerSvc,
+    limits_service: UserLimitsSvc,
 ) -> AliasService:
     """Алиасы + применение к существующим записям (чеки и транзакции)."""
     return AliasService(
@@ -143,6 +157,7 @@ async def get_alias_service(
         seller_service,
         TransactionRepository(session),
         ReceiptRepository(session),
+        limits_service,
     )
 
 
