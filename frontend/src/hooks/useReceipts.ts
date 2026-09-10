@@ -31,6 +31,7 @@ export function useDeleteReceipt() {
       void queryClient.invalidateQueries({ queryKey: ['analytics'] })
       void queryClient.invalidateQueries({ queryKey: ['stores'] })
       void queryClient.invalidateQueries({ queryKey: ['tags'] })
+      void queryClient.invalidateQueries({ queryKey: ['user-limits'] })
     },
   })
 }

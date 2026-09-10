@@ -1,6 +1,6 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/admin'
-import type { AdminUser, AdminUserFilters } from '../api/types'
+import type { AdminUser, AdminUserFilters, UserLimits } from '../api/types'
 
 const PAGE_SIZE = 50
 
@@ -35,6 +35,17 @@ export function useDeleteUser() {
     mutationFn: (id: string) => api.deleteUser(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+    },
+  })
+}
+
+export function useUpdateUserLimits() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<UserLimits> }) => api.updateUserLimits(id, patch),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+      void queryClient.invalidateQueries({ queryKey: ['user-limits'] })
     },
   })
 }

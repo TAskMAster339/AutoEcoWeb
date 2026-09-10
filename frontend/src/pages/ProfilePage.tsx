@@ -21,6 +21,7 @@ import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
 import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import DataUsageOutlinedIcon from '@mui/icons-material/DataUsageOutlined'
 import { Link as RouterLink } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useUiStore } from '../store/uiStore'
@@ -29,6 +30,8 @@ import { fetchProverkachekaTokenStatus, saveProverkachekaToken } from '../api/au
 import { messageFromError } from '../api/client'
 import { colors, softBg, softFg } from '../theme'
 import { PasswordField } from '../components/common/PasswordField'
+import { LimitUsageBar } from '../components/common/LimitUsageBar'
+import { useUserLimits } from '../hooks/useUserLimits'
 
 const ROLE_LABELS: Record<string, string> = { user: 'Пользователь', admin: 'Администратор' }
 const STATUS_LABELS: Record<string, string> = {
@@ -182,6 +185,7 @@ export function ProfilePage() {
     const logout = useAuthStore((s) => s.logout)
     const changePassword = useAuthStore((s) => s.changePassword)
     const themeMode = useUiStore((s) => s.themeMode)
+    const limitsQuery = useUserLimits()
 
     const [confirming, setConfirming] = useState(false)
     const [busy, setBusy] = useState(false)
@@ -340,6 +344,44 @@ export function ProfilePage() {
                                         : 'Ключ не подключён'}
                             </Typography>
                         </Box>
+                    </Card>
+                </Grid>
+
+                <Grid size={{ xs: 12 }}>
+                    <Card sx={{ p: { xs: 2, md: 2.5 } }}>
+                        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2 }}>
+                            <TileIcon>
+                                <DataUsageOutlinedIcon sx={{ fontSize: 20 }} />
+                            </TileIcon>
+                            <Box>
+                                <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Лимиты аккаунта</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    Использование обновляется после создания и удаления данных
+                                </Typography>
+                            </Box>
+                        </Stack>
+                        {limitsQuery.isPending ? (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <CircularProgress size={18} />
+                                <Typography variant="body2" color="text.secondary">Загружаем лимиты…</Typography>
+                            </Box>
+                        ) : limitsQuery.isError || !limitsQuery.data ? (
+                            <Typography variant="body2" color="error.main">Не удалось загрузить лимиты аккаунта</Typography>
+                        ) : (
+                            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
+                                <LimitUsageBar label="Теги" used={limitsQuery.data.usage.tags} limit={limitsQuery.data.limits.max_tags} />
+                                <LimitUsageBar label="Алиасы магазинов" used={limitsQuery.data.usage.seller_aliases} limit={limitsQuery.data.limits.max_seller_aliases} />
+                                <LimitUsageBar label="Алиасы товаров" used={limitsQuery.data.usage.product_aliases} limit={limitsQuery.data.limits.max_product_aliases} />
+                                <LimitUsageBar label="Чеки" used={limitsQuery.data.usage.receipts} limit={limitsQuery.data.limits.max_receipts} />
+                                <LimitUsageBar label="Транзакции" used={limitsQuery.data.usage.transactions} limit={limitsQuery.data.limits.max_transactions} />
+                                <Box sx={{ display: 'grid', gap: 0.5, alignContent: 'center' }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Ограничения операций</Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        До {limitsQuery.data.limits.max_receipt_items.toLocaleString('ru-RU')} позиций в чеке · до {limitsQuery.data.limits.max_import_rows.toLocaleString('ru-RU')} строк за импорт
+                                    </Typography>
+                                </Box>
+                            </Box>
+                        )}
                     </Card>
                 </Grid>
 

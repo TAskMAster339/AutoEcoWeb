@@ -23,6 +23,7 @@ export function useInfiniteTags() {
 function invalidateTags(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ['tags'] })
   void queryClient.invalidateQueries({ queryKey: ['tags-page'] })
+  void queryClient.invalidateQueries({ queryKey: ['user-limits'] })
 }
 
 export function useCreateTag() {

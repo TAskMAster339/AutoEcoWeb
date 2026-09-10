@@ -132,6 +132,7 @@ export function DataPage() {
             void queryClient.invalidateQueries({ queryKey: ['analytics'] })
             void queryClient.invalidateQueries({ queryKey: ['tags'] })
             void queryClient.invalidateQueries({ queryKey: ['receipts'] })
+            void queryClient.invalidateQueries({ queryKey: ['user-limits'] })
         } catch (caught) {
             setError(messageFromError(caught))
             setStage('error')

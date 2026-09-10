@@ -49,6 +49,7 @@ function invalidateAfterMutation(
   void queryClient.invalidateQueries({ queryKey: ['tags'] })
   void queryClient.invalidateQueries({ queryKey: ['tags-page'] })
   void queryClient.invalidateQueries({ queryKey: ['receipts'] })
+  void queryClient.invalidateQueries({ queryKey: ['user-limits'] })
 }
 
 export function useCreateTransaction() {

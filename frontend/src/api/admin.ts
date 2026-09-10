@@ -2,7 +2,7 @@
  * Admin users API — real endpoints, mirrors backend OpenAPI (backend/src/api/v1/admin.py).
  */
 import { api } from './client'
-import type { AdminUser, CursorPage, UserRole, UserStatus } from './types'
+import type { AdminUser, CursorPage, UserLimits, UserRole, UserStatus } from './types'
 
 export interface FetchUsersParams {
   limit?: number
@@ -33,4 +33,8 @@ export function updateUser(
 
 export function deleteUser(id: string): Promise<void> {
   return api.del(`/api/v1/admin/users/${id}`)
+}
+
+export function updateUserLimits(id: string, patch: Partial<UserLimits>): Promise<UserLimits> {
+  return api.patch<UserLimits>(`/api/v1/admin/users/${id}/limits`, patch)
 }
