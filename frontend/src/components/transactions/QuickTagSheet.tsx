@@ -5,7 +5,7 @@ import { BottomSheet } from '../common/BottomSheet'
 import { TagAutocomplete } from '../common/TagAutocomplete'
 import { useUpdateTransaction } from '../../hooks/useTransactions'
 import { messageFromError } from '../../api/client'
-import { formatLongDate } from '../../lib/format'
+import { formatCurrency, formatLongDate } from '../../lib/format'
 import type { Tag, Transaction, TransactionUpdatePatch, TransactionView } from '../../api/types'
 
 interface QuickTagSheetProps {
@@ -31,6 +31,8 @@ export function QuickTagSheet({ tx, tags, open, onClose, onSaved }: QuickTagShee
   if (!tx) return null
 
   const changed = selectedTag !== tx.tagId
+  const displayedPrice = tx.price ?? tx.income ?? tx.expense
+  const priceLabel = tx.price === null || tx.price === undefined ? 'Сумма' : 'Цена'
 
   const close = () => {
     if (!updateTx.isPending) onClose()
@@ -67,13 +69,33 @@ export function QuickTagSheet({ tx, tags, open, onClose, onSaved }: QuickTagShee
       <Stack spacing={2} onKeyDown={handleKeyDown}>
         {error && <Alert severity="error">{error}</Alert>}
 
-        <Box sx={{ px: 1.5, py: 1.25, borderRadius: '8px', bgcolor: 'action.hover' }}>
-          <Typography variant="subtitle2" sx={{ overflowWrap: 'anywhere' }}>
-            {tx.name}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {tx.store ?? 'Без магазина'} · {formatLongDate(tx.date)}
-          </Typography>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) minmax(104px, 42%)',
+            columnGap: 2,
+            px: 1.5,
+            py: 1.25,
+            borderRadius: '8px',
+            bgcolor: 'action.hover',
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle2" sx={{ overflowWrap: 'anywhere' }}>
+              {tx.name}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {formatLongDate(tx.date)}
+            </Typography>
+          </Box>
+          <Box sx={{ minWidth: 0, textAlign: 'right' }}>
+            <Typography variant="subtitle2" noWrap title={tx.store ?? 'Без магазина'}>
+              {tx.store ?? 'Без магазина'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" className="tnum">
+              {priceLabel}: {formatCurrency(displayedPrice)}
+            </Typography>
+          </Box>
         </Box>
 
         <TagAutocomplete tags={tags} value={selectedTag} onChange={setSelectedTag} />
