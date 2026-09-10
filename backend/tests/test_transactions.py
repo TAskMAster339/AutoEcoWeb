@@ -1394,6 +1394,9 @@ async def test_update_seller_name(session):
     assert tx.seller.name == "Метрополитен"
     assert tx.seller.normalized_name == "Метрополитен"
     assert TransactionOut.from_model(tx).seller_name == "Метрополитен"
+    # PATCH другого поля не должен восприниматься как очистка магазина.
+    tx = await service.update(user, tx.id, TransactionUpdate(comment="Вечерняя поездка"))
+    assert TransactionOut.from_model(tx).seller_name == "Метрополитен"
     # снять магазин явным null
     tx = await service.update(user, tx.id, TransactionUpdate(seller_name=None))
     assert tx.seller is None

@@ -54,6 +54,10 @@ export function toggleSelectedId(selectedIds, id) {
     : [...selectedIds, id]
 }
 
+export function canStartMobileSelection(editorOpen, editorOpening) {
+  return !editorOpen && !editorOpening
+}
+
 /** Replaces one chronologically sorted row and keeps running balances accurate. */
 export function replaceTransactionInPlace(rows, updatedView, preserveInheritedStore = false) {
   const changedIndex = rows.findIndex((row) => row.id === updatedView.id)

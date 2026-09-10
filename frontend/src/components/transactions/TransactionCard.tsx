@@ -148,6 +148,13 @@ export const TransactionCard = memo(function TransactionCard({
   }
 
   const openEditor = () => {
+    // The edit action stops pointer/touch propagation, so the card-level
+    // long-press timer must be cancelled here explicitly. Otherwise it can
+    // enable selection after the editor has already opened.
+    cancelLongPress()
+    pointerStart.current = null
+    dragging.current = false
+    longPressTriggeredRef.current = false
     const action = swipeEditAction()
     setOffset(0)
     onSwipeOpen(action.openSwipeId)
