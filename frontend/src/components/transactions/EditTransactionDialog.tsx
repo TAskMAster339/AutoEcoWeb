@@ -27,17 +27,18 @@ import { messageFromError } from '../../api/client'
 import { todayIso } from '../../lib/format'
 import { parseNum } from '../../lib/numbers'
 import { colors } from '../../theme'
-import type { AliasScope, Store, TransactionUpdatePatch, TransactionView } from '../../api/types'
+import type { AliasScope, Store, Transaction, TransactionUpdatePatch, TransactionView } from '../../api/types'
 
 interface EditTransactionDialogProps {
     tx: TransactionView | null
     open: boolean
     onClose: () => void
-    onSaved?: (id: string) => void
+    updateInPlace?: boolean
+    onSaved?: (updated: Transaction, patch: TransactionUpdatePatch) => void
 }
 
 /** Редактирование повторяет форму добавления, но отправляет PATCH и позволяет удалить транзакцию. */
-export function EditTransactionDialog({ tx, open, onClose, onSaved }: EditTransactionDialogProps) {
+export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false, onSaved }: EditTransactionDialogProps) {
     const { data: tags } = useTags()
     const { data: stores } = useStores()
     const updateTx = useUpdateTransaction()
@@ -124,8 +125,13 @@ export function EditTransactionDialog({ tx, open, onClose, onSaved }: EditTransa
         if (newComment !== tx.comment) patch.comment = newComment
 
         try {
-            await updateTx.mutateAsync({ id: tx.id, patch })
-            onSaved?.(tx.id)
+            const dateChanged = patch.datetime !== undefined
+            const updated = await updateTx.mutateAsync({
+                id: tx.id,
+                patch,
+                refreshRows: !updateInPlace || dateChanged,
+            })
+            onSaved?.(updated, patch)
             onClose()
         } catch (error) {
             setFormError(messageFromError(error))

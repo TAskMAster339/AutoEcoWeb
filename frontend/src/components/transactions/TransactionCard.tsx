@@ -24,6 +24,7 @@ interface TransactionCardProps {
   onSwipeOpen: (id: string | null) => void
   onExpandedChange: (id: string | null) => void
   onEdit: (tx: TransactionView) => void
+  onTagEdit: (tx: TransactionView) => void
 }
 
 /**
@@ -39,6 +40,7 @@ export const TransactionCard = memo(function TransactionCard({
   onSwipeOpen,
   onExpandedChange,
   onEdit,
+  onTagEdit,
 }: TransactionCardProps) {
   const theme = useTheme()
   const [offset, setOffset] = useState(0)
@@ -268,7 +270,7 @@ export const TransactionCard = memo(function TransactionCard({
           </Box>
         )}
         {!tag && (
-          <Button size="small" variant="text" onClick={() => onEdit(tx)} sx={{ mt: 1, ml: -1 }}>
+          <Button size="small" variant="text" onClick={() => onTagEdit(tx)} sx={{ mt: 1, ml: -1, minHeight: 44 }}>
             Назначить тег
           </Button>
         )}

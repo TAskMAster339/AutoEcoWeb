@@ -9,10 +9,30 @@ import {
   medianOf,
   nextOpenSwipeId,
   replaceQuickEditTarget,
+  replaceTransactionInPlace,
   selectionRange,
   settleSwipe,
   swipeEditAction,
 } from '../src/lib/transactionInteractions.mjs'
+
+const transactionView = (id, balance, expense) => ({
+  id,
+  date: '2025-01-01',
+  store: 'Магазин',
+  sellerId: null,
+  sellerNameSource: null,
+  sellerAliasName: null,
+  tagId: null,
+  name: id,
+  nameSource: id,
+  nameAliasName: null,
+  comment: null,
+  quantity: 1,
+  price: expense,
+  income: null,
+  expense,
+  balance,
+})
 
 test('only the latest swiped card remains open', () => {
   let openId = nextOpenSwipeId('first')
@@ -27,6 +47,17 @@ test('a right swipe closes an already open action', () => {
 
 test('edit action closes swipe and requests editor immediately', () => {
   assert.deepEqual(swipeEditAction(), { openSwipeId: null, shouldEdit: true })
+})
+
+test('an in-place transaction update preserves order and adjusts following balances', () => {
+  const rows = [transactionView('first', -100, 100), transactionView('second', -150, 50)]
+  const updated = { ...rows[0], name: 'Изменено', expense: 120, balance: 0 }
+  const result = replaceTransactionInPlace(rows, updated)
+
+  assert.deepEqual(result.map((row) => row.id), ['first', 'second'])
+  assert.equal(result[0].name, 'Изменено')
+  assert.equal(result[0].balance, -120)
+  assert.equal(result[1].balance, -170)
 })
 
 test('right click replaces the previous quick-edit target', () => {

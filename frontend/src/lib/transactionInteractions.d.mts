@@ -18,4 +18,10 @@ export interface TableFilterState {
 export function hasActiveTableFilters(filters: TableFilterState): boolean
 export function matchesOptionSearch(label: string, query: string): boolean
 export function replaceQuickEditTarget<T>(current: T | null, next: T): T
+export function replaceTransactionInPlace(
+  rows: readonly TransactionView[],
+  updatedView: TransactionView,
+  preserveInheritedStore?: boolean,
+): TransactionView[]
 export function medianOf(values: readonly number[]): number | null
+import type { TransactionView } from '../api/types'

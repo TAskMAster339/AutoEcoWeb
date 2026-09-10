@@ -24,6 +24,7 @@ import { TransactionCard } from '../components/transactions/TransactionCard'
 import { VirtualizedTransactionList } from '../components/transactions/VirtualizedTransactionList'
 import { FilterSheet } from '../components/transactions/FilterSheet'
 import { EditTransactionDialog } from '../components/transactions/EditTransactionDialog'
+import { QuickTagSheet } from '../components/transactions/QuickTagSheet'
 import { LoadingState, EmptyState, ErrorState, OfflineState } from '../components/common/States'
 import { useSummary } from '../hooks/useSummary'
 import { useStores, useDeleteTransaction } from '../hooks/useTransactions'
@@ -36,8 +37,8 @@ import { formatCurrency, pluralRu } from '../lib/format'
 import { normalizeAmountFilter } from '../lib/numbers'
 import { colors, softBg, softFg } from '../theme'
 import { PageSearch } from '../components/common/PageSearch'
-import type { TransactionView } from '../api/types'
-import { hasActiveTableFilters, nextOpenSwipeId } from '../lib/transactionInteractions.mjs'
+import type { Transaction, TransactionUpdatePatch, TransactionView } from '../api/types'
+import { hasActiveTableFilters, nextOpenSwipeId, replaceTransactionInPlace } from '../lib/transactionInteractions.mjs'
 
 /** Размер автоматически подгружаемой страницы мобильного списка. */
 const MOBILE_PAGE = 50
@@ -277,6 +278,8 @@ export function TransactionsPage() {
     // доиграть exit-анимацию вместо мгновенного удаления из DOM.
     const [editingTx, setEditingTx] = useState<TransactionView | null>(null)
     const [editOpen, setEditOpen] = useState(false)
+    const [tagEditingTx, setTagEditingTx] = useState<TransactionView | null>(null)
+    const [tagEditOpen, setTagEditOpen] = useState(false)
 
     const openTransactionEditor = useCallback((tx: TransactionView) => {
         // Touch browsers can emit pointerup and a synthetic click for the same
@@ -306,6 +309,27 @@ export function TransactionsPage() {
         }
         editOpenRef.current = false
         setEditOpen(false)
+    }, [])
+
+    const handleTransactionUpdated = useCallback((updated: Transaction, patch: TransactionUpdatePatch) => {
+        if (!updated.id) return
+        if (patch.datetime === undefined) {
+            setMobileRows((rows) => {
+                const updatedView = toTransactionView(updated)
+                const preserveInheritedStore = !('seller_name' in patch) && updatedView.store === null
+                return replaceTransactionInPlace(rows, updatedView, preserveInheritedStore)
+            })
+        }
+        handleTransactionSaved(updated.id)
+    }, [handleTransactionSaved])
+
+    const openTagEditor = useCallback((tx: TransactionView) => {
+        setTagEditingTx(tx)
+        setTagEditOpen(true)
+    }, [])
+
+    const closeTagEditor = useCallback(() => {
+        setTagEditOpen(false)
     }, [])
 
     const bulkDelete = async () => {
@@ -546,6 +570,7 @@ export function TransactionsPage() {
                                         onSwipeOpen={handleSwipeOpen}
                                         onExpandedChange={setExpandedMobileId}
                                         onEdit={openTransactionEditor}
+                                        onTagEdit={openTagEditor}
                                     />
                                 )}
                             />
@@ -651,7 +676,16 @@ export function TransactionsPage() {
                 tx={editingTx}
                 open={editOpen}
                 onClose={closeTransactionEditor}
-                onSaved={handleTransactionSaved}
+                updateInPlace={isMobile}
+                onSaved={handleTransactionUpdated}
+            />
+
+            <QuickTagSheet
+                tx={tagEditingTx}
+                tags={tags ?? []}
+                open={tagEditOpen}
+                onClose={closeTagEditor}
+                onSaved={handleTransactionUpdated}
             />
 
             {!isMobile && bulkEditOpen && (

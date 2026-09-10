@@ -48,6 +48,35 @@ export function replaceQuickEditTarget(_current, next) {
   return next
 }
 
+/** Replaces one chronologically sorted row and keeps running balances accurate. */
+export function replaceTransactionInPlace(rows, updatedView, preserveInheritedStore = false) {
+  const changedIndex = rows.findIndex((row) => row.id === updatedView.id)
+  if (changedIndex < 0) return rows
+  const previous = rows[changedIndex]
+  const previousSignedAmount = previous.income ?? -(previous.expense ?? 0)
+  const updatedSignedAmount = updatedView.income ?? -(updatedView.expense ?? 0)
+  const balanceDelta = updatedSignedAmount - previousSignedAmount
+
+  return rows.map((row, index) => {
+    if (index < changedIndex) return row
+    if (index > changedIndex) {
+      return balanceDelta === 0
+        ? row
+        : { ...row, balance: Math.round((row.balance + balanceDelta) * 100) / 100 }
+    }
+    return {
+      ...updatedView,
+      balance: Math.round((previous.balance + balanceDelta) * 100) / 100,
+      ...(preserveInheritedStore ? {
+        store: previous.store,
+        sellerId: previous.sellerId,
+        sellerNameSource: previous.sellerNameSource,
+        sellerAliasName: previous.sellerAliasName,
+      } : {}),
+    }
+  })
+}
+
 export function medianOf(values) {
   if (values.length === 0) return null
   const sorted = [...values].sort((a, b) => a - b)

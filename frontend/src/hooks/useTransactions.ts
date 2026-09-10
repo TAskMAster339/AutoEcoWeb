@@ -18,20 +18,25 @@ export function useStores() {
   })
 }
 
-/** После любой мутации обновляются все зависимые данные. 'txPage' — страницы
- *  таблицы (datasource AG Grid и мобильный список ходят через fetchQuery). */
-function invalidateAfterMutation(queryClient: ReturnType<typeof useQueryClient>) {
+/** После мутации обновляются зависимые агрегаты. Страницы списка можно не
+ *  сбрасывать, когда мобильный интерфейс подменяет изменённую строку локально. */
+function invalidateAfterMutation(
+  queryClient: ReturnType<typeof useQueryClient>,
+  refreshTransactionRows = true,
+) {
   // Сначала удаляем block-кэш. Если сперва увеличить revision, компонент грида
   // может успеть запросить ещё свежий (staleTime 30 s) txPage до асинхронной
   // invalidation — тогда новая транзакция появится только позднее. Удаление
   // гарантирует, что purgeInfiniteCache / мобильная первая страница получат
-  // актуальные строки непосредственно после успешного POST/PATCH/DELETE.
-  queryClient.removeQueries({ queryKey: ['txPage'] })
+  // актуальные строки после мутаций, которые меняют состав или порядок списка.
+  if (refreshTransactionRows) queryClient.removeQueries({ queryKey: ['txPage'] })
   // Не удаляем txTotal: TransactionsPage использует его как гейт первого
   // экрана. removeQueries переводит запрос в pending, из-за чего весь экран
   // временно заменяется LoadingState и сбрасывает прокрутку <main> в начало.
   // Инвалидация сохраняет уже смонтированную страницу и обновляет число тихо.
-  queryClient.setQueryData<number>(['txRevision'], (revision = 0) => revision + 1)
+  if (refreshTransactionRows) {
+    queryClient.setQueryData<number>(['txRevision'], (revision = 0) => revision + 1)
+  }
   void queryClient.invalidateQueries({ queryKey: ['txTotal'] })
   // AG Grid keeps already-loaded rows in its own Infinite Row Model cache.
   // A TanStack invalidation alone marks the HTTP query stale, but does not
@@ -65,9 +70,9 @@ export function useDeleteTransaction() {
 export function useUpdateTransaction() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: TransactionUpdatePatch }) =>
+    mutationFn: ({ id, patch }: { id: string; patch: TransactionUpdatePatch; refreshRows?: boolean }) =>
       api.updateTransaction(id, patch),
-    onSuccess: () => invalidateAfterMutation(queryClient),
+    onSuccess: (_, variables) => invalidateAfterMutation(queryClient, variables.refreshRows ?? true),
   })
 }
 
