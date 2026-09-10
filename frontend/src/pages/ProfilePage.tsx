@@ -347,44 +347,6 @@ export function ProfilePage() {
                     </Card>
                 </Grid>
 
-                <Grid size={{ xs: 12 }}>
-                    <Card sx={{ p: { xs: 2, md: 2.5 } }}>
-                        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2 }}>
-                            <TileIcon>
-                                <DataUsageOutlinedIcon sx={{ fontSize: 20 }} />
-                            </TileIcon>
-                            <Box>
-                                <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Лимиты аккаунта</Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                    Использование обновляется после создания и удаления данных
-                                </Typography>
-                            </Box>
-                        </Stack>
-                        {limitsQuery.isPending ? (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <CircularProgress size={18} />
-                                <Typography variant="body2" color="text.secondary">Загружаем лимиты…</Typography>
-                            </Box>
-                        ) : limitsQuery.isError || !limitsQuery.data ? (
-                            <Typography variant="body2" color="error.main">Не удалось загрузить лимиты аккаунта</Typography>
-                        ) : (
-                            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
-                                <LimitUsageBar label="Теги" used={limitsQuery.data.usage.tags} limit={limitsQuery.data.limits.max_tags} />
-                                <LimitUsageBar label="Алиасы магазинов" used={limitsQuery.data.usage.seller_aliases} limit={limitsQuery.data.limits.max_seller_aliases} />
-                                <LimitUsageBar label="Алиасы товаров" used={limitsQuery.data.usage.product_aliases} limit={limitsQuery.data.limits.max_product_aliases} />
-                                <LimitUsageBar label="Чеки" used={limitsQuery.data.usage.receipts} limit={limitsQuery.data.limits.max_receipts} />
-                                <LimitUsageBar label="Транзакции" used={limitsQuery.data.usage.transactions} limit={limitsQuery.data.limits.max_transactions} />
-                                <Box sx={{ display: 'grid', gap: 0.5, alignContent: 'center' }}>
-                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Ограничения операций</Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                        До {limitsQuery.data.limits.max_receipt_items.toLocaleString('ru-RU')} позиций в чеке · до {limitsQuery.data.limits.max_import_rows.toLocaleString('ru-RU')} строк за импорт
-                                    </Typography>
-                                </Box>
-                            </Box>
-                        )}
-                    </Card>
-                </Grid>
-
                 {/* Ключ сервиса проверки чеков */}
                 <Grid size={{ xs: 12, md: 7 }}>
                     <Card sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -556,6 +518,45 @@ export function ProfilePage() {
                         >
                             Открыть
                         </Button>
+                    </Card>
+                </Grid>
+
+                {/* Лимиты — внизу профиля, перед выходом из аккаунта */}
+                <Grid size={{ xs: 12 }}>
+                    <Card sx={{ p: { xs: 2, md: 2.5 } }}>
+                        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2 }}>
+                            <TileIcon>
+                                <DataUsageOutlinedIcon sx={{ fontSize: 20 }} />
+                            </TileIcon>
+                            <Box>
+                                <Typography sx={{ fontWeight: 700, fontSize: 15 }}>Лимиты аккаунта</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    Использование обновляется после создания и удаления данных
+                                </Typography>
+                            </Box>
+                        </Stack>
+                        {limitsQuery.isPending ? (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <CircularProgress size={18} />
+                                <Typography variant="body2" color="text.secondary">Загружаем лимиты…</Typography>
+                            </Box>
+                        ) : limitsQuery.isError || !limitsQuery.data ? (
+                            <Typography variant="body2" color="error.main">Не удалось загрузить лимиты аккаунта</Typography>
+                        ) : (
+                            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
+                                <LimitUsageBar label="Теги" used={limitsQuery.data.usage.tags} limit={limitsQuery.data.limits.max_tags} />
+                                <LimitUsageBar label="Алиасы магазинов" used={limitsQuery.data.usage.seller_aliases} limit={limitsQuery.data.limits.max_seller_aliases} />
+                                <LimitUsageBar label="Алиасы товаров" used={limitsQuery.data.usage.product_aliases} limit={limitsQuery.data.limits.max_product_aliases} />
+                                <LimitUsageBar label="Чеки" used={limitsQuery.data.usage.receipts} limit={limitsQuery.data.limits.max_receipts} />
+                                <LimitUsageBar label="Транзакции" used={limitsQuery.data.usage.transactions} limit={limitsQuery.data.limits.max_transactions} />
+                                <Box sx={{ display: 'grid', gap: 0.5, alignContent: 'center' }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Ограничения операций</Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                        До {limitsQuery.data.limits.max_receipt_items.toLocaleString('ru-RU')} позиций в чеке · до {limitsQuery.data.limits.max_import_rows.toLocaleString('ru-RU')} строк за импорт
+                                    </Typography>
+                                </Box>
+                            </Box>
+                        )}
                     </Card>
                 </Grid>
 
