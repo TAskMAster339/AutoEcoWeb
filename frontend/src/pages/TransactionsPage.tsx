@@ -357,8 +357,10 @@ export function TransactionsPage() {
     }, [])
 
     const toggleMobileSelection = useCallback((id: string) => {
-        setSelectedIds((current) => toggleSelectedId(current, id))
-    }, [])
+        const nextSelectedIds = toggleSelectedId(selectedIds, id)
+        setSelectedIds(nextSelectedIds)
+        if (nextSelectedIds.length === 0) setMobileSelectionActive(false)
+    }, [selectedIds])
 
     const closeMobileSelection = useCallback(() => {
         setMobileSelectionActive(false)

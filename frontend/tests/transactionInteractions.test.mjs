@@ -53,6 +53,7 @@ test('edit action closes swipe and requests editor immediately', () => {
 test('mobile selection toggles cards without changing the remaining order', () => {
   assert.deepEqual(toggleSelectedId(['a', 'c'], 'b'), ['a', 'c', 'b'])
   assert.deepEqual(toggleSelectedId(['a', 'c', 'b'], 'c'), ['a', 'b'])
+  assert.deepEqual(toggleSelectedId(['a'], 'a'), [])
 })
 
 test('an in-place transaction update preserves order and adjusts following balances', () => {
