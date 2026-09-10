@@ -13,6 +13,7 @@ import {
   selectionRange,
   settleSwipe,
   swipeEditAction,
+  toggleSelectedId,
 } from '../src/lib/transactionInteractions.mjs'
 
 const transactionView = (id, balance, expense) => ({
@@ -47,6 +48,11 @@ test('a right swipe closes an already open action', () => {
 
 test('edit action closes swipe and requests editor immediately', () => {
   assert.deepEqual(swipeEditAction(), { openSwipeId: null, shouldEdit: true })
+})
+
+test('mobile selection toggles cards without changing the remaining order', () => {
+  assert.deepEqual(toggleSelectedId(['a', 'c'], 'b'), ['a', 'c', 'b'])
+  assert.deepEqual(toggleSelectedId(['a', 'c', 'b'], 'c'), ['a', 'b'])
 })
 
 test('an in-place transaction update preserves order and adjusts following balances', () => {

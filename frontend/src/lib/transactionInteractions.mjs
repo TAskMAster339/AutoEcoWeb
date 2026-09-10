@@ -48,6 +48,12 @@ export function replaceQuickEditTarget(_current, next) {
   return next
 }
 
+export function toggleSelectedId(selectedIds, id) {
+  return selectedIds.includes(id)
+    ? selectedIds.filter((selectedId) => selectedId !== id)
+    : [...selectedIds, id]
+}
+
 /** Replaces one chronologically sorted row and keeps running balances accurate. */
 export function replaceTransactionInPlace(rows, updatedView, preserveInheritedStore = false) {
   const changedIndex = rows.findIndex((row) => row.id === updatedView.id)

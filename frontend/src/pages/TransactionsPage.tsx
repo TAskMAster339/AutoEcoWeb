@@ -7,6 +7,7 @@ import {
     Grid2 as Grid,
     Skeleton,
     Stack,
+    IconButton,
     Typography,
     useMediaQuery,
     useTheme,
@@ -16,6 +17,8 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import AddIcon from '@mui/icons-material/Add'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
+import CloseIcon from '@mui/icons-material/Close'
+import SelectAllIcon from '@mui/icons-material/SelectAll'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { StatisticCard } from '../components/common/StatisticCard'
@@ -38,7 +41,7 @@ import { normalizeAmountFilter } from '../lib/numbers'
 import { colors, softBg, softFg } from '../theme'
 import { PageSearch } from '../components/common/PageSearch'
 import type { Transaction, TransactionUpdatePatch, TransactionView } from '../api/types'
-import { hasActiveTableFilters, nextOpenSwipeId, replaceTransactionInPlace } from '../lib/transactionInteractions.mjs'
+import { hasActiveTableFilters, nextOpenSwipeId, replaceTransactionInPlace, toggleSelectedId } from '../lib/transactionInteractions.mjs'
 
 /** Размер автоматически подгружаемой страницы мобильного списка. */
 const MOBILE_PAGE = 50
@@ -272,8 +275,10 @@ export function TransactionsPage() {
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
     const [bulkEditOpen, setBulkEditOpen] = useState(false)
+    const [mobileSelectionActive, setMobileSelectionActive] = useState(false)
     const [selectionResetRevision, setSelectionResetRevision] = useState(0)
     const [bulkError, setBulkError] = useState<string | null>(null)
+    const mobileSelectionMode = isMobile && mobileSelectionActive
     // Данные остаются смонтированными во время закрытия, чтобы Drawer мог
     // доиграть exit-анимацию вместо мгновенного удаления из DOM.
     const [editingTx, setEditingTx] = useState<TransactionView | null>(null)
@@ -332,11 +337,38 @@ export function TransactionsPage() {
         setTagEditOpen(false)
     }, [])
 
+    const startMobileSelection = useCallback((id: string) => {
+        setExpandedMobileId(null)
+        setMobileSwipeId(null)
+        setMobileSelectionActive(true)
+        setSelectedIds([id])
+    }, [])
+
+    const toggleMobileSelection = useCallback((id: string) => {
+        setSelectedIds((current) => toggleSelectedId(current, id))
+    }, [])
+
+    const closeMobileSelection = useCallback(() => {
+        setMobileSelectionActive(false)
+        setSelectedIds([])
+        setBulkError(null)
+    }, [])
+
+    useEffect(() => {
+        if (!mobileSelectionMode) return
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') closeMobileSelection()
+        }
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [closeMobileSelection, mobileSelectionMode])
+
     const bulkDelete = async () => {
         setBulkError(null)
         try {
             await Promise.all(selectedIds.map((id) => deleteTx.mutateAsync(id)))
             setSelectedIds([])
+            setMobileSelectionActive(false)
             setSelectionResetRevision((revision) => revision + 1)
             setConfirmDeleteOpen(false)
         } catch (e) {
@@ -530,12 +562,48 @@ export function TransactionsPage() {
                     }}
                 />
             ) : isMobile ? (
-                <Stack spacing={1.25}>
+                <Stack spacing={1.25} sx={{ pb: mobileSelectionMode ? 10 : 0 }}>
                     {mobileLoading ? (
                         <LoadingState label="Загружаем операции…" />
                     ) : (
                         <>
-                            {showSwipeHint && mobileRows.length > 0 && (
+                            {mobileSelectionMode && (
+                                <Box
+                                    role="toolbar"
+                                    aria-label="Действия с выбранными транзакциями"
+                                    sx={{
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 8,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 1,
+                                        px: 1,
+                                        py: 0.75,
+                                        border: '1px solid',
+                                        borderColor: 'primary.main',
+                                        borderRadius: '8px',
+                                        bgcolor: 'background.paper',
+                                        boxShadow: theme.shadows[4],
+                                    }}
+                                >
+                                    <IconButton onClick={closeMobileSelection} aria-label="Выйти из режима выбора">
+                                        <CloseIcon />
+                                    </IconButton>
+                                    <Typography sx={{ flex: 1, fontWeight: 700 }}>
+                                        Выбрано: {selectedIds.length}
+                                    </Typography>
+                                    <Button
+                                        size="small"
+                                        startIcon={<SelectAllIcon />}
+                                        onClick={() => setSelectedIds(mobileRows.map((row) => row.id))}
+                                        disabled={selectedIds.length === mobileRows.length}
+                                    >
+                                        Все показанные
+                                    </Button>
+                                </Box>
+                            )}
+                            {!mobileSelectionMode && showSwipeHint && mobileRows.length > 0 && (
                                 <Box
                                     role="status"
                                     sx={{
@@ -567,15 +635,21 @@ export function TransactionsPage() {
                                         expanded={expandedMobileId === t.id}
                                         animationIndex={index}
                                         highlighted={highlightedMobileId === t.id}
+                                        selected={selectedIds.includes(t.id)}
+                                        selectionMode={mobileSelectionMode}
                                         onSwipeOpen={handleSwipeOpen}
                                         onExpandedChange={setExpandedMobileId}
                                         onEdit={openTransactionEditor}
                                         onTagEdit={openTagEditor}
+                                        onSelectionStart={startMobileSelection}
+                                        onSelectionToggle={toggleMobileSelection}
                                     />
                                 )}
                             />
                             <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
-                                Показано {mobileRows.length} из {total ?? 0} · свайп влево — изменить
+                                {mobileSelectionMode
+                                    ? `Показано ${mobileRows.length} из ${total ?? 0} · касание — выбрать`
+                                    : `Показано ${mobileRows.length} из ${total ?? 0} · удерживайте для выбора`}
                             </Typography>
                             {total !== null && mobileRows.length < total && !mobileLoadError && (
                                 <Box ref={mobileSentinelRef} sx={{ minHeight: 52, display: 'grid', placeItems: 'center' }} aria-live="polite">
@@ -669,6 +743,48 @@ export function TransactionsPage() {
                 </Box>
             )}
 
+            {mobileSelectionMode && (
+                <Box
+                    sx={{
+                        position: 'fixed',
+                        zIndex: 1200,
+                        left: 12,
+                        right: 12,
+                        bottom: 'calc(72px + env(safe-area-inset-bottom))',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: 1,
+                        p: 1,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: '10px',
+                        bgcolor: 'background.paper',
+                        boxShadow: theme.shadows[8],
+                    }}
+                >
+                    <Button
+                        variant="contained"
+                        startIcon={<EditOutlinedIcon />}
+                        onClick={() => setBulkEditOpen(true)}
+                        disabled={selectedIds.length === 0}
+                    >
+                        Изменить ({selectedIds.length})
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        color="error"
+                        startIcon={<DeleteOutlineIcon />}
+                        onClick={() => {
+                            setBulkError(null)
+                            setConfirmDeleteOpen(true)
+                        }}
+                        disabled={selectedIds.length === 0}
+                    >
+                        Удалить
+                    </Button>
+                </Box>
+            )}
+
             <FilterSheet tags={tags} stores={stores} />
 
             {/* Редактирование транзакции */}
@@ -688,7 +804,7 @@ export function TransactionsPage() {
                 onSaved={handleTransactionUpdated}
             />
 
-            {!isMobile && bulkEditOpen && (
+            {bulkEditOpen && (
                 <Suspense fallback={null}>
                     <BulkEditSheet
                         open
@@ -698,6 +814,7 @@ export function TransactionsPage() {
                         onClose={() => setBulkEditOpen(false)}
                         onSaved={() => {
                             setSelectedIds([])
+                            setMobileSelectionActive(false)
                             setSelectionResetRevision((revision) => revision + 1)
                         }}
                     />
