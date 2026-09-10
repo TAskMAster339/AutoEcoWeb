@@ -60,7 +60,7 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
     const [aliasScope, setAliasScope] = useState<AliasScope | null>(null)
 
     useEffect(() => {
-        if (!tx) return
+        if (!open || !tx) return
         const amount = tx.income ?? tx.expense ?? null
         const matchingStore = (stores ?? []).find((candidate) => {
             const label = candidate.alias_name || candidate.normalized_seller_name || candidate.seller_name
@@ -81,7 +81,7 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
         setDeleteError(null)
         setConfirmOpen(false)
         setAliasScope(null)
-    }, [stores, tx])
+    }, [open, stores, tx])
 
     const priceNum = price ? parseNum(price) : NaN
     const qtyNum = quantity ? parseNum(quantity) : NaN
@@ -220,12 +220,14 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
                                 freeSolo
                                 openOnFocus
                                 autoHighlight
-                                autoSelect
                                 selectOnFocus
                                 options={storeOptions}
                                 value={selectedStore}
                                 inputValue={store}
-                                onChange={(_, value) => {
+                                onChange={(_, value, reason) => {
+                                    // Losing focus must not turn an untouched optional
+                                    // store into an explicit `seller_name: null` patch.
+                                    if (reason === 'blur') return
                                     if (typeof value === 'string') {
                                         setSelectedStore(null)
                                         setStore(value)

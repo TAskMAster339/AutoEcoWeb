@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import {
+  canStartMobileSelection,
   clampSwipeOffset,
   detectSwipeAxis,
   hasActiveTableFilters,
@@ -55,6 +56,12 @@ test('mobile selection toggles cards without changing the remaining order', () =
   assert.deepEqual(toggleSelectedId(['a', 'c'], 'b'), ['a', 'c', 'b'])
   assert.deepEqual(toggleSelectedId(['a', 'c', 'b'], 'c'), ['a', 'b'])
   assert.deepEqual(toggleSelectedId(['a'], 'a'), [])
+})
+
+test('mobile selection cannot start while the transaction editor opens or is open', () => {
+  assert.equal(canStartMobileSelection(false, false), true)
+  assert.equal(canStartMobileSelection(false, true), false)
+  assert.equal(canStartMobileSelection(true, false), false)
 })
 
 test('keyboard viewport handles overlay and resized mobile browsers without double offset', () => {

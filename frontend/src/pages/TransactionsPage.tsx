@@ -43,7 +43,7 @@ import { normalizeAmountFilter } from '../lib/numbers'
 import { colors, softBg, softFg } from '../theme'
 import { PageSearch } from '../components/common/PageSearch'
 import type { Transaction, TransactionUpdatePatch, TransactionView } from '../api/types'
-import { hasActiveTableFilters, nextOpenSwipeId, replaceTransactionInPlace, toggleSelectedId } from '../lib/transactionInteractions.mjs'
+import { canStartMobileSelection, hasActiveTableFilters, nextOpenSwipeId, replaceTransactionInPlace, toggleSelectedId } from '../lib/transactionInteractions.mjs'
 
 /** Размер автоматически подгружаемой страницы мобильного списка. */
 const MOBILE_PAGE = 50
@@ -350,6 +350,7 @@ export function TransactionsPage() {
     }, [])
 
     const startMobileSelection = useCallback((id: string) => {
+        if (!canStartMobileSelection(editOpenRef.current, editOpenFrameRef.current !== null)) return
         setExpandedMobileId(null)
         setMobileSwipeId(null)
         setMobileSelectionActive(true)
