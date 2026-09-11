@@ -7,6 +7,7 @@ from http import HTTPStatus
 
 import pytest
 from fastapi import HTTPException
+from src.api.v1.transactions import update_transaction
 from src.models.receipt import Receipt
 
 from src.models.user import User
@@ -1400,3 +1401,39 @@ async def test_update_seller_name(session):
     # снять магазин явным null
     tx = await service.update(user, tx.id, TransactionUpdate(seller_name=None))
     assert tx.seller is None
+
+
+async def test_update_receipt_transaction_keeps_inherited_aliased_seller(session):
+    """Both tag-only and full edits return the seller inherited from the receipt."""
+    user = await _make_user(session)
+    alias = await _alias_service(session).create(
+        user,
+        AliasCreate(original_name="перекресток", alias_name="Мой магазин"),
+    )
+    receipt = await _make_receipt(session, user)
+    service = _tx_service(session)
+    tx = (await service.create_for_receipt(receipt, [_item("Молоко", "60.00")]))[0]
+    tag = await TagService(TagRepository(session)).create(
+        user,
+        TagCreate(name="Еда", color="#3B82F6"),
+    )
+
+    quick_tag_response = await update_transaction(
+        tx.id,
+        TransactionUpdate(tag_id=tag.id),
+        user,
+        service,
+    )
+    assert quick_tag_response.seller_name == "Мой магазин"
+    assert quick_tag_response.normalized_seller_name == "Мой магазин"
+    assert quick_tag_response.seller_name_alias_id == alias.id
+    assert quick_tag_response.seller_name_alias_name == "Мой магазин"
+
+    full_edit_response = await update_transaction(
+        tx.id,
+        TransactionUpdate(comment="Покупка на неделю"),
+        user,
+        service,
+    )
+    assert full_edit_response.seller_name == "Мой магазин"
+    assert full_edit_response.seller_name_alias_id == alias.id

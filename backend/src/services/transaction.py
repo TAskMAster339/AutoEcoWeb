@@ -26,6 +26,7 @@ from src.schemas.transaction import (
     TransactionCreate,
     TransactionInReceipt,
     TransactionManualIn,
+    TransactionOut,
     TransactionSummary,
     TransactionUpdate,
 )
@@ -644,6 +645,41 @@ class TransactionService:
                 detail="Транзакция не найдена",
             )
         return tx
+
+    async def to_out(
+        self,
+        user: User,
+        tx: Transaction,
+        *,
+        balance: Decimal | None = None,
+    ) -> TransactionOut:
+        """Build an API response with the effective receipt seller.
+
+        Receipt transactions normally have no own ``seller_id`` and inherit the
+        seller (including its alias) from the parent receipt. A point mutation
+        returns one transaction rather than a joined list row, so that fallback
+        has to be loaded explicitly to avoid returning an empty seller.
+        """
+        receipt = None
+        if tx.seller is None and tx.receipt_id is not None:
+            receipt = await self._receipt_repo.get(user.id, tx.receipt_id)
+        receipt_seller = receipt.seller if receipt is not None else None
+        return TransactionOut.from_model(
+            tx,
+            seller_name=(
+                receipt_seller.normalized_name if receipt_seller is not None else None
+            ),
+            seller_alias_id=(
+                receipt_seller.seller_alias_id if receipt_seller is not None else None
+            ),
+            seller_alias_name=(
+                receipt_seller.seller_alias.alias_name
+                if receipt_seller is not None
+                and receipt_seller.seller_alias is not None
+                else None
+            ),
+            balance=balance,
+        )
 
     async def update(
         self,

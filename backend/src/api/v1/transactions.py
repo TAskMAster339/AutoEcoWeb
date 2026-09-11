@@ -135,7 +135,7 @@ async def update_transaction(
     transaction_service: TransactionSvc,
 ) -> TransactionOut:
     tx = await transaction_service.update(_current_user, transaction_id, data)
-    return TransactionOut.from_model(tx)
+    return await transaction_service.to_out(_current_user, tx)
 
 
 @router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
