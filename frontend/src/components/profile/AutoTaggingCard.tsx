@@ -22,6 +22,7 @@ import {
   useRetrainAutoTagging,
   useUpdateAutoTagging,
 } from '../../hooks/useAutoTagging'
+import { useTags } from '../../hooks/useTags'
 import { colors, softBg, softFg } from '../../theme'
 
 const STATUS_COPY: Record<AutoTaggingModelStatus, { title: string; text: string }> = {
@@ -81,6 +82,7 @@ export function AutoTaggingCard() {
   const query = useAutoTagging()
   const update = useUpdateAutoTagging()
   const retrain = useRetrainAutoTagging()
+  const tagsQuery = useTags()
   const [detailsOpen, setDetailsOpen] = useState(false)
   const data = query.data
   const pending = update.isPending || retrain.isPending
@@ -242,7 +244,11 @@ export function AutoTaggingCard() {
                 <Collapse in={detailsOpen} unmountOnExit>
                   <Divider sx={{ mb: 1.5 }} />
                   <Box sx={{ display: 'grid', gap: 0 }}>
-                    {data.per_tag_metrics.map((metric) => (
+                    {data.per_tag_metrics.map((metric) => {
+                      const tag = tagsQuery.data?.find((item) => item.id === metric.tag_id)
+                      const tagColor = tag?.color ?? metric.tag_color
+                      const tagIcon = tag?.icon ?? metric.tag_icon
+                      return (
                       <Box
                         key={metric.tag_id}
                         sx={{
@@ -263,16 +269,16 @@ export function AutoTaggingCard() {
                               width: 32,
                               height: 32,
                               borderRadius: '7px',
-                              bgcolor: metric.tag_color,
+                              bgcolor: tagColor,
                               display: 'grid',
                               placeItems: 'center',
                               flexShrink: 0,
                               fontSize: 17,
                               lineHeight: 1,
-                              boxShadow: `inset 0 0 0 1px ${metric.tag_color}`,
+                              boxShadow: `inset 0 0 0 1px ${tagColor}`,
                             }}
                           >
-                            {metric.tag_icon ?? ''}
+                            {tagIcon ?? ''}
                           </Box>
                           <Box sx={{ minWidth: 0 }}>
                             <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap title={metric.tag_name}>
@@ -293,7 +299,8 @@ export function AutoTaggingCard() {
                           variant="outlined"
                         />
                       </Box>
-                    ))}
+                      )
+                    })}
                   </Box>
                 </Collapse>
               </>
