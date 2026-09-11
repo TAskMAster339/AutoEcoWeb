@@ -256,13 +256,32 @@ export function AutoTaggingCard() {
                           '&:last-child': { borderBottom: 0 },
                         }}
                       >
-                        <Box sx={{ minWidth: 0 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap title={metric.tag_name}>
-                            {metric.tag_name}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {metric.training_examples} примеров
-                          </Typography>
+                        <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                          <Box
+                            aria-hidden="true"
+                            sx={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: '7px',
+                              bgcolor: metric.tag_color,
+                              display: 'grid',
+                              placeItems: 'center',
+                              flexShrink: 0,
+                              fontSize: 17,
+                              lineHeight: 1,
+                              boxShadow: `inset 0 0 0 1px ${metric.tag_color}`,
+                            }}
+                          >
+                            {metric.tag_icon ?? ''}
+                          </Box>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap title={metric.tag_name}>
+                              {metric.tag_name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {metric.training_examples} примеров
+                            </Typography>
+                          </Box>
                         </Box>
                         <Typography variant="caption" className="tnum">
                           Точность {percent(metric.precision)}

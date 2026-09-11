@@ -467,6 +467,22 @@ class AutoTaggingService:
         status: str,
         rows: list[AutoTagTrainingRow],
     ) -> AutoTaggingStatusResponse:
+        tag_appearance = {
+            str(row.tag_id): (row.tag_color, row.tag_icon)
+            for row in rows
+        }
+        per_tag_metrics = []
+        for metric in state.per_tag_metrics if state else []:
+            tag_id = str(metric["tag_id"])
+            color, icon = tag_appearance.get(tag_id, ("#6C5CE7", None))
+            per_tag_metrics.append(
+                {
+                    **metric,
+                    "tag_color": color,
+                    "tag_icon": icon,
+                },
+            )
+
         return AutoTaggingStatusResponse(
             enabled=user.auto_tagging_enabled,
             status=status,
@@ -486,5 +502,5 @@ class AutoTaggingService:
             macro_f1=state.macro_f1 if state else None,
             store_baseline_precision=state.store_baseline_precision if state else None,
             threshold=state.threshold if state else None,
-            per_tag_metrics=state.per_tag_metrics if state else [],
+            per_tag_metrics=per_tag_metrics,
         )

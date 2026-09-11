@@ -27,6 +27,8 @@ class AutoTagTrainingRow:
     operation_type: int
     amount: Decimal
     check_datetime: datetime
+    tag_color: str = "#6C5CE7"
+    tag_icon: str | None = None
 
 
 class AutoTaggingRepository:
@@ -82,6 +84,8 @@ class AutoTaggingRepository:
             select(
                 Transaction.tag_id,
                 Tag.name,
+                Tag.color,
+                Tag.icon,
                 Transaction.name,
                 Transaction.normalized_name,
                 func.coalesce(own_seller.name, receipt_seller.name),
@@ -110,6 +114,8 @@ class AutoTaggingRepository:
             AutoTagTrainingRow(
                 tag_id=tag_id,
                 tag_name=tag_name,
+                tag_color=tag_color,
+                tag_icon=tag_icon,
                 raw_name=raw_name,
                 normalized_name=normalized_name,
                 raw_seller=raw_seller,
@@ -121,6 +127,8 @@ class AutoTaggingRepository:
             for (
                 tag_id,
                 tag_name,
+                tag_color,
+                tag_icon,
                 raw_name,
                 normalized_name,
                 raw_seller,

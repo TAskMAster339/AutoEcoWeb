@@ -74,6 +74,8 @@ export type AutoTaggingModelStatus =
 export interface AutoTaggingTagMetric {
   tag_id: string
   tag_name: string
+  tag_color: string
+  tag_icon: string | null
   training_examples: number
   validation_examples: number
   precision: number | null

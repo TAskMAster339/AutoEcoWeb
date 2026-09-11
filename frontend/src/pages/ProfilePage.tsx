@@ -348,10 +348,6 @@ export function ProfilePage() {
                     </Card>
                 </Grid>
 
-                <Grid size={{ xs: 12 }}>
-                    <AutoTaggingCard />
-                </Grid>
-
                 {/* Ключ сервиса проверки чеков */}
                 <Grid size={{ xs: 12, md: 7 }}>
                     <Card sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -524,6 +520,11 @@ export function ProfilePage() {
                             Открыть
                         </Button>
                     </Card>
+                </Grid>
+
+                {/* Автотегирование — рядом с лимитами в нижней части профиля */}
+                <Grid size={{ xs: 12 }}>
+                    <AutoTaggingCard />
                 </Grid>
 
                 {/* Лимиты — внизу профиля, перед выходом из аккаунта */}

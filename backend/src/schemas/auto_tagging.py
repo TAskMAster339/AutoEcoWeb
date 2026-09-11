@@ -22,6 +22,8 @@ class AutoTaggingSettingsUpdate(BaseModel):
 class AutoTaggingTagMetric(BaseModel):
     tag_id: UUID
     tag_name: str
+    tag_color: str
+    tag_icon: str | None = None
     training_examples: int
     validation_examples: int
     precision: float | None = None
