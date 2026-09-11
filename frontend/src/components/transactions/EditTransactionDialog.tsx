@@ -21,6 +21,7 @@ import { NumericField } from '../common/NumericField'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { CreateAliasDialog } from '../common/CreateAliasDialog'
 import { TagAutocomplete } from '../common/TagAutocomplete'
+import { AutoTagHint } from './AutoTagHint'
 import { useTags } from '../../hooks/useTags'
 import { useDeleteTransaction, useStores, useUpdateTransaction } from '../../hooks/useTransactions'
 import { messageFromError } from '../../api/client'
@@ -281,7 +282,10 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
                         </Tooltip>
                     </Stack>
 
-                    <TagAutocomplete tags={tags ?? []} value={selectedTag} onChange={setSelectedTag} enterKeyHint="done" />
+                    <Stack spacing={0.75}>
+                        <TagAutocomplete tags={tags ?? []} value={selectedTag} onChange={setSelectedTag} enterKeyHint="done" />
+                        <AutoTagHint source={tx.tagSource} confidence={tx.tagConfidence} />
+                    </Stack>
 
                     <TextField
                         label="Комментарий (необязательно)"

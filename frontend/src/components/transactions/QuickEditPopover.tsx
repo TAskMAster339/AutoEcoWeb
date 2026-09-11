@@ -15,6 +15,7 @@ import {
 } from '@mui/material'
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined'
 import { TagAutocomplete } from '../common/TagAutocomplete'
+import { AutoTagHint } from './AutoTagHint'
 import { NumericField } from '../common/NumericField'
 import { useStores, useUpdateTransaction } from '../../hooks/useTransactions'
 import { messageFromError } from '../../api/client'
@@ -227,7 +228,10 @@ export function QuickEditPopover({
               {error && <Alert severity="error">{error}</Alert>}
 
               {target.field === 'tagId' ? (
-                <TagAutocomplete tags={tags} value={tagId} onChange={setTagId} />
+                <Stack spacing={0.75}>
+                  <TagAutocomplete tags={tags} value={tagId} onChange={setTagId} />
+                  <AutoTagHint source={target.tx.tagSource} confidence={target.tx.tagConfidence} />
+                </Stack>
               ) : target.field === 'store' ? (
                 <Autocomplete
                   freeSolo

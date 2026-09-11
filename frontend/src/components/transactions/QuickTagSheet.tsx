@@ -3,6 +3,7 @@ import { Alert, Box, Button, CircularProgress, Stack, Typography } from '@mui/ma
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import { BottomSheet } from '../common/BottomSheet'
 import { TagAutocomplete } from '../common/TagAutocomplete'
+import { AutoTagHint } from './AutoTagHint'
 import { useUpdateTransaction } from '../../hooks/useTransactions'
 import { messageFromError } from '../../api/client'
 import { formatCurrency, formatLongDate } from '../../lib/format'
@@ -108,6 +109,7 @@ export function QuickTagSheet({ tx, tags, open, onClose, onSaved }: QuickTagShee
         </Box>
 
         <TagAutocomplete tags={tags} value={selectedTag} onChange={setSelectedTag} enterKeyHint="done" />
+        <AutoTagHint source={tx.tagSource} confidence={tx.tagConfidence} />
 
         {selectedTag !== null && (
           <Button

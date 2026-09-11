@@ -32,6 +32,7 @@ import { colors, softBg, softFg } from '../theme'
 import { PasswordField } from '../components/common/PasswordField'
 import { LimitUsageBar } from '../components/common/LimitUsageBar'
 import { useUserLimits } from '../hooks/useUserLimits'
+import { AutoTaggingCard } from '../components/profile/AutoTaggingCard'
 
 const ROLE_LABELS: Record<string, string> = { user: 'Пользователь', admin: 'Администратор' }
 const STATUS_LABELS: Record<string, string> = {
@@ -345,6 +346,10 @@ export function ProfilePage() {
                             </Typography>
                         </Box>
                     </Card>
+                </Grid>
+
+                <Grid size={{ xs: 12 }}>
+                    <AutoTaggingCard />
                 </Grid>
 
                 {/* Ключ сервиса проверки чеков */}

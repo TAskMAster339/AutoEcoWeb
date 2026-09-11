@@ -62,6 +62,47 @@ export interface UserLimitsOverview {
   usage: UserUsage
 }
 
+export type AutoTaggingModelStatus =
+  | 'disabled'
+  | 'insufficient_data'
+  | 'stale'
+  | 'training'
+  | 'ready'
+  | 'degraded'
+  | 'error'
+
+export interface AutoTaggingTagMetric {
+  tag_id: string
+  tag_name: string
+  training_examples: number
+  validation_examples: number
+  precision: number | null
+  recall: number | null
+  supported: boolean
+}
+
+export interface AutoTaggingStatus {
+  enabled: boolean
+  status: AutoTaggingModelStatus
+  current_revision: number
+  trained_revision: number | null
+  algorithm_version: string
+  trained_at: string | null
+  training_examples: number
+  validation_examples: number
+  distinct_tags: number
+  supported_tags: number
+  minimum_training_examples: number
+  minimum_examples_per_tag: number
+  target_precision: number
+  precision: number | null
+  coverage: number | null
+  macro_f1: number | null
+  store_baseline_precision: number | null
+  threshold: number | null
+  per_tag_metrics: AutoTaggingTagMetric[]
+}
+
 /** Offset-based page envelope — mirrors backend src/schemas/pagination.py.
  *  total заполняет transactions (бесконечный скролл); receipts (keyset) — null. */
 export interface CursorPage<T> {
@@ -97,6 +138,8 @@ export interface Transaction {
   /** ISO datetime (UTC) */
   datetime: string
   tag_id: string | null
+  tag_source: 'manual' | 'auto' | null
+  tag_confidence: number | null
   seller_id: string | null
   /** Effective seller value; standalone uses its own seller, receipt rows inherit the receipt seller. */
   seller_name: string | null
@@ -276,6 +319,8 @@ export interface TransactionView {
   sellerAliasName: string | null
   /** tag id */
   tagId: string | null
+  tagSource: 'manual' | 'auto' | null
+  tagConfidence: number | null
   /** Название */
   name: string
   nameSource: string

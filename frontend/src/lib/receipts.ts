@@ -40,6 +40,8 @@ export function receiptTransactionToView(tx: ApiTransaction, r: ApiReceipt): Tra
     sellerAliasName: tx.seller_name_alias_name,
     date: tx.datetime.slice(0, 10),
     tagId: tx.tag_id,
+    tagSource: tx.tag_source,
+    tagConfidence: tx.tag_confidence,
     name: displayAlias(tx.name_alias_name, tx.normalized_name, tx.name),
     nameSource: tx.name,
     nameAliasName: tx.name_alias_name,
