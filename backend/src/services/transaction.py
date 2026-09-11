@@ -30,6 +30,7 @@ from src.schemas.transaction import (
     TransactionUpdate,
 )
 from src.services.aliases import AliasService
+from src.services.auto_tagging import AutoTagInput, AutoTaggingService
 from src.services.receipt_parser import ReceiptItemData, normalize_product_name
 from src.services.sellers import SellerService
 from src.services.user_limits import UserLimitsService
@@ -120,6 +121,7 @@ class TransactionService:
         alias_repo: AliasRepository,
         seller_service: SellerService,
         limits_service: UserLimitsService | None = None,
+        auto_tagging_service: AutoTaggingService | None = None,
     ) -> None:
         self._tx_repo = tx_repo
         self._receipt_repo = receipt_repo
@@ -127,6 +129,7 @@ class TransactionService:
         self._alias_repo = alias_repo
         self._seller_service = seller_service
         self._limits = limits_service
+        self._auto_tagging = auto_tagging_service
 
     # ---------- применение алиасов при создании ----------
 
@@ -168,6 +171,7 @@ class TransactionService:
         self,
         receipt: Receipt,
         items: list[ReceiptItemData],
+        user: User | None = None,
     ) -> list[Transaction]:
         if self._limits is not None:
             await self._limits.ensure_receipt_batch(receipt.user_id, len(items))
@@ -182,12 +186,20 @@ class TransactionService:
             resolved = AliasService.resolve_with_alias(aliases, tx.name)
             tx.normalized_name = normalize_product_name(resolved.value)
             tx.name_alias_id = resolved.alias.id if resolved.alias is not None else None
+        if user is not None:
+            await self._assign_auto_tags(
+                user,
+                transactions,
+                raw_seller=receipt.seller.name,
+                normalized_seller=receipt.seller.normalized_name,
+            )
         return await self._tx_repo.create_many(receipt.id, transactions)
 
     async def create_manual_for_receipt(
         self,
         receipt: Receipt,
         items: list[TransactionManualIn],
+        user: User | None = None,
     ) -> list[Transaction]:
         """Ручные позиции чека (схема) → данные парсера → транзакции."""
         data = [
@@ -201,7 +213,7 @@ class TransactionService:
             )
             for item in items
         ]
-        return await self.create_for_receipt(receipt, data)
+        return await self.create_for_receipt(receipt, data, user)
 
     async def add_to_receipt(
         self,
@@ -241,10 +253,21 @@ class TransactionService:
             operation_type=receipt.operation_type,
             check_datetime=receipt.check_datetime,
             tag_id=data.tag_id,
+            tag_source="manual" if data.tag_id is not None else None,
         )
         if data.tag_id is not None:
             await self._ensure_tag(user.id, data.tag_id)
-        return await self._tx_repo.create(tx)
+        if data.tag_id is None:
+            await self._assign_auto_tags(
+                user,
+                [tx],
+                raw_seller=receipt.seller.name,
+                normalized_seller=receipt.seller.normalized_name,
+            )
+        created = await self._tx_repo.create(tx)
+        if data.tag_id is not None and self._auto_tagging is not None:
+            await self._auto_tagging.bump_revision(user.id)
+        return created
 
     # ---------- ручные (без чека) ----------
 
@@ -280,13 +303,24 @@ class TransactionService:
             operation_type=data.operation_type,
             check_datetime=data.datetime,
             tag_id=data.tag_id,
+            tag_source="manual" if data.tag_id is not None else None,
             comment=data.comment,
         )
+        if data.tag_id is None:
+            await self._assign_auto_tags(
+                user,
+                [tx],
+                raw_seller=seller.name if seller is not None else None,
+                normalized_seller=seller.normalized_name if seller is not None else None,
+            )
         if self._limits is not None:
             # Resolving a new seller can commit, so quota locking belongs
             # immediately before the transaction insert.
             await self._limits.ensure_transactions(user.id)
-        return await self._tx_repo.create(tx)
+        created = await self._tx_repo.create(tx)
+        if data.tag_id is not None and self._auto_tagging is not None:
+            await self._auto_tagging.bump_revision(user.id)
+        return created
 
     async def ensure_new_receipt(self, user_id: UUID, item_count: int) -> None:
         if self._limits is not None:
@@ -619,6 +653,7 @@ class TransactionService:
     ) -> Transaction:
         tx = await self.get(user, tx_id)
         fields = data.model_dump(exclude_unset=True)
+        changed_fields = set(data.model_fields_set)
         if not fields:
             return tx
         null_required = sorted(
@@ -651,14 +686,31 @@ class TransactionService:
             fields["comment"] = fields["comment"].strip() or None
         if fields.get("tag_id") is not None:
             await self._ensure_tag(user.id, fields["tag_id"])
+        training_changed = tx.tag_source == "manual" and bool(
+            {"name", "seller_name", "operation_type", "amount"} & changed_fields
+        )
+        if "tag_id" in fields:
+            if fields["tag_id"] is None:
+                training_changed = training_changed or tx.tag_source == "manual"
+                fields["tag_source"] = None
+                fields["tag_confidence"] = None
+            else:
+                training_changed = True
+                fields["tag_source"] = "manual"
+                fields["tag_confidence"] = None
         updated = await self._tx_repo.update(tx, **fields)
         if "seller_name" in data.model_fields_set and previous_seller_id is not None:
             await self._seller_service.delete_if_unused(user.id, previous_seller_id)
+        if training_changed and self._auto_tagging is not None:
+            await self._auto_tagging.bump_revision(user.id)
         return updated
 
     async def delete(self, user: User, tx_id: UUID) -> None:
         tx = await self.get(user, tx_id)
+        training_changed = tx.tag_source == "manual"
         await self._tx_repo.delete(tx)
+        if training_changed and self._auto_tagging is not None:
+            await self._auto_tagging.bump_revision(user.id)
 
     # ---------- helpers ----------
 
@@ -671,3 +723,34 @@ class TransactionService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Тег не найден",  # noqa: RUF001
             )
+
+    async def _assign_auto_tags(
+        self,
+        user: User,
+        transactions: list[Transaction],
+        *,
+        raw_seller: str | None,
+        normalized_seller: str | None,
+    ) -> None:
+        if self._auto_tagging is None or not transactions:
+            return
+        predictions = await self._auto_tagging.predict_many(
+            user,
+            [
+                AutoTagInput(
+                    raw_name=tx.name,
+                    normalized_name=tx.normalized_name,
+                    raw_seller=raw_seller,
+                    normalized_seller=normalized_seller,
+                    operation_type=tx.operation_type,
+                    amount=tx.amount,
+                )
+                for tx in transactions
+            ],
+        )
+        for tx, prediction in zip(transactions, predictions, strict=True):
+            if tx.tag_id is not None or prediction is None:
+                continue
+            tx.tag_id = prediction.tag_id
+            tx.tag_source = "auto"
+            tx.tag_confidence = prediction.confidence

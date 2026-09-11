@@ -11,6 +11,7 @@ from src.core.enums.user_status import UserStatus
 from src.core.security import decode_access_token
 from src.models.user import User
 from src.repositories.alias import AliasRepository
+from src.repositories.auto_tagging import AutoTaggingRepository
 from src.repositories.email_code import EmailCodeRepository
 from src.repositories.feedback import FeedbackRepository
 from src.repositories.receipt import ReceiptRepository
@@ -20,6 +21,7 @@ from src.repositories.transaction import TransactionRepository
 from src.repositories.user import UserRepository
 from src.repositories.user_limits import UserLimitsRepository
 from src.services.aliases import AliasService
+from src.services.auto_tagging import AutoTaggingService
 from src.services.email import EmailService
 from src.services.import_export import ImportExportService
 from src.services.proverkacheka import ProverkachekaClient
@@ -95,11 +97,28 @@ async def get_seller_service(session: DBSession) -> SellerService:
 SellerSvc = Annotated[SellerService, Depends(get_seller_service)]
 
 
+async def get_auto_tagging_repo(session: DBSession) -> AutoTaggingRepository:
+    return AutoTaggingRepository(session)
+
+
+AutoTaggingRepo = Annotated[AutoTaggingRepository, Depends(get_auto_tagging_repo)]
+
+
+async def get_auto_tagging_service(
+    repo: AutoTaggingRepo,
+) -> AutoTaggingService:
+    return AutoTaggingService(repo)
+
+
+AutoTaggingSvc = Annotated[AutoTaggingService, Depends(get_auto_tagging_service)]
+
+
 async def get_transaction_service(
     session: DBSession,
     receipt_repo: ReceiptRepo,
     seller_service: SellerSvc,
     limits_service: UserLimitsSvc,
+    auto_tagging_service: AutoTaggingSvc,
 ) -> TransactionService:
     return TransactionService(
         TransactionRepository(session),
@@ -108,6 +127,7 @@ async def get_transaction_service(
         AliasRepository(session),
         seller_service,
         limits_service,
+        auto_tagging_service,
     )
 
 
@@ -133,6 +153,7 @@ async def get_import_export_service(
         AliasRepository(session),
         seller_service,
         limits_service,
+        AutoTaggingRepository(session),
     )
 
 
@@ -158,6 +179,7 @@ async def get_alias_service(
         TransactionRepository(session),
         ReceiptRepository(session),
         limits_service,
+        AutoTaggingRepository(session),
     )
 
 

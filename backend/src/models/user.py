@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, Index, String
+from sqlalchemy import Boolean, Enum, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.core.enums.user_role import UserRole
 from src.core.enums.user_status import UserStatus
@@ -46,6 +46,18 @@ class User(BaseModel):
     proverkacheka_token: Mapped[str | None] = mapped_column(
         String(256),
         nullable=True,
+    )
+
+    auto_tagging_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    auto_tagging_training_revision: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
     )
 
     limits: Mapped["UserLimits"] = relationship(

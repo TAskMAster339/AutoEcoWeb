@@ -105,7 +105,11 @@ class ReceiptService:
         )
         # транзакции — ответственность TransactionService
         try:
-            await self._transaction_service.create_for_receipt(receipt, normalized.items)
+            await self._transaction_service.create_for_receipt(
+                receipt,
+                normalized.items,
+                user,
+            )
         except Exception:
             await self._repo.delete(receipt)
             await self._seller_service.delete_if_unused(user.id, seller.id)
@@ -153,6 +157,7 @@ class ReceiptService:
             await self._transaction_service.create_manual_for_receipt(
                 receipt,
                 data.transactions or [],
+                user,
             )
         except Exception:
             await self._repo.delete(receipt)

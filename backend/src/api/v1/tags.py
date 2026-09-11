@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Query, status
-from src.core.dependencies import CurrentUser, TagRepo, UserLimitsSvc
+from src.core.dependencies import AutoTaggingRepo, CurrentUser, TagRepo, UserLimitsSvc
 from src.models.tag import Tag
 from src.schemas.pagination import CursorPage
 from src.schemas.tag import TagCreate, TagResponse, TagUpdate
@@ -62,8 +62,13 @@ async def update_tag(
     data: TagUpdate,
     current_user: CurrentUser,
     repo: TagRepo,
+    auto_tagging_repo: AutoTaggingRepo,
 ) -> TagResponse:
-    tag = await TagService(repo).update(current_user, tag_id, data)
+    tag = await TagService(repo, auto_tagging_repo=auto_tagging_repo).update(
+        current_user,
+        tag_id,
+        data,
+    )
     return _response(tag)
 
 
@@ -72,5 +77,9 @@ async def delete_tag(
     tag_id: UUID,
     _current_user: CurrentUser,
     repo: TagRepo,
+    auto_tagging_repo: AutoTaggingRepo,
 ) -> None:
-    await TagService(repo).delete(_current_user, tag_id)
+    await TagService(repo, auto_tagging_repo=auto_tagging_repo).delete(
+        _current_user,
+        tag_id,
+    )

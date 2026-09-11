@@ -3,7 +3,9 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -32,6 +34,20 @@ class Transaction(BaseModel):
         Index("ix_transactions_user_created", "user_id", "created_at", "id"),
         Index("ix_transactions_name_alias_id", "name_alias_id"),
         Index("ix_transactions_seller_id", "seller_id"),
+        Index(
+            "ix_transactions_user_tag_source_updated",
+            "user_id",
+            "tag_source",
+            "updated_at",
+        ),
+        CheckConstraint(
+            "tag_source IS NULL OR tag_source IN ('manual', 'auto')",
+            name="ck_transactions_tag_source",
+        ),
+        CheckConstraint(
+            "tag_confidence IS NULL OR (tag_confidence >= 0 AND tag_confidence <= 1)",
+            name="ck_transactions_tag_confidence",
+        ),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -126,3 +142,8 @@ class Transaction(BaseModel):
         ForeignKey("tags.id", ondelete="SET NULL"),
         nullable=True,
     )
+
+    # Источник текущего тега. Автоматические назначения не используются
+    # как обучающие примеры, пока пользователь не заменит тег вручную.
+    tag_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    tag_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)

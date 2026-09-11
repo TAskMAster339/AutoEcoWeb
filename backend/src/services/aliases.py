@@ -11,6 +11,7 @@ from src.core.regex import compile_wildcard_regex
 from src.models.alias import Alias
 from src.models.user import User
 from src.repositories.alias import AliasRepository
+from src.repositories.auto_tagging import AutoTaggingRepository
 from src.repositories.receipt import ReceiptRepository
 from src.repositories.transaction import TransactionRepository
 from src.schemas.alias import AliasApplyResult, AliasCreate, AliasUpdate
@@ -38,12 +39,14 @@ class AliasService:
         tx_repo: TransactionRepository | None = None,
         receipt_repo: ReceiptRepository | None = None,
         limits_service: UserLimitsService | None = None,
+        auto_tagging_repo: AutoTaggingRepository | None = None,
     ) -> None:
         self._repo = repo
         self._tx_repo = tx_repo
         self._receipt_repo = receipt_repo
         self._seller_service = seller_service
         self._limits = limits_service
+        self._auto_tagging_repo = auto_tagging_repo
 
     async def list_all(self, user: User) -> list[Alias]:
         return await self._repo.list_all(user.id)
@@ -100,6 +103,8 @@ class AliasService:
         )
         # Новый алиас сразу применяется к уже сохранённым записям
         await self.apply_scope(user.id, data.scope)
+        if self._auto_tagging_repo is not None:
+            await self._auto_tagging_repo.bump_revision(user.id)
         return alias
 
     async def update(self, user: User, alias_id: UUID, data: AliasUpdate) -> Alias:
@@ -139,6 +144,8 @@ class AliasService:
         await self.apply_scope(user.id, changes.get("scope", alias.scope))
         if previous_scope != alias.scope:
             await self.apply_scope(user.id, previous_scope, rebuild_empty=True)
+        if self._auto_tagging_repo is not None:
+            await self._auto_tagging_repo.bump_revision(user.id)
         return alias
 
     async def delete(self, user: User, alias_id: UUID) -> None:
@@ -164,6 +171,8 @@ class AliasService:
             )
         elif alias.scope == _SCOPE_SELLER and self._seller_service is not None:
             await self._seller_service.reapply(user.id, rebuild_empty=True)
+        if self._auto_tagging_repo is not None:
+            await self._auto_tagging_repo.bump_revision(user.id)
 
     async def _get_or_404(self, user_id: UUID, alias_id: UUID) -> Alias:
         alias = await self._repo.get(user_id, alias_id)
@@ -281,4 +290,6 @@ class AliasService:
         if scope is None or scope == _SCOPE_PRODUCT:
             product = await self.apply_scope(user_id, _SCOPE_PRODUCT)
             result.product_updated = product.product_updated
+        if self._auto_tagging_repo is not None:
+            await self._auto_tagging_repo.bump_revision(user_id)
         return result

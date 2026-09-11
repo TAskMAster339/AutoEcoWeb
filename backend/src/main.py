@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.api.v1.admin import router as admin_router
+from src.api.v1.auto_tagging import router as auto_tagging_router
 from src.api.v1.aliases import router as aliases_router
 from src.api.v1.analytics import router as analytics_router
 from src.api.v1.auth import router as auth_router
@@ -25,6 +26,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(auto_tagging_router)
 app.include_router(admin_router)
 app.include_router(receipts_router)
 app.include_router(sellers_router)

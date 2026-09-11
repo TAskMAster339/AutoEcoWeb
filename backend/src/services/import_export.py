@@ -34,6 +34,7 @@ from src.models.tag import Tag
 from src.models.transaction import Transaction
 from src.models.user import User
 from src.repositories.alias import AliasRepository
+from src.repositories.auto_tagging import AutoTaggingRepository
 from src.repositories.tag import TagRepository
 from src.repositories.transaction import TransactionRepository
 from src.schemas.import_export import (
@@ -502,6 +503,7 @@ class ImportExportService:
         alias_repo: AliasRepository,
         seller_service: SellerService,
         limits_service: UserLimitsService | None = None,
+        auto_tagging_repo: AutoTaggingRepository | None = None,
     ) -> None:
         self._session = session
         self._tx_repo = tx_repo
@@ -509,6 +511,7 @@ class ImportExportService:
         self._alias_repo = alias_repo
         self._seller_service = seller_service
         self._limits = limits_service
+        self._auto_tagging_repo = auto_tagging_repo
 
     async def mark_duplicates(self, user: User, preview: ImportPreview) -> ImportPreview:
         """Отмечает точные повторы внутри файла и среди операций пользователя."""
@@ -627,6 +630,7 @@ class ImportExportService:
                         tzinfo=datetime.timezone.utc,
                     ),
                     tag_id=tag_id,
+                    tag_source="manual" if tag_id is not None else None,
                 ),
             )
 
@@ -636,6 +640,9 @@ class ImportExportService:
                 # re-check immediately before the transaction batch is stored.
                 await self._limits.ensure_transactions(user.id, len(transactions))
             await self._tx_repo.create_many_standalone(transactions)
+            if any(tx.tag_source == "manual" for tx in transactions):
+                if self._auto_tagging_repo is not None:
+                    await self._auto_tagging_repo.bump_revision(user.id)
         return ImportResult(
             imported=len(transactions),
             skipped=skipped,

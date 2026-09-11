@@ -1,4 +1,5 @@
 from .alias import Alias
+from .auto_tagging import AutoTaggingModelState
 from .email_code import EmailCode
 from .feedback import Feedback
 from .receipt import Receipt
@@ -11,6 +12,7 @@ from .user_limits import UserLimits
 
 __all__ = [
     "Alias",
+    "AutoTaggingModelState",
     "EmailCode",
     "Feedback",
     "Receipt",

@@ -1,6 +1,7 @@
 from datetime import datetime as dt
 from datetime import timezone
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
@@ -38,6 +39,8 @@ class TransactionOut(BaseModel):
     operation_type: int = 1
     datetime: dt
     tag_id: UUID | None = None
+    tag_source: Literal["manual", "auto"] | None = None
+    tag_confidence: float | None = None
     seller_id: UUID | None = None
     seller_name: str | None = None
     normalized_seller_name: str | None = None
@@ -100,6 +103,8 @@ class TransactionOut(BaseModel):
             operation_type=tx.operation_type,
             datetime=tx.check_datetime,
             tag_id=tx.tag_id,
+            tag_source=tx.tag_source,
+            tag_confidence=tx.tag_confidence,
             seller_id=own.id if own is not None else None,
             seller_name=display,
             normalized_seller_name=display,

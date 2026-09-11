@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from src.models.tag import Tag
 from src.models.user import User
 from src.repositories.tag import TagRepository
+from src.repositories.auto_tagging import AutoTaggingRepository
 from src.schemas.tag import TagCreate, TagUpdate
 from src.services.user_limits import UserLimitsService
 
@@ -13,9 +14,11 @@ class TagService:
         self,
         repo: TagRepository,
         limits_service: UserLimitsService | None = None,
+        auto_tagging_repo: AutoTaggingRepository | None = None,
     ) -> None:
         self._repo = repo
         self._limits = limits_service
+        self._auto_tagging_repo = auto_tagging_repo
 
     async def list_all(self, user: User) -> list[tuple[Tag, int]]:
         return await self._repo.list_all_with_counts(user.id)
@@ -56,11 +59,22 @@ class TagService:
                     detail="Тег с таким названием уже существует",  # noqa: RUF001
                 )
             changes["name"] = name
-        return await self._repo.update(tag, **changes)
+        updated = await self._repo.update(tag, **changes)
+        if "name" in changes and self._auto_tagging_repo is not None:
+            await self._auto_tagging_repo.bump_revision(user.id)
+        return updated
 
     async def delete(self, user: User, tag_id: UUID) -> None:
         tag = await self._get_or_404(user.id, tag_id)
+        training_changed = False
+        if self._auto_tagging_repo is not None:
+            training_changed = await self._auto_tagging_repo.clear_tag_metadata(
+                user.id,
+                tag_id,
+            )
         await self._repo.delete(tag)
+        if training_changed and self._auto_tagging_repo is not None:
+            await self._auto_tagging_repo.bump_revision(user.id)
 
     async def _get_or_404(self, user_id: UUID, tag_id: UUID) -> Tag:
         tag = await self._repo.get(user_id, tag_id)
