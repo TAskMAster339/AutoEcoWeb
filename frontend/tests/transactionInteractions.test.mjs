@@ -131,6 +131,20 @@ test('reduced-motion stylesheet keeps feedback without spatial movement', async 
   assert.match(mediaBlock, /transition-duration:\s*100ms\s*!important/)
 })
 
+test('receipt import refreshes paged transactions and their total before reloading the list', async () => {
+  const source = await readFile(
+    new URL('../src/components/transactions/AddReceiptSheet.tsx', import.meta.url),
+    'utf8',
+  )
+  const removePageCache = source.indexOf("removeQueries({ queryKey: ['txPage'] })")
+  const notifyViews = source.indexOf("setQueryData<number>(['txRevision']")
+
+  assert.notEqual(removePageCache, -1)
+  assert.notEqual(notifyViews, -1)
+  assert.ok(removePageCache < notifyViews)
+  assert.match(source, /invalidateQueries\(\{ queryKey: \['txTotal'\] \}\)/)
+})
+
 test('vertical movement does not hijack page scrolling', () => {
   assert.equal(detectSwipeAxis(5, 40), 'vertical')
   assert.equal(detectSwipeAxis(-40, 5), 'horizontal')

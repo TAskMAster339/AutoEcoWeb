@@ -48,10 +48,18 @@ export function AddReceiptSheet() {
     const scannerRef = useRef<Html5QrcodeLike | null>(null)
 
     const invalidateDomain = () => {
+        // A receipt creates transactions in bulk. Mobile and desktop keep their
+        // paged rows under txPage, so discard those pages before notifying the
+        // views; otherwise a cached first page (often exactly 50 rows) keeps an
+        // outdated total and prevents the mobile sentinel from loading the rest.
+        queryClient.removeQueries({ queryKey: ['txPage'] })
+        queryClient.setQueryData<number>(['txRevision'], (revision = 0) => revision + 1)
+        void queryClient.invalidateQueries({ queryKey: ['txTotal'] })
         void queryClient.invalidateQueries({ queryKey: ['receipts'] })
         void queryClient.invalidateQueries({ queryKey: ['transactions'] })
         void queryClient.invalidateQueries({ queryKey: ['summary'] })
         void queryClient.invalidateQueries({ queryKey: ['analytics'] })
+        void queryClient.invalidateQueries({ queryKey: ['stores'] })
         void queryClient.invalidateQueries({ queryKey: ['tags'] })
         void queryClient.invalidateQueries({ queryKey: ['tags-page'] })
         void queryClient.invalidateQueries({ queryKey: ['user-limits'] })
