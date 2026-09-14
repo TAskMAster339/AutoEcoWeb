@@ -56,8 +56,8 @@ export function RegexBuilder({ value, onChange, scope, autoFocus = true }: Regex
                 autoFocus={autoFocus}
                 size="small"
                 placeholder={scope === 'seller' ? '*перекр?сток*' : '*сырок*45?*'}
-                helperText={`${value.length}/255 · шаблон можно поправить вручную`}
-                slotProps={{ htmlInput: { maxLength: 255 } }}
+                helperText={`${value.length}/1000 · шаблон можно поправить вручную`}
+                slotProps={{ htmlInput: { maxLength: 1000 } }}
             />
 
             <Box>

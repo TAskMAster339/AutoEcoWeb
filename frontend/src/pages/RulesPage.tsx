@@ -224,9 +224,9 @@ export function RulesPage() {
                 </Button>
             </Stack>
 
-            {applyAliases.isError && <Alert severity="error" sx={{ borderRadius: '8px' }}>{applyAliases.error instanceof Error ? applyAliases.error.message : 'Не удалось применить алиасы'}</Alert>}
+            {applyAliases.isError && <Alert severity="error" sx={{ borderRadius: '8px' }}>{applyAliases.error instanceof Error ? applyAliases.error.message : 'Не удалось применить правила'}</Alert>}
             {applyAliases.isSuccess && applyTotal > 0 && <Alert severity="success" sx={{ borderRadius: '8px' }}>Обновлено записей: {applyTotal} (магазины: {applyAliases.data!.seller_updated_receipts} чеков + {applyAliases.data!.seller_updated_transactions} транзакций, товары: {applyAliases.data!.product_updated})</Alert>}
-            {applyAliases.isSuccess && applyTotal === 0 && <Alert severity="info" sx={{ borderRadius: '8px' }}>Все записи уже соответствуют алиасам — ничего не изменено</Alert>}
+            {applyAliases.isSuccess && applyTotal === 0 && <Alert severity="info" sx={{ borderRadius: '8px' }}>Все записи уже соответствуют правилам — ничего не изменено</Alert>}
             {createAlias.isSuccess && !sheetOpen && <Alert severity="success" sx={{ borderRadius: '8px' }}>Правило создано и применено к подходящим записям</Alert>}
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 2, alignItems: 'start' }}>
@@ -297,7 +297,7 @@ export function RulesPage() {
                 </Stack>
             </BottomSheet>
 
-            <ConfirmDialog open={confirmOpen} onClose={() => setConfirmOpen(false)} onConfirm={() => void runApplyAll()} tone="primary" title="Применить все алиасы?" message="Все алиасы магазинов и товаров будут применены к существующим чекам и транзакциям. Операция переименовывает подходящие записи и необратима." confirmLabel="Применить" pending={applyAliases.isPending} error={applyAliases.isError ? (applyAliases.error instanceof Error ? applyAliases.error.message : null) : null} />
+            <ConfirmDialog open={confirmOpen} onClose={() => setConfirmOpen(false)} onConfirm={() => void runApplyAll()} tone="primary" title="Применить все правила?" message="Все правила для магазинов и товаров будут применены к существующим чекам и транзакциям. Операция переименовывает подходящие записи и необратима." confirmLabel="Применить" pending={applyAliases.isPending} error={applyAliases.isError ? (applyAliases.error instanceof Error ? applyAliases.error.message : null) : null} />
             <ConfirmDialog
                 open={deleteTarget !== null}
                 onClose={() => setDeleteTarget(null)}

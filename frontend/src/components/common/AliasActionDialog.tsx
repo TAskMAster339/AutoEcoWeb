@@ -15,61 +15,64 @@ import {
 import AddLinkOutlinedIcon from '@mui/icons-material/AddLinkOutlined'
 import PlaylistAddOutlinedIcon from '@mui/icons-material/PlaylistAddOutlined'
 import { messageFromError } from '../../api/client'
-import type { Alias } from '../../api/types'
+import type { Alias, AliasScope } from '../../api/types'
 import { useAliases, useUpdateAlias } from '../../hooks/useAliases'
 import { appendAliasPattern } from '../../lib/aliasPatterns.mjs'
 
-const MAX_ALIAS_PATTERN_LENGTH = 1000
+const MAX_RULE_PATTERN_LENGTH = 1000
 
-interface ProductAliasActionDialogProps {
+interface AliasActionDialogProps {
   open: boolean
-  productName: string
+  scope: AliasScope
+  sourceName: string
   onClose: () => void
   onCreateNew: () => void
 }
 
-export function ProductAliasActionDialog({ open, productName, onClose, onCreateNew }: ProductAliasActionDialogProps) {
+export function AliasActionDialog({ open, scope, sourceName, onClose, onCreateNew }: AliasActionDialogProps) {
   const titleId = useId()
   const [step, setStep] = useState<'actions' | 'attach'>('actions')
   const [search, setSearch] = useState('')
-  const [selectedAlias, setSelectedAlias] = useState<Alias | null>(null)
+  const [selectedRule, setSelectedRule] = useState<Alias | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
-  const aliasesQuery = useAliases('product', search)
-  const updateAlias = useUpdateAlias()
-  const aliases = useMemo(() => aliasesQuery.data?.pages.flatMap((page) => page.items) ?? [], [aliasesQuery.data])
+  const rulesQuery = useAliases(scope, search)
+  const updateRule = useUpdateAlias()
+  const rules = useMemo(() => rulesQuery.data?.pages.flatMap((page) => page.items) ?? [], [rulesQuery.data])
+  const subjectGenitive = scope === 'seller' ? 'магазина' : 'товара'
+  const subjectAccusative = scope === 'seller' ? 'магазин' : 'товар'
 
   useEffect(() => {
     if (!open) return
     setStep('actions')
     setSearch('')
-    setSelectedAlias(null)
+    setSelectedRule(null)
     setFormError(null)
-    updateAlias.reset()
-  }, [open, productName]) // eslint-disable-line react-hooks/exhaustive-deps
+    updateRule.reset()
+  }, [open, scope, sourceName]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!open || step !== 'attach' || !aliasesQuery.hasNextPage || aliasesQuery.isFetchingNextPage) return
-    void aliasesQuery.fetchNextPage()
-  }, [aliasesQuery, open, step])
+    if (!open || step !== 'attach' || !rulesQuery.hasNextPage || rulesQuery.isFetchingNextPage) return
+    void rulesQuery.fetchNextPage()
+  }, [open, rulesQuery, step])
 
   const close = () => {
-    if (!updateAlias.isPending) onClose()
+    if (!updateRule.isPending) onClose()
   }
 
   const attach = async () => {
-    if (!selectedAlias) {
-      setFormError('Выберите алиас товара')
+    if (!selectedRule) {
+      setFormError(`Выберите правило для ${subjectGenitive}`)
       return
     }
-    const originalName = appendAliasPattern(selectedAlias, productName)
-    if (originalName.length > MAX_ALIAS_PATTERN_LENGTH) {
-      setFormError('Новое правило длиннее 1000 символов. Сократите правило перед присоединением товара.')
+    const originalName = appendAliasPattern(selectedRule, sourceName)
+    if (originalName.length > MAX_RULE_PATTERN_LENGTH) {
+      setFormError('Новое условие длиннее 1000 символов. Сократите правило перед добавлением названия.')
       return
     }
     setFormError(null)
     try {
-      await updateAlias.mutateAsync({
-        id: selectedAlias.id,
+      await updateRule.mutateAsync({
+        id: selectedRule.id,
         patch: { original_name: originalName, is_regex: true },
       })
       onClose()
@@ -89,12 +92,12 @@ export function ProductAliasActionDialog({ open, productName, onClose, onCreateN
     >
       <DialogContent sx={{ p: 0, overflow: 'visible' }}>
         <Typography id={titleId} sx={{ fontSize: 17, fontWeight: 700, mb: 0.75 }}>
-          {step === 'actions' ? 'Добавить алиас товара' : 'Присоединить к алиасу'}
+          {step === 'actions' ? `Добавить правило для ${subjectGenitive}` : `Добавить ${subjectAccusative} в правило`}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           {step === 'actions'
-            ? `Выберите, как обработать «${productName.trim()}».`
-            : 'Найдите алиас по названию. Текущее название товара добавится в его правило.'}
+            ? `Выберите, как обработать «${sourceName.trim()}».`
+            : `Найдите правило по названию. Текущее название ${subjectGenitive} добавится в его условие.`}
         </Typography>
 
         {formError && <Alert severity="error" sx={{ mb: 1.5, borderRadius: '8px' }}>{formError}</Alert>}
@@ -107,7 +110,7 @@ export function ProductAliasActionDialog({ open, productName, onClose, onCreateN
               onClick={onCreateNew}
               sx={{ minHeight: 52, justifyContent: 'flex-start' }}
             >
-              Создать новый алиас
+              Создать новое правило
             </Button>
             <Button
               variant="outlined"
@@ -115,15 +118,15 @@ export function ProductAliasActionDialog({ open, productName, onClose, onCreateN
               onClick={() => setStep('attach')}
               sx={{ minHeight: 52, justifyContent: 'flex-start' }}
             >
-              Присоединить к существующему
+              Добавить в существующее
             </Button>
           </Stack>
         ) : (
           <Autocomplete
-            options={aliases}
-            value={selectedAlias}
+            options={rules}
+            value={selectedRule}
             onChange={(_, value) => {
-              setSelectedAlias(value)
+              setSelectedRule(value)
               if (value) setSearch(value.alias_name)
               setFormError(null)
             }}
@@ -133,16 +136,16 @@ export function ProductAliasActionDialog({ open, productName, onClose, onCreateN
             }}
             getOptionLabel={(option) => option.alias_name}
             isOptionEqualToValue={(option, value) => option.id === value.id}
-            loading={aliasesQuery.isLoading || aliasesQuery.isFetchingNextPage}
+            loading={rulesQuery.isLoading || rulesQuery.isFetchingNextPage}
             openOnFocus
             autoHighlight
             selectOnFocus
-            noOptionsText={aliasesQuery.isError ? 'Не удалось загрузить алиасы' : 'Алиасы не найдены'}
+            noOptionsText={rulesQuery.isError ? 'Не удалось загрузить правила' : 'Правила не найдены'}
             renderOption={(props, option) => (
               <Box component="li" {...props} key={option.id} sx={{ display: 'block !important', minHeight: 48 }}>
                 <Typography noWrap sx={{ fontWeight: 600 }}>{option.alias_name}</Typography>
                 <Typography variant="caption" color="text.secondary" noWrap>
-                  Правило: {option.original_name}
+                  Условие: {option.original_name}
                 </Typography>
               </Box>
             )}
@@ -150,15 +153,15 @@ export function ProductAliasActionDialog({ open, productName, onClose, onCreateN
               <TextField
                 {...params}
                 autoFocus
-                label="Алиас товара"
+                label={`Правило для ${subjectGenitive}`}
                 placeholder="Найти по названию"
-                helperText={aliasesQuery.isError ? 'Проверьте подключение и попробуйте ещё раз' : 'Выберите алиас, к которому относится этот товар'}
+                helperText={rulesQuery.isError ? 'Проверьте подключение и попробуйте ещё раз' : `Выберите правило, к которому относится название ${subjectGenitive}`}
                 slotProps={{
                   input: {
                     ...params.InputProps,
                     endAdornment: (
                       <>
-                        {(aliasesQuery.isLoading || aliasesQuery.isFetchingNextPage) && <CircularProgress color="inherit" size={18} />}
+                        {(rulesQuery.isLoading || rulesQuery.isFetchingNextPage) && <CircularProgress color="inherit" size={18} />}
                         {params.InputProps.endAdornment}
                       </>
                     ),
@@ -171,12 +174,12 @@ export function ProductAliasActionDialog({ open, productName, onClose, onCreateN
       </DialogContent>
 
       <DialogActions sx={{ px: 0, pb: 0, pt: 2, flexDirection: { xs: 'column-reverse', sm: 'row' }, gap: 1 }}>
-        <Button fullWidth onClick={step === 'attach' ? () => setStep('actions') : close} disabled={updateAlias.isPending}>
+        <Button fullWidth onClick={step === 'attach' ? () => setStep('actions') : close} disabled={updateRule.isPending}>
           {step === 'attach' ? 'Назад' : 'Отмена'}
         </Button>
         {step === 'attach' && (
-          <Button fullWidth variant="contained" onClick={() => void attach()} disabled={!selectedAlias || updateAlias.isPending}>
-            {updateAlias.isPending ? <CircularProgress size={20} color="inherit" /> : 'Присоединить'}
+          <Button fullWidth variant="contained" onClick={() => void attach()} disabled={!selectedRule || updateRule.isPending}>
+            {updateRule.isPending ? <CircularProgress size={20} color="inherit" /> : 'Добавить'}
           </Button>
         )}
       </DialogActions>

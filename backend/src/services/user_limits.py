@@ -38,9 +38,9 @@ class UserLimitsService:
     async def ensure_aliases(self, user_id: UUID, scope: str, additional: int = 1) -> None:
         limits, usage = await self._locked_usage(user_id)
         if scope == "seller":
-            self._ensure("алиасов магазинов", usage.seller_aliases, additional, limits.max_seller_aliases)
+            self._ensure("правил для магазинов", usage.seller_aliases, additional, limits.max_seller_aliases)
         else:
-            self._ensure("алиасов товаров", usage.product_aliases, additional, limits.max_product_aliases)
+            self._ensure("правил для товаров", usage.product_aliases, additional, limits.max_product_aliases)
 
     async def ensure_transactions(self, user_id: UUID, additional: int = 1) -> None:
         limits, usage = await self._locked_usage(user_id)

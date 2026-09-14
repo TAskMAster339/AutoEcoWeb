@@ -24,7 +24,7 @@ interface CreateAliasDialogProps {
     onClose: () => void
 }
 
-/** Быстрое создание алиаса прямо из формы редактирования транзакции. */
+/** Быстрое создание правила прямо из формы редактирования транзакции. */
 export function CreateAliasDialog({ open, scope, originalName, onClose }: CreateAliasDialogProps) {
     const titleId = useId()
     const createAlias = useCreateAlias()
@@ -56,7 +56,7 @@ export function CreateAliasDialog({ open, scope, originalName, onClose }: Create
             })
             onClose()
         } catch (error) {
-            setFormError(error instanceof Error ? error.message : 'Не удалось создать алиас')
+            setFormError(error instanceof Error ? error.message : 'Не удалось создать правило')
         }
     }
 
@@ -84,10 +84,10 @@ export function CreateAliasDialog({ open, scope, originalName, onClose }: Create
         >
             <DialogContent sx={{ p: 0, overflow: 'visible' }} onKeyDown={handleKeyDown}>
                 <Typography id={titleId} sx={{ fontSize: 17, fontWeight: 700, mb: 0.75 }}>
-                    Создать алиас {scope === 'seller' ? 'магазина' : 'товара'}
+                    Создать правило для {scope === 'seller' ? 'магазина' : 'товара'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Алиас сразу применится к подходящим существующим записям.
+                    Правило сразу применится к подходящим существующим записям.
                 </Typography>
                 {formError && <Alert severity="error" sx={{ mb: 1.5, borderRadius: '8px' }}>{formError}</Alert>}
                 <Stack spacing={1.5}>
@@ -128,7 +128,7 @@ export function AliasShortcut({ scope, originalName, onClick }: AliasShortcutPro
                 edge="end"
                 onClick={onClick}
                 disabled={!originalName.trim()}
-                aria-label={`Создать алиас ${scope === 'seller' ? 'магазина' : 'товара'}`}
+                aria-label={`Создать правило для ${scope === 'seller' ? 'магазина' : 'товара'}`}
                 sx={{ borderRadius: '6px' }}
             >
                 <AddLinkOutlinedIcon fontSize="small" />

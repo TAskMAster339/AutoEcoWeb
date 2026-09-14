@@ -268,7 +268,7 @@ export function QuickEditPopover({
                       <li {...optionProps} key={`${option.seller_id}:${state.index}`}>
                         <Stack direction="row" spacing={1} alignItems="center">
                           <span>{storeLabel(option)}</span>
-                          {option.alias_name && <Chip label="алиас" size="small" color="primary" />}
+                          {option.alias_name && <Chip label="правило" size="small" color="primary" />}
                         </Stack>
                       </li>
                     )
@@ -280,7 +280,7 @@ export function QuickEditPopover({
                       label="Магазин"
                       placeholder="Найдите или введите новый"
                       helperText={selectedStore?.alias_name
-                        ? `Алиас: оригинал «${selectedStore.seller_name}»`
+                        ? `Правило: исходное название «${selectedStore.seller_name}»`
                         : 'Можно выбрать существующий или ввести новый'}
                     />
                   )}

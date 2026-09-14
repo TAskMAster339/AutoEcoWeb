@@ -189,7 +189,7 @@ export function BulkEditSheet({
                   <li {...optionProps} key={option.seller_id}>
                     <Stack direction="row" spacing={1} alignItems="center">
                       <span>{storeLabel(option)}</span>
-                      {option.alias_name && <Chip label="алиас" size="small" color="primary" />}
+                      {option.alias_name && <Chip label="правило" size="small" color="primary" />}
                     </Stack>
                   </li>
                 )

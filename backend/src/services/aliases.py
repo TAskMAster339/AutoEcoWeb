@@ -89,7 +89,7 @@ class AliasService:
         if duplicate is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Такой алиас уже существует",
+                detail="Такое правило уже существует",
             )
         if self._limits is not None:
             await self._limits.ensure_aliases(user.id, data.scope)
@@ -137,7 +137,7 @@ class AliasService:
         if duplicate is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Такой алиас уже существует",
+                detail="Такое правило уже существует",
             )
         alias = await self._repo.update(alias, **changes)
         # Изменённый алиас тоже применяется к существующим записям
@@ -179,7 +179,7 @@ class AliasService:
         if alias is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Алиас не найден",
+                detail="Правило не найдено",
             )
         return alias
 

@@ -189,7 +189,7 @@ export function AddTransactionSheet() {
                         <li {...props} key={option.seller_id}>
                             <Stack direction="row" spacing={1} alignItems="center">
                                 <span>{option.alias_name || option.normalized_seller_name || option.seller_name}</span>
-                                {option.alias_name && <Chip label="алиас" size="small" color="primary" />}
+                                {option.alias_name && <Chip label="правило" size="small" color="primary" />}
                             </Stack>
                         </li>
                     )}
@@ -198,7 +198,7 @@ export function AddTransactionSheet() {
                             {...params}
                             label="Магазин (необязательно)"
                             placeholder="Выберите или введите новый"
-                            helperText={selectedStore?.alias_name ? `Алиас: оригинал «${selectedStore.seller_name}»` : 'Можно выбрать существующий или ввести новый'}
+                            helperText={selectedStore?.alias_name ? `Правило: исходное название «${selectedStore.seller_name}»` : 'Можно выбрать существующий или ввести новый'}
                         />
                     )}
                 />

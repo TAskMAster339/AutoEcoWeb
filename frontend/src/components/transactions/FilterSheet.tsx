@@ -250,7 +250,7 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
                         renderOption={(props, store) => (
                             <Box component="li" {...props} key={store.filter_value} sx={{ minHeight: 44, display: 'flex', alignItems: 'center' }}>
                                 <Typography noWrap>{storeLabel(store)}</Typography>
-                                {store.alias_name && <Chip label="алиас" size="small" color="primary" sx={{ ml: 'auto' }} />}
+                                {store.alias_name && <Chip label="правило" size="small" color="primary" sx={{ ml: 'auto' }} />}
                             </Box>
                         )}
                         renderInput={(params) => (

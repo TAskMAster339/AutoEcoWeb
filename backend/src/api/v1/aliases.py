@@ -24,7 +24,7 @@ async def list_aliases(
     scope: Literal["seller", "product"] | None = Query(None),
     search: str | None = Query(None, max_length=255),
 ) -> CursorPage[AliasResponse]:
-    """Страница алиасов (offset-пагинация) + total — алиасов может быть много."""
+    """Страница правил (offset-пагинация) + total — правил может быть много."""
     items, total = await alias_service.list_page(
         _current_user,
         scope=scope,
@@ -47,7 +47,7 @@ async def apply_aliases(
     alias_service: AliasSvc,
     data: AliasApplyRequest | None = None,
 ) -> AliasApplyResult:
-    """Применить все алиасы (или одного скоупа) к существующим записям."""
+    """Применить все правила (или одного скоупа) к существующим записям."""
     return await alias_service.apply_all(current_user.id, data.scope if data else None)
 
 
@@ -57,7 +57,7 @@ async def create_alias(
     current_user: CurrentUser,
     alias_service: AliasSvc,
 ) -> AliasResponse:
-    """Создать алиас и сразу применить его к подходящим записям."""  # noqa: RUF002
+    """Создать правило и сразу применить его к подходящим записям."""  # noqa: RUF002
     alias = await alias_service.create(current_user, data)
     return AliasResponse.model_validate(alias)
 
@@ -69,7 +69,7 @@ async def update_alias(
     current_user: CurrentUser,
     alias_service: AliasSvc,
 ) -> AliasResponse:
-    """Обновить алиас и переприменить его к подходящим записям."""  # noqa: RUF002
+    """Обновить правило и переприменить его к подходящим записям."""  # noqa: RUF002
     alias = await alias_service.update(current_user, alias_id, data)
     return AliasResponse.model_validate(alias)
 
@@ -80,5 +80,5 @@ async def delete_alias(
     _current_user: CurrentUser,
     alias_service: AliasSvc,
 ) -> None:
-    """Удалить алиас. Уже применённые переименования не откатываются."""
+    """Удалить правило. Уже применённые переименования не откатываются."""
     await alias_service.delete(_current_user, alias_id)

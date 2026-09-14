@@ -551,8 +551,8 @@ export function ProfilePage() {
                         ) : (
                             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
                                 <LimitUsageBar label="Теги" used={limitsQuery.data.usage.tags} limit={limitsQuery.data.limits.max_tags} />
-                                <LimitUsageBar label="Алиасы магазинов" used={limitsQuery.data.usage.seller_aliases} limit={limitsQuery.data.limits.max_seller_aliases} />
-                                <LimitUsageBar label="Алиасы товаров" used={limitsQuery.data.usage.product_aliases} limit={limitsQuery.data.limits.max_product_aliases} />
+                                <LimitUsageBar label="Правила для магазинов" used={limitsQuery.data.usage.seller_aliases} limit={limitsQuery.data.limits.max_seller_aliases} />
+                                <LimitUsageBar label="Правила для товаров" used={limitsQuery.data.usage.product_aliases} limit={limitsQuery.data.limits.max_product_aliases} />
                                 <LimitUsageBar label="Чеки" used={limitsQuery.data.usage.receipts} limit={limitsQuery.data.limits.max_receipts} />
                                 <LimitUsageBar label="Транзакции" used={limitsQuery.data.usage.transactions} limit={limitsQuery.data.limits.max_transactions} />
                                 <Box sx={{ display: 'grid', gap: 0.5, alignContent: 'center' }}>

@@ -20,7 +20,7 @@ import { BottomSheet } from '../common/BottomSheet'
 import { NumericField } from '../common/NumericField'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { CreateAliasDialog } from '../common/CreateAliasDialog'
-import { ProductAliasActionDialog } from '../common/ProductAliasActionDialog'
+import { AliasActionDialog } from '../common/AliasActionDialog'
 import { TagAutocomplete } from '../common/TagAutocomplete'
 import { AutoTagHint } from './AutoTagHint'
 import { useTags } from '../../hooks/useTags'
@@ -60,7 +60,7 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
     const [deleteError, setDeleteError] = useState<string | null>(null)
     const [confirmOpen, setConfirmOpen] = useState(false)
     const [aliasScope, setAliasScope] = useState<AliasScope | null>(null)
-    const [productAliasActionOpen, setProductAliasActionOpen] = useState(false)
+    const [aliasActionScope, setAliasActionScope] = useState<AliasScope | null>(null)
 
     useEffect(() => {
         if (!open || !tx) return
@@ -84,7 +84,7 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
         setDeleteError(null)
         setConfirmOpen(false)
         setAliasScope(null)
-        setProductAliasActionOpen(false)
+        setAliasActionScope(null)
     }, [open, stores, tx])
 
     const priceNum = price ? parseNum(price) : NaN
@@ -99,6 +99,9 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
     if (!tx) return null
 
     const productOriginalName = name === tx.name ? tx.nameSource : name
+    const sellerOriginalName = store === tx.store
+        ? tx.sellerNameSource ?? store
+        : selectedStore?.seller_name ?? store
 
     const submit = async () => {
         setFormError(null)
@@ -178,7 +181,7 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
                     onKeyDown={handleFormKeyDown}
                     onSubmit={(event) => {
                         event.preventDefault()
-                        if (!confirmOpen && aliasScope === null && !updateTx.isPending && !deleteTx.isPending) void submit()
+                        if (!confirmOpen && aliasScope === null && aliasActionScope === null && !updateTx.isPending && !deleteTx.isPending) void submit()
                     }}
                 >
                     {formError && <Alert severity="error">{formError}</Alert>}
@@ -203,15 +206,15 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
                             fullWidth
                             required
                             placeholder="Например: Кофе, проезд, зарплата"
-                            helperText={tx.nameAliasName ? `Алиас: оригинал «${tx.nameSource}»` : undefined}
+                            helperText={tx.nameAliasName ? `Правило: исходное название «${tx.nameSource}»` : undefined}
                             sx={{ '& .MuiInputBase-root': { height: 56 } }}
                         />
-                        <Tooltip title="Добавить алиас названия">
+                        <Tooltip title="Добавить правило для названия">
                             <span>
                                 <IconButton
-                                    aria-label="Добавить алиас названия"
+                                    aria-label="Добавить правило для названия"
                                     color="primary"
-                                    onClick={() => setProductAliasActionOpen(true)}
+                                    onClick={() => setAliasActionScope('product')}
                                     disabled={!name.trim()}
                                     sx={{ width: 56, minWidth: 56, height: 56, minHeight: 56, p: 0, mt: 0, borderRadius: '6px', border: '1px solid', borderColor: 'divider', flexShrink: 0 }}
                                 >
@@ -258,7 +261,7 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
                                     <li {...props} key={option.seller_id}>
                                         <Stack direction="row" spacing={1} alignItems="center">
                                             <span>{option.alias_name || option.normalized_seller_name || option.seller_name}</span>
-                                            {option.alias_name && <Chip label="алиас" size="small" color="primary" />}
+                                            {option.alias_name && <Chip label="правило" size="small" color="primary" />}
                                         </Stack>
                                     </li>
                                 )}
@@ -267,18 +270,18 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
                                         {...params}
                                         label="Магазин (необязательно)"
                                         placeholder="Выберите или введите новый"
-                                        helperText={selectedStore?.alias_name ? `Алиас: оригинал «${selectedStore.seller_name}»` : 'Можно выбрать существующий или ввести новый'}
+                                        helperText={selectedStore?.alias_name ? `Правило: исходное название «${selectedStore.seller_name}»` : 'Можно выбрать существующий или ввести новый'}
                                         sx={{ '& .MuiInputBase-root': { height: 56 } }}
                                     />
                                 )}
                             />
                         </Box>
-                        <Tooltip title="Создать алиас магазина">
+                        <Tooltip title="Добавить правило для магазина">
                             <span>
                                 <IconButton
-                                    aria-label="Создать алиас магазина"
+                                    aria-label="Добавить правило для магазина"
                                     color="primary"
-                                    onClick={() => setAliasScope('seller')}
+                                    onClick={() => setAliasActionScope('seller')}
                                     disabled={!store.trim()}
                                     sx={{ width: 56, minWidth: 56, height: 56, minHeight: 56, p: 0, mt: 0, borderRadius: '6px', border: '1px solid', borderColor: 'divider', flexShrink: 0 }}
                                 >
@@ -382,14 +385,15 @@ export function EditTransactionDialog({ tx, open, onClose, updateInPlace = false
                 originalName={aliasScope === 'seller' ? store : productOriginalName}
                 onClose={() => setAliasScope(null)}
             />
-            {productAliasActionOpen && (
-                <ProductAliasActionDialog
+            {aliasActionScope && (
+                <AliasActionDialog
                     open
-                    productName={productOriginalName}
-                    onClose={() => setProductAliasActionOpen(false)}
+                    scope={aliasActionScope}
+                    sourceName={aliasActionScope === 'seller' ? sellerOriginalName : productOriginalName}
+                    onClose={() => setAliasActionScope(null)}
                     onCreateNew={() => {
-                        setProductAliasActionOpen(false)
-                        setAliasScope('product')
+                        setAliasScope(aliasActionScope)
+                        setAliasActionScope(null)
                     }}
                 />
             )}

@@ -39,13 +39,13 @@ class AliasResponse(BaseModel):
 
 
 class AliasApplyRequest(BaseModel):
-    """POST /api/v1/aliases/apply: применить все алиасы (или одного scope)."""
+    """POST /api/v1/aliases/apply: применить все правила (или одного scope)."""
 
     scope: AliasScopeLiteral | None = None
 
 
 class AliasApplyResult(BaseModel):
-    """Сколько записей переименовано при применении алиасов."""
+    """Сколько записей переименовано при применении правил."""
 
     # seller: названия магазинов в чеках и ручных транзакциях
     seller_updated_receipts: int = 0

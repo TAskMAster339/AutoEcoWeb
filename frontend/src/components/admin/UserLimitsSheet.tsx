@@ -7,8 +7,8 @@ import type { AdminUser, UserLimits } from '../../api/types'
 
 const FIELDS: Array<{ key: keyof UserLimits; label: string; hint: string }> = [
   { key: 'max_tags', label: 'Теги', hint: 'Всего тегов' },
-  { key: 'max_seller_aliases', label: 'Алиасы магазинов', hint: 'Отдельный лимит' },
-  { key: 'max_product_aliases', label: 'Алиасы товаров', hint: 'Отдельный лимит' },
+  { key: 'max_seller_aliases', label: 'Правила для магазинов', hint: 'Отдельный лимит' },
+  { key: 'max_product_aliases', label: 'Правила для товаров', hint: 'Отдельный лимит' },
   { key: 'max_receipts', label: 'Чеки', hint: 'Всего чеков' },
   { key: 'max_transactions', label: 'Транзакции', hint: 'Включая позиции чеков' },
   { key: 'max_receipt_items', label: 'Позиций в чеке', hint: 'Для одного чека' },
