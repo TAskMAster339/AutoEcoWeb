@@ -8,7 +8,7 @@ AliasScopeLiteral = Literal["seller", "product"]
 
 
 class AliasCreate(BaseModel):
-    original_name: str = Field(min_length=1, max_length=255)
+    original_name: str = Field(min_length=1, max_length=1000)
     alias_name: str = Field(min_length=1, max_length=255)
     # 'seller' — магазины, 'product' — товары (позиции транзакций)
     scope: AliasScopeLiteral = "seller"
@@ -17,7 +17,7 @@ class AliasCreate(BaseModel):
 
 
 class AliasUpdate(BaseModel):
-    original_name: str | None = Field(default=None, min_length=1, max_length=255)
+    original_name: str | None = Field(default=None, min_length=1, max_length=1000)
     alias_name: str | None = Field(default=None, min_length=1, max_length=255)
     scope: AliasScopeLiteral | None = None
     is_regex: bool | None = None

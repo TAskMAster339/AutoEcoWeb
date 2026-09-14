@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import cast
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from src.core.regex import wildcard_to_regex
 from src.repositories.alias import AliasRepository
 from src.repositories.receipt import ReceiptRepository
@@ -91,6 +92,27 @@ async def test_alias_scope_defaults_to_seller(session):
         ),
     )
     assert product.scope == "product"
+
+
+async def test_alias_rule_accepts_1000_characters(session):
+    user = await _make_user(UserRepository(session))
+    rule = "а" * 1000
+
+    alias = await _alias_service(session).create(
+        user,
+        AliasCreate(original_name=rule, alias_name="Длинное правило", scope="product"),
+    )
+
+    assert alias.original_name == rule
+
+
+def test_alias_rule_rejects_more_than_1000_characters():
+    try:
+        AliasCreate(original_name="а" * 1001, alias_name="Слишком длинное правило")
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("ожидалась ошибка валидации для правила длиннее 1000 символов")
 
 
 async def test_alias_same_pair_different_scopes_allowed(session):

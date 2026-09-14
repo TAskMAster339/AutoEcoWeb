@@ -48,7 +48,7 @@ class Alias(BaseModel):
     )
 
     original_name: Mapped[str] = mapped_column(
-        String(255),
+        String(1000),
         nullable=False,
     )
 
