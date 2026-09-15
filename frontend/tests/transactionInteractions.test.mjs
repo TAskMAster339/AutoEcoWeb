@@ -6,6 +6,7 @@ import {
   clampSwipeOffset,
   detectSwipeAxis,
   hasActiveTableFilters,
+  isNearScrollEnd,
   matchesOptionSearch,
   medianOf,
   nextOpenSwipeId,
@@ -62,6 +63,12 @@ test('mobile selection cannot start while the transaction editor opens or is ope
   assert.equal(canStartMobileSelection(false, false), true)
   assert.equal(canStartMobileSelection(false, true), false)
   assert.equal(canStartMobileSelection(true, false), false)
+})
+
+test('mobile pagination starts before the app scroll frame reaches the end', () => {
+  assert.equal(isNearScrollEnd(4120, 800, 5200), true)
+  assert.equal(isNearScrollEnd(4000, 800, 5200), false)
+  assert.equal(isNearScrollEnd(-40, 800, 5200), false)
 })
 
 test('keyboard viewport handles overlay and resized mobile browsers without double offset', () => {

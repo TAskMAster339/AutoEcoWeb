@@ -43,7 +43,7 @@ import { normalizeAmountFilter } from '../lib/numbers'
 import { colors, softBg, softFg } from '../theme'
 import { PageSearch } from '../components/common/PageSearch'
 import type { Transaction, TransactionUpdatePatch, TransactionView } from '../api/types'
-import { canStartMobileSelection, hasActiveTableFilters, nextOpenSwipeId, replaceTransactionInPlace, toggleSelectedId } from '../lib/transactionInteractions.mjs'
+import { canStartMobileSelection, hasActiveTableFilters, isNearScrollEnd, nextOpenSwipeId, replaceTransactionInPlace, toggleSelectedId } from '../lib/transactionInteractions.mjs'
 
 /** Размер автоматически подгружаемой страницы мобильного списка. */
 const MOBILE_PAGE = 50
@@ -159,7 +159,7 @@ export function TransactionsPage() {
     // или из мобильного списка (для пустых состояний).
     const [total, setTotal] = useState<number | null>(null)
 
-    // Мобильный список: догрузка страницами по кнопке «Показать ещё».
+    // Мобильный список: автоматическая догрузка страниц при приближении к низу.
     const [mobileRows, setMobileRows] = useState<TransactionView[]>([])
     const [mobileLoading, setMobileLoading] = useState(true)
     const [mobileLoadingMore, setMobileLoadingMore] = useState(false)
@@ -169,6 +169,7 @@ export function TransactionsPage() {
     const [showSwipeHint, setShowSwipeHint] = useState(() => !hasSeenSwipeHint())
     const [highlightedMobileId, setHighlightedMobileId] = useState<string | null>(null)
     const mobileSentinelRef = useRef<HTMLDivElement | null>(null)
+    const mobileLoadInFlightRef = useRef(false)
     const highlightTimerRef = useRef<number | null>(null)
     const editOpenFrameRef = useRef<number | null>(null)
     const editOpenRef = useRef(false)
@@ -242,7 +243,8 @@ export function TransactionsPage() {
     }, [params, queryClient, txRevision])
 
     const loadMoreMobile = useCallback(async () => {
-        if (mobileLoadingMore || total === null || mobileRows.length >= total) return
+        if (mobileLoadInFlightRef.current || total === null || mobileRows.length >= total) return
+        mobileLoadInFlightRef.current = true
         setMobileLoadingMore(true)
         setMobileLoadError(false)
         try {
@@ -256,23 +258,43 @@ export function TransactionsPage() {
         } catch {
             setMobileLoadError(true)
         } finally {
+            mobileLoadInFlightRef.current = false
             setMobileLoadingMore(false)
         }
-    }, [mobileLoadingMore, mobileRows.length, params, queryClient, total])
+    }, [mobileRows.length, params, queryClient, total])
 
     useEffect(() => {
         if (!isMobile || mobileLoading || mobileLoadingMore || mobileLoadError) return
         if (total === null || mobileRows.length >= total) return
+        const scrollRoot = document.querySelector<HTMLElement>('main')
         const sentinel = mobileSentinelRef.current
-        if (!sentinel) return
-        const observer = new IntersectionObserver(
-            ([entry]) => {
-                if (entry?.isIntersecting) void loadMoreMobile()
-            },
-            { root: document.querySelector('main'), rootMargin: '0px 0px 320px 0px' },
-        )
-        observer.observe(sentinel)
-        return () => observer.disconnect()
+        if (!scrollRoot || !sentinel) return
+
+        // The fixed app frame scrolls <main>, not window. A direct distance
+        // check is reliable on iOS/Android WebViews where an observer rooted
+        // at an overflow container can miss the sentinel after virtualization.
+        const requestNextPageNearBottom = () => {
+            if (isNearScrollEnd(scrollRoot.scrollTop, scrollRoot.clientHeight, scrollRoot.scrollHeight)) {
+                void loadMoreMobile()
+            }
+        }
+        scrollRoot.addEventListener('scroll', requestNextPageNearBottom, { passive: true })
+        const frame = window.requestAnimationFrame(requestNextPageNearBottom)
+
+        const observer = typeof IntersectionObserver === 'undefined'
+            ? null
+            : new IntersectionObserver(
+                ([entry]) => {
+                    if (entry?.isIntersecting) void loadMoreMobile()
+                },
+                { root: scrollRoot, rootMargin: '0px 0px 320px 0px' },
+            )
+        observer?.observe(sentinel)
+        return () => {
+            window.cancelAnimationFrame(frame)
+            scrollRoot.removeEventListener('scroll', requestNextPageNearBottom)
+            observer?.disconnect()
+        }
     }, [isMobile, loadMoreMobile, mobileLoadError, mobileLoading, mobileLoadingMore, mobileRows.length, total])
 
     // Выбранные в таблице строки (чекбоксы) → панель «Удалить (N)».

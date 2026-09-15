@@ -58,6 +58,13 @@ export function canStartMobileSelection(editorOpen, editorOpening) {
   return !editorOpen && !editorOpening
 }
 
+/** Mobile WebKit does not always notify an IntersectionObserver whose root is
+ * an independently scrolling app frame. The scroll position is the reliable
+ * source of truth for deciding when the next page should be requested. */
+export function isNearScrollEnd(scrollTop, clientHeight, scrollHeight, threshold = 320) {
+  return scrollHeight - Math.max(0, scrollTop) - clientHeight <= threshold
+}
+
 /** Replaces one chronologically sorted row and keeps running balances accurate. */
 export function replaceTransactionInPlace(rows, updatedView, preserveInheritedStore = false) {
   const changedIndex = rows.findIndex((row) => row.id === updatedView.id)
