@@ -83,7 +83,7 @@ async def test_reapply_after_alias_delete_restores_source(
     await session.refresh(seller)
     assert seller.normalized_name == "5ka"
     await AliasRepository(session).delete(alias)
-    await seller_service.reapply(user.id, rebuild_empty=True)
+    await seller_service.reapply(user.id)
     await session.refresh(seller)
     assert seller.normalized_name == "Пятёрочка"
     assert seller.seller_alias_id is None

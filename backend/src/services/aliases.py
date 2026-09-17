@@ -143,7 +143,7 @@ class AliasService:
         # Изменённый алиас тоже применяется к существующим записям
         await self.apply_scope(user.id, changes.get("scope", alias.scope))
         if previous_scope != alias.scope:
-            await self.apply_scope(user.id, previous_scope, rebuild_empty=True)
+            await self.apply_scope(user.id, previous_scope)
         if self._auto_tagging_repo is not None:
             await self._auto_tagging_repo.bump_revision(user.id)
         return alias
@@ -151,26 +151,9 @@ class AliasService:
     async def delete(self, user: User, alias_id: UUID) -> None:
         alias = await self._get_or_404(user.id, alias_id)
         await self._repo.delete(alias)
-        # Rebuild normalized values from immutable source columns after removal.
-        # This also handles the last alias in a scope and preserves any other
-        # aliases that still match the same transaction.
-        remaining = await self._repo.list_all(user.id, scope=alias.scope)
-        if alias.scope == _SCOPE_PRODUCT and self._tx_repo is not None:
-            rows = await self._tx_repo.list_name_columns(user.id)
-            await self._tx_repo.bulk_update_names(
-                [
-                    (
-                        tx_id,
-                        name,
-                        normalize_product_name(resolved.value),
-                        resolved.alias.id if resolved.alias else None,
-                    )
-                    for tx_id, name in rows
-                    for resolved in [AliasService.resolve_with_alias(remaining, name)]
-                ],
-            )
-        elif alias.scope == _SCOPE_SELLER and self._seller_service is not None:
-            await self._seller_service.reapply(user.id, rebuild_empty=True)
+        # Rebuild from immutable source names so records that no longer match
+        # return to their source-derived value (or fall through to another rule).
+        await self.apply_scope(user.id, alias.scope)
         if self._auto_tagging_repo is not None:
             await self._auto_tagging_repo.bump_revision(user.id)
 
@@ -223,8 +206,6 @@ class AliasService:
         self,
         user_id: UUID,
         scope: str,
-        *,
-        rebuild_empty: bool = False,
     ) -> AliasApplyResult:
         """Применить ВСЕ алиасы скоупа к существующим записям.
 
@@ -235,37 +216,21 @@ class AliasService:
         if self._tx_repo is None or self._receipt_repo is None:
             return AliasApplyResult()
 
-        if not aliases and rebuild_empty and scope == _SCOPE_PRODUCT:
-            rows = await self._tx_repo.list_name_columns(user_id)
-            await self._tx_repo.bulk_update_names(
-                [
-                    (tx_id, name, normalize_product_name(name), None)
-                    for tx_id, name in rows
-                ],
-            )
-            return AliasApplyResult(product_updated=len(rows))
         if scope == _SCOPE_PRODUCT:
             rows = await self._tx_repo.list_name_columns(user_id)
-            changes = [
-                (
-                    tx_id,
-                    name,
-                    normalize_product_name(resolved.value),
-                    resolved.alias.id if resolved.alias else None,
-                )
-                for tx_id, name in rows
-                for resolved in [AliasService.resolve_with_alias(aliases, name)]
-                if resolved.value != name or resolved.alias is not None
-            ]
+            changes: list[tuple[UUID, str, str, UUID | None]] = []
+            for tx_id, name, current_value, current_alias_id in rows:
+                resolved = AliasService.resolve_with_alias(aliases, name)
+                normalized = normalize_product_name(resolved.value)
+                alias_id = resolved.alias.id if resolved.alias else None
+                if normalized != current_value or alias_id != current_alias_id:
+                    changes.append((tx_id, name, normalized, alias_id))
             await self._tx_repo.bulk_update_names(changes)
             return AliasApplyResult(product_updated=len(changes))
 
         result = AliasApplyResult()
         if scope == _SCOPE_SELLER and self._seller_service is not None:
-            changed_ids = await self._seller_service.reapply(
-                user_id,
-                rebuild_empty=rebuild_empty,
-            )
+            changed_ids = await self._seller_service.reapply(user_id)
             if changed_ids:
                 result.seller_updated_receipts = (
                     await self._receipt_repo.count_by_seller_ids(user_id, changed_ids)

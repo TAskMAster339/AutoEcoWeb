@@ -220,13 +220,13 @@ export function RulesPage() {
                     <PageSearch value={search} onChange={setSearch} placeholder="Поиск по правилам" ariaLabel="Поиск по названиям правил" width="100%" />
                 </Box>
                 <Button variant="outlined" color="primary" startIcon={<RefreshIcon />} onClick={() => setConfirmOpen(true)} disabled={applyAliases.isPending} sx={{ flexShrink: 0 }}>
-                    {applyAliases.isPending ? 'Применяем…' : 'Применить все'}
+                    {applyAliases.isPending ? 'Пересчитываем…' : 'Пересчитать названия'}
                 </Button>
             </Stack>
 
-            {applyAliases.isError && <Alert severity="error" sx={{ borderRadius: '8px' }}>{applyAliases.error instanceof Error ? applyAliases.error.message : 'Не удалось применить правила'}</Alert>}
+            {applyAliases.isError && <Alert severity="error" sx={{ borderRadius: '8px' }}>{applyAliases.error instanceof Error ? applyAliases.error.message : 'Не удалось пересчитать названия'}</Alert>}
             {applyAliases.isSuccess && applyTotal > 0 && <Alert severity="success" sx={{ borderRadius: '8px' }}>Обновлено записей: {applyTotal} (магазины: {applyAliases.data!.seller_updated_receipts} чеков + {applyAliases.data!.seller_updated_transactions} транзакций, товары: {applyAliases.data!.product_updated})</Alert>}
-            {applyAliases.isSuccess && applyTotal === 0 && <Alert severity="info" sx={{ borderRadius: '8px' }}>Все записи уже соответствуют правилам — ничего не изменено</Alert>}
+            {applyAliases.isSuccess && applyTotal === 0 && <Alert severity="info" sx={{ borderRadius: '8px' }}>Все названия уже соответствуют правилам — ничего не изменено</Alert>}
             {createAlias.isSuccess && !sheetOpen && <Alert severity="success" sx={{ borderRadius: '8px' }}>Правило создано и применено к подходящим записям</Alert>}
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 2, alignItems: 'start' }}>
@@ -297,7 +297,7 @@ export function RulesPage() {
                 </Stack>
             </BottomSheet>
 
-            <ConfirmDialog open={confirmOpen} onClose={() => setConfirmOpen(false)} onConfirm={() => void runApplyAll()} tone="primary" title="Применить все правила?" message="Все правила для магазинов и товаров будут применены к существующим чекам и транзакциям. Операция переименовывает подходящие записи и необратима." confirmLabel="Применить" pending={applyAliases.isPending} error={applyAliases.isError ? (applyAliases.error instanceof Error ? applyAliases.error.message : null) : null} />
+            <ConfirmDialog open={confirmOpen} onClose={() => setConfirmOpen(false)} onConfirm={() => void runApplyAll()} tone="primary" title="Пересчитать названия?" message="Названия магазинов и товаров будут заново рассчитаны из исходных названий. Записи, которые больше не подходят ни под одно правило, вернутся к исходному названию." confirmLabel="Пересчитать" pending={applyAliases.isPending} error={applyAliases.isError ? (applyAliases.error instanceof Error ? applyAliases.error.message : null) : null} />
             <ConfirmDialog
                 open={deleteTarget !== null}
                 onClose={() => setDeleteTarget(null)}
@@ -306,7 +306,7 @@ export function RulesPage() {
                     deleteAlias.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) })
                 }}
                 title="Удалить правило?"
-                message={deleteTarget ? `Правило «${deleteTarget.original_name}» → «${deleteTarget.alias_name}» будет удалено. Существующие записи сохранятся.` : ''}
+                message={deleteTarget ? `Правило «${deleteTarget.original_name}» → «${deleteTarget.alias_name}» будет удалено. Связанные записи применят другое подходящее правило или вернутся к исходному названию.` : ''}
                 confirmLabel="Удалить"
                 pending={deleteAlias.isPending}
                 error={deleteAlias.isError ? (deleteAlias.error instanceof Error ? deleteAlias.error.message : 'Не удалось удалить правило') : null}

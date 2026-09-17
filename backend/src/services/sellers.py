@@ -91,12 +91,10 @@ class SellerService:
         if seller is not None:
             await self._repo.delete_if_unused(seller)
 
-    async def reapply(
-        self, user_id: UUID, *, rebuild_empty: bool = False
-    ) -> list[UUID]:
+    async def reapply(self, user_id: UUID) -> list[UUID]:
         aliases = await self._alias_repo.list_all(user_id, scope=_SCOPE_SELLER)
         rows = await self._repo.list_name_columns(user_id)
-        if not rows or (not aliases and not rebuild_empty):
+        if not rows:
             return []
         changes: list[tuple[UUID, str, UUID | None]] = []
         for seller_id, name, current_value, current_alias_id in rows:

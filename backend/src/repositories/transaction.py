@@ -827,13 +827,20 @@ class TransactionRepository:
 
     # ---------- применение алиасов ----------
 
-    async def list_name_columns(self, user_id: UUID) -> list[tuple[UUID, str]]:
-        """(id, name) всех транзакций пользователя — для применения
-        товарных алиасов (один лёгкий запрос вместо N+1)."""
-        stmt = select(Transaction.id, Transaction.name).where(
+    async def list_name_columns(
+        self,
+        user_id: UUID,
+    ) -> list[tuple[UUID, str, str, UUID | None]]:
+        """Source and current product names used to rebuild aliases in bulk."""
+        stmt = select(
+            Transaction.id,
+            Transaction.name,
+            Transaction.normalized_name,
+            Transaction.name_alias_id,
+        ).where(
             Transaction.user_id == user_id,
         )
-        return [(row[0], row[1]) for row in (await self._session.execute(stmt)).all()]
+        return [tuple(row) for row in (await self._session.execute(stmt)).all()]
 
     async def bulk_update_names(
         self,
@@ -841,8 +848,9 @@ class TransactionRepository:
     ) -> None:
         """Bulk-обновление normalized_name, не меняя исходное name.
 
-        changes: (id, original_name, normalized_name). Исходное name хранится
-        неизменно и позволяет пересчитать значение после удаления алиаса.
+        changes: (id, original_name, normalized_name, alias_id). Исходное name
+        хранится неизменно и позволяет пересчитать значение после изменения
+        или удаления алиаса.
         """
         if not changes:
             return
