@@ -1,5 +1,6 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Box } from '@mui/material'
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 interface Identifiable {
   id: string
@@ -15,9 +16,9 @@ interface VirtualizedTransactionListProps<T extends Identifiable> {
 }
 
 /**
- * Lightweight variable-height virtual list for the mobile transaction feed.
- * It uses the existing scrolling <main> as its viewport and keeps only the
- * visible cards plus a small overscan mounted.
+ * Variable-height virtual list for the mobile transaction feed. The list uses
+ * the app shell's existing <main> element as its viewport, so the page keeps a
+ * single native scroll surface on mobile.
  */
 export function VirtualizedTransactionList<T extends Identifiable>({
   items,
@@ -28,142 +29,96 @@ export function VirtualizedTransactionList<T extends Identifiable>({
   overscan = 6,
 }: VirtualizedTransactionListProps<T>) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const listOriginRef = useRef<number | null>(null)
-  const measuredHeightsRef = useRef(new Map<string, number>())
-  const [measurementRevision, setMeasurementRevision] = useState(0)
-  const [viewport, setViewport] = useState({ top: 0, height: 800 })
+  const [scrollMargin, setScrollMargin] = useState(0)
 
-  const recordHeight = useCallback((itemId: string, height: number) => {
-    if (measuredHeightsRef.current.get(itemId) === height) return
-    measuredHeightsRef.current.set(itemId, height)
-    setMeasurementRevision((revision) => revision + 1)
-  }, [])
-
-  const layout = useMemo(() => {
-    const offsets: number[] = []
-    let totalHeight = 0
-    for (const item of items) {
-      offsets.push(totalHeight)
-      totalHeight += (measuredHeightsRef.current.get(item.id) ?? estimatedItemHeight) + gap
-    }
-    return { offsets, totalHeight: Math.max(0, totalHeight - gap) }
-  }, [estimatedItemHeight, gap, items, measurementRevision])
-
-  const commitViewport = useCallback((nextTop: number, nextHeight: number) => {
-    // Overscan safely covers the small interval between updates, so a render
-    // is needed only after half an estimated card rather than on every pixel.
-    setViewport((current) => (
-      Math.abs(current.top - nextTop) < estimatedItemHeight / 2 && current.height === nextHeight
-        ? current
-        : { top: nextTop, height: nextHeight }
-    ))
-  }, [estimatedItemHeight])
-
-  const updateViewport = useCallback(() => {
-    if (!scrollContainer || listOriginRef.current === null) return
-    const nextTop = Math.max(0, scrollContainer.scrollTop - listOriginRef.current)
-    commitViewport(nextTop, scrollContainer.clientHeight)
-  }, [commitViewport, scrollContainer])
-
-  const measureLayout = useCallback(() => {
+  const measureScrollMargin = useCallback(() => {
     const container = containerRef.current
     if (!container || !scrollContainer) return
+
     const containerRect = container.getBoundingClientRect()
-    const rootRect = scrollContainer.getBoundingClientRect()
-    listOriginRef.current = containerRect.top - rootRect.top + scrollContainer.scrollTop
-    updateViewport()
-  }, [scrollContainer, updateViewport])
+    const scrollRect = scrollContainer.getBoundingClientRect()
+    const nextMargin = Math.max(0, containerRect.top - scrollRect.top + scrollContainer.scrollTop)
+    setScrollMargin((current) => Math.abs(current - nextMargin) < 0.5 ? current : nextMargin)
+  }, [scrollContainer])
 
   useLayoutEffect(() => {
-    if (!scrollContainer) return
-    measureLayout()
-    scrollContainer.addEventListener('scroll', updateViewport, { passive: true })
-    window.addEventListener('resize', measureLayout, { passive: true })
-    const resizeObserver = new ResizeObserver(measureLayout)
+    const container = containerRef.current
+    if (!container || !scrollContainer) return
+
+    let animationFrame = 0
+    const scheduleMeasurement = () => {
+      cancelAnimationFrame(animationFrame)
+      animationFrame = requestAnimationFrame(measureScrollMargin)
+    }
+
+    measureScrollMargin()
+    const resizeObserver = new ResizeObserver(scheduleMeasurement)
     resizeObserver.observe(scrollContainer)
+    if (container.parentElement) resizeObserver.observe(container.parentElement)
+    window.addEventListener('resize', scheduleMeasurement, { passive: true })
+
     return () => {
-      scrollContainer.removeEventListener('scroll', updateViewport)
-      window.removeEventListener('resize', measureLayout)
+      cancelAnimationFrame(animationFrame)
       resizeObserver.disconnect()
+      window.removeEventListener('resize', scheduleMeasurement)
     }
-  }, [measureLayout, scrollContainer, updateViewport])
+  }, [measureScrollMargin, scrollContainer])
 
-  // Also remeasure after parent layout changes (for example when the swipe
-  // hint disappears). Scroll events themselves now avoid forced layout reads.
-  useLayoutEffect(measureLayout)
+  // Preceding mobile controls can appear or disappear without resizing the
+  // scroll element itself. One layout read after such a React commit keeps the
+  // virtualizer's origin aligned with the real list position.
+  useLayoutEffect(measureScrollMargin)
 
-  const visibleRange = useMemo(() => {
-    if (items.length === 0) return { start: 0, end: 0 }
-    const top = viewport.top
-    const bottom = top + viewport.height
-    let start = 0
-    while (start < items.length - 1 && (layout.offsets[start + 1] ?? 0) < top) start += 1
-    let end = start
-    while (end < items.length && (layout.offsets[end] ?? 0) < bottom) end += 1
-    return {
-      start: Math.max(0, start - overscan),
-      end: Math.min(items.length, end + overscan),
-    }
-  }, [items.length, layout.offsets, overscan, viewport])
+  const rowVirtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollContainer,
+    estimateSize: () => estimatedItemHeight,
+    getItemKey: (index) => items[index]?.id ?? index,
+    gap,
+    overscan,
+    scrollMargin,
+    useFlushSync: false,
+  })
+  const virtualRows = rowVirtualizer.getVirtualItems()
+  const firstVirtualRow = virtualRows[0]
+  const lastVirtualRow = virtualRows.at(-1)
 
   return (
     <Box
       ref={containerRef}
       role="list"
       aria-label="Транзакции"
-      data-virtual-start={visibleRange.start}
-      data-virtual-end={visibleRange.end}
-      data-virtual-viewport-top={Math.round(viewport.top)}
-      sx={{ position: 'relative', height: layout.totalHeight, minHeight: items.length ? estimatedItemHeight : 0 }}
+      data-virtual-start={firstVirtualRow?.index ?? 0}
+      data-virtual-end={lastVirtualRow ? lastVirtualRow.index + 1 : 0}
+      data-virtual-scroll-margin={Math.round(scrollMargin)}
+      sx={{
+        position: 'relative',
+        height: rowVirtualizer.getTotalSize(),
+        minHeight: items.length ? estimatedItemHeight : 0,
+      }}
     >
-      {items.slice(visibleRange.start, visibleRange.end).map((item, localIndex) => {
-        const index = visibleRange.start + localIndex
+      {virtualRows.map((virtualRow) => {
+        const item = items[virtualRow.index]
+        if (!item) return null
+
         return (
-          <MeasuredItem
-            key={item.id}
-            itemId={item.id}
-            top={layout.offsets[index] ?? 0}
-            onHeight={recordHeight}
+          <Box
+            key={virtualRow.key}
+            ref={rowVirtualizer.measureElement}
+            role="listitem"
+            data-index={virtualRow.index}
+            style={{ transform: `translateY(${virtualRow.start - scrollMargin}px)` }}
+            sx={{
+              position: 'absolute',
+              insetInline: 0,
+              top: 0,
+              contain: 'layout paint style',
+            }}
           >
-            {renderItem(item, index)}
-          </MeasuredItem>
+            {renderItem(item, virtualRow.index)}
+          </Box>
         )
       })}
-    </Box>
-  )
-}
-
-function MeasuredItem({
-  itemId,
-  top,
-  onHeight,
-  children,
-}: {
-  itemId: string
-  top: number
-  onHeight: (itemId: string, height: number) => void
-  children: ReactNode
-}) {
-  const itemRef = useRef<HTMLDivElement | null>(null)
-
-  useLayoutEffect(() => {
-    const element = itemRef.current
-    if (!element) return
-    onHeight(itemId, Math.ceil(element.offsetHeight))
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) onHeight(itemId, Math.ceil(entry.contentRect.height))
-    })
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [itemId, onHeight])
-
-  return (
-    <Box
-      ref={itemRef}
-      role="listitem"
-      sx={{ position: 'absolute', insetInline: 0, top, contain: 'layout paint style' }}
-    >
-      {children}
     </Box>
   )
 }
