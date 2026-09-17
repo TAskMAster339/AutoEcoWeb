@@ -202,13 +202,13 @@ test('receipt import refreshes paged transactions and their total before reloadi
     new URL('../src/components/transactions/AddReceiptSheet.tsx', import.meta.url),
     'utf8',
   )
-  const removePageCache = source.indexOf("removeQueries({ queryKey: ['txPage'] })")
-  const notifyViews = source.indexOf("setQueryData<number>(['txRevision']")
+  const removePageCache = source.indexOf("removeQueries({ queryKey: userQueryKey('txPage') })")
+  const notifyViews = source.indexOf("setQueryData<number>(userQueryKey('txRevision')")
 
   assert.notEqual(removePageCache, -1)
   assert.notEqual(notifyViews, -1)
   assert.ok(removePageCache < notifyViews)
-  assert.match(source, /invalidateQueries\(\{ queryKey: \['txTotal'\] \}\)/)
+  assert.match(source, /invalidateQueries\(\{ queryKey: userQueryKey\('txTotal'\) \}\)/)
 })
 
 test('vertical movement does not hijack page scrolling', () => {

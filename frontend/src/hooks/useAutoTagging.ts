@@ -4,15 +4,15 @@ import {
   retrainAutoTagging,
   updateAutoTagging,
 } from '../api/autoTagging'
-
-const queryKey = ['auto-tagging'] as const
+import { userQueryKey } from '../lib/querySession'
 
 export function useAutoTagging() {
-  return useQuery({ queryKey, queryFn: fetchAutoTaggingStatus })
+  return useQuery({ queryKey: userQueryKey('auto-tagging'), queryFn: fetchAutoTaggingStatus })
 }
 
 export function useUpdateAutoTagging() {
   const queryClient = useQueryClient()
+  const queryKey = userQueryKey('auto-tagging')
   return useMutation({
     mutationFn: updateAutoTagging,
     onSuccess: (data) => queryClient.setQueryData(queryKey, data),
@@ -21,6 +21,7 @@ export function useUpdateAutoTagging() {
 
 export function useRetrainAutoTagging() {
   const queryClient = useQueryClient()
+  const queryKey = userQueryKey('auto-tagging')
   return useMutation({
     mutationFn: retrainAutoTagging,
     onSuccess: (data) => queryClient.setQueryData(queryKey, data),

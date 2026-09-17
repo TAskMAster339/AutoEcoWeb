@@ -47,6 +47,7 @@ import { PageSearch } from '../components/common/PageSearch'
 import type { Transaction, TransactionUpdatePatch, TransactionView } from '../api/types'
 import { canStartMobileSelection, hasActiveTableFilters, nextOpenSwipeId, replaceTransactionInPlace, toggleSelectedId } from '../lib/transactionInteractions.mjs'
 import { nextPageOffset } from '../lib/mobilePagination.mjs'
+import { userQueryKey } from '../lib/querySession'
 
 /** Размер автоматически подгружаемой страницы мобильного списка. */
 const MOBILE_PAGE = 50
@@ -161,7 +162,7 @@ export function TransactionsPage() {
     const amountMax = useUiStore((s) => s.amountMax)
     const operationFilter = useUiStore((s) => s.operationFilter)
     const setTransactionSelectionMode = useUiStore((s) => s.setTransactionSelectionMode)
-    const { data: txRevision } = useQuery({ queryKey: ['txRevision'], queryFn: () => 0 })
+    const { data: txRevision } = useQuery({ queryKey: userQueryKey('txRevision'), queryFn: () => 0 })
 
     // Параметры фильтров (период/тег/поиск/магазин) — применяет бэкенд.
     const params = useFilterParams()
@@ -179,7 +180,7 @@ export function TransactionsPage() {
         isError: totalError,
         refetch,
     } = useQuery({
-        queryKey: ['txTotal'],
+        queryKey: userQueryKey('txTotal'),
         queryFn: async () => {
             const page = await fetchTransactionsPage({ limit: 1 })
             return page.total ?? 0
@@ -188,10 +189,7 @@ export function TransactionsPage() {
     })
 
     const [desktopTotal, setDesktopTotal] = useState<number | null>(null)
-    const mobileQueryKey = useMemo(
-        () => ['txPage', 'mobile', params, 'date', 'asc', MOBILE_PAGE, txRevision] as const,
-        [params, txRevision],
-    )
+    const mobileQueryKey = userQueryKey('txPage', 'mobile', params, 'date', 'asc', MOBILE_PAGE, txRevision)
 
     const mobileQuery = useInfiniteQuery({
         queryKey: mobileQueryKey,

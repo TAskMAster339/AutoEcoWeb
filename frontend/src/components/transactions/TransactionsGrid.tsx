@@ -5,6 +5,7 @@ import 'ag-grid-community/styles/ag-theme-quartz.css'
 import type { CellContextMenuEvent, ColDef, IDatasource, IGetRowsParams, RowClickedEvent } from 'ag-grid-community'
 import { Alert, Box, Button, CircularProgress, MenuItem, Paper, Popper, Select, Stack, Typography, useTheme } from '@mui/material'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { userQueryKey } from '../../lib/querySession'
 import { TagChip } from '../common/TagChip'
 import { formatCurrency, formatNumber, formatShortDate } from '../../lib/format'
 import { colors } from '../../theme'
@@ -391,7 +392,7 @@ export function TransactionsGrid({
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const queryClient = useQueryClient()
-  const { data: txRevision } = useQuery({ queryKey: ['txRevision'], queryFn: () => 0 })
+  const { data: txRevision } = useQuery({ queryKey: userQueryKey('txRevision'), queryFn: () => 0 })
   const gridRef = useRef<AgGridReact<TransactionView>>(null)
   const gridWrapperRef = useRef<HTMLDivElement>(null)
   const statsAccumulatorRef = useRef<StatsAccumulator>(createStatsAccumulator())
@@ -454,7 +455,7 @@ export function TransactionsGrid({
       const limit = endRow - startRow
       void queryClient
         .fetchQuery({
-          queryKey: ['txPage', paramsRef.current, sortBy, sortDir, limit, startRow],
+          queryKey: userQueryKey('txPage', paramsRef.current, sortBy, sortDir, limit, startRow),
           queryFn: () =>
             fetchTransactionsPage({
               limit,
@@ -543,7 +544,7 @@ export function TransactionsGrid({
     try {
       for (let offset = 0; offset < total; offset += 100) {
         const page = await queryClient.fetchQuery({
-          queryKey: ['txPage', paramsRef.current, 'stats', 100, offset],
+          queryKey: userQueryKey('txPage', paramsRef.current, 'stats', 100, offset),
           queryFn: () => fetchTransactionsPage({ limit: 100, offset, ...paramsRef.current, sort_by: 'date', sort_dir: 'asc' }),
           staleTime: 30_000,
         })

@@ -22,6 +22,7 @@ import { useUiStore, type OperationFilter } from '../../store/uiStore'
 import { normalizeAmountFilter } from '../../lib/numbers'
 import type { Store, Tag } from '../../api/types'
 import { fetchTransactionsPage } from '../../api/transactions'
+import { userQueryKey } from '../../lib/querySession'
 
 interface FilterSheetProps {
     tags: Tag[] | undefined
@@ -54,7 +55,7 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
     const [storeInput, setStoreInput] = useState('')
     const [tagInput, setTagInput] = useState('')
     const { data: untaggedPage } = useQuery({
-        queryKey: ['transactions', 'untagged-total'],
+        queryKey: userQueryKey('transactions', 'untagged-total'),
         queryFn: () => fetchTransactionsPage({ limit: 1, untagged: true }),
         staleTime: 30_000,
     })

@@ -1,10 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/transactions'
 import type { Transaction, TransactionDraft, TransactionUpdatePatch, Store } from '../api/types'
+import { userQueryKey } from '../lib/querySession'
 
 export function useTransactions() {
   return useQuery<Transaction[]>({
-    queryKey: ['transactions'],
+    queryKey: userQueryKey('transactions'),
     queryFn: api.fetchAllTransactions,
     staleTime: 30_000,
   })
@@ -12,7 +13,7 @@ export function useTransactions() {
 
 export function useStores() {
   return useQuery<Store[]>({
-    queryKey: ['stores'],
+    queryKey: userQueryKey('stores'),
     queryFn: api.fetchTransactionStores,
     staleTime: 60_000,
   })
@@ -29,27 +30,27 @@ function invalidateAfterMutation(
   // invalidation — тогда новая транзакция появится только позднее. Удаление
   // гарантирует, что purgeInfiniteCache / мобильная первая страница получат
   // актуальные строки после мутаций, которые меняют состав или порядок списка.
-  if (refreshTransactionRows) queryClient.removeQueries({ queryKey: ['txPage'] })
+  if (refreshTransactionRows) queryClient.removeQueries({ queryKey: userQueryKey('txPage') })
   // Не удаляем txTotal: TransactionsPage использует его как гейт первого
   // экрана. removeQueries переводит запрос в pending, из-за чего весь экран
   // временно заменяется LoadingState и сбрасывает прокрутку <main> в начало.
   // Инвалидация сохраняет уже смонтированную страницу и обновляет число тихо.
   if (refreshTransactionRows) {
-    queryClient.setQueryData<number>(['txRevision'], (revision = 0) => revision + 1)
+    queryClient.setQueryData<number>(userQueryKey('txRevision'), (revision = 0) => revision + 1)
   }
-  void queryClient.invalidateQueries({ queryKey: ['txTotal'] })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('txTotal') })
   // AG Grid keeps already-loaded rows in its own Infinite Row Model cache.
   // A TanStack invalidation alone marks the HTTP query stale, but does not
   // make AG Grid ask for the visible block again. The revision is observed by
   // both desktop and mobile transaction views and forces that reload.
-  void queryClient.invalidateQueries({ queryKey: ['transactions'] })
-  void queryClient.invalidateQueries({ queryKey: ['summary'] })
-  void queryClient.invalidateQueries({ queryKey: ['analytics'] })
-  void queryClient.invalidateQueries({ queryKey: ['stores'] })
-  void queryClient.invalidateQueries({ queryKey: ['tags'] })
-  void queryClient.invalidateQueries({ queryKey: ['tags-page'] })
-  void queryClient.invalidateQueries({ queryKey: ['receipts'] })
-  void queryClient.invalidateQueries({ queryKey: ['user-limits'] })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('transactions') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('summary') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('analytics') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('stores') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('tags') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('tags-page') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('receipts') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('user-limits') })
 }
 
 export function useCreateTransaction() {

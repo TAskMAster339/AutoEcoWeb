@@ -9,6 +9,7 @@ import * as authApi from '../api/auth'
 import { setUnauthorizedHandler } from '../api/client'
 import { messageFromError } from '../api/client'
 import type { User } from '../api/types'
+import { clearQuerySession, setQuerySessionUser } from '../lib/querySession'
 
 export type AuthStatus = 'idle' | 'loading' | 'authenticated' | 'unauthenticated'
 
@@ -105,6 +106,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // clears the HttpOnly cookies on its side when it can)
     } finally {
       set({ user: null, status: 'unauthenticated', error: null })
+      clearQuerySession()
     }
   },
 
@@ -126,4 +128,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 // Session expires server-side (e.g. refresh token revoked) → force sign out.
 setUnauthorizedHandler(() => {
   useAuthStore.setState({ user: null, status: 'unauthenticated' })
+  clearQuerySession()
+})
+
+// This is the single boundary for every authenticated identity transition,
+// including bootstrap, login and any future path that replaces the user.
+useAuthStore.subscribe((state, previousState) => {
+  const userId = state.user?.id ?? null
+  if (userId !== (previousState.user?.id ?? null)) setQuerySessionUser(userId)
 })

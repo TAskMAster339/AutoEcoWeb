@@ -1,10 +1,11 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { deleteReceipt, fetchReceiptsPage } from '../api/receipts'
+import { userQueryKey } from '../lib/querySession'
 
 /** Бесшовная cursor-подгрузка чеков; поиск входит в query key и серверный запрос. */
 export function useReceipts(search = '') {
   return useInfiniteQuery({
-    queryKey: ['receipts', search],
+    queryKey: userQueryKey('receipts', search),
     queryFn: ({ pageParam }) => fetchReceiptsPage({ limit: 100, cursor: pageParam, search: search.trim() || undefined }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
@@ -20,18 +21,18 @@ export function useDeleteReceipt() {
   return useMutation({
     mutationFn: (id: string) => deleteReceipt(id),
     onSuccess: (_, id) => {
-      queryClient.removeQueries({ queryKey: ['receipt', id] })
-      queryClient.removeQueries({ queryKey: ['receipt-raw', id] })
-      queryClient.removeQueries({ queryKey: ['txPage'] })
-      queryClient.removeQueries({ queryKey: ['txTotal'] })
-      queryClient.setQueryData<number>(['txRevision'], (revision = 0) => revision + 1)
-      void queryClient.invalidateQueries({ queryKey: ['receipts'] })
-      void queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      void queryClient.invalidateQueries({ queryKey: ['summary'] })
-      void queryClient.invalidateQueries({ queryKey: ['analytics'] })
-      void queryClient.invalidateQueries({ queryKey: ['stores'] })
-      void queryClient.invalidateQueries({ queryKey: ['tags'] })
-      void queryClient.invalidateQueries({ queryKey: ['user-limits'] })
+      queryClient.removeQueries({ queryKey: userQueryKey('receipt', id) })
+      queryClient.removeQueries({ queryKey: userQueryKey('receipt-raw', id) })
+      queryClient.removeQueries({ queryKey: userQueryKey('txPage') })
+      queryClient.removeQueries({ queryKey: userQueryKey('txTotal') })
+      queryClient.setQueryData<number>(userQueryKey('txRevision'), (revision = 0) => revision + 1)
+      void queryClient.invalidateQueries({ queryKey: userQueryKey('receipts') })
+      void queryClient.invalidateQueries({ queryKey: userQueryKey('transactions') })
+      void queryClient.invalidateQueries({ queryKey: userQueryKey('summary') })
+      void queryClient.invalidateQueries({ queryKey: userQueryKey('analytics') })
+      void queryClient.invalidateQueries({ queryKey: userQueryKey('stores') })
+      void queryClient.invalidateQueries({ queryKey: userQueryKey('tags') })
+      void queryClient.invalidateQueries({ queryKey: userQueryKey('user-limits') })
     },
   })
 }

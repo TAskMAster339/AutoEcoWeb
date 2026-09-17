@@ -2,12 +2,13 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from 
 import * as api from '../api/aliases'
 import { useUiStore } from '../store/uiStore'
 import type { AliasDraft, AliasScope, AliasUpdatePatch } from '../api/types'
+import { userQueryKey } from '../lib/querySession'
 
 const PAGE_SIZE = 50
 
 export function useAliases(scope: AliasScope, search = '') {
   return useInfiniteQuery({
-    queryKey: ['aliases', scope, search],
+    queryKey: userQueryKey('aliases', scope, search),
     queryFn: ({ pageParam }) => api.fetchAliasesPage({ scope, limit: PAGE_SIZE, offset: pageParam, search: search.trim() || undefined }),
     initialPageParam: 0,
     getNextPageParam: (last, pages) => {
@@ -20,15 +21,15 @@ export function useAliases(scope: AliasScope, search = '') {
 }
 
 function invalidateAfterAliasChange(queryClient: ReturnType<typeof useQueryClient>) {
-  queryClient.setQueryData<number>(['txRevision'], (revision = 0) => revision + 1)
-  void queryClient.invalidateQueries({ queryKey: ['aliases'] })
-  void queryClient.invalidateQueries({ queryKey: ['txPage'] })
-  void queryClient.invalidateQueries({ queryKey: ['transactions'] })
-  void queryClient.invalidateQueries({ queryKey: ['receipts'] })
-  void queryClient.invalidateQueries({ queryKey: ['summary'] })
-  void queryClient.invalidateQueries({ queryKey: ['analytics'] })
-  void queryClient.invalidateQueries({ queryKey: ['stores'] })
-  void queryClient.invalidateQueries({ queryKey: ['user-limits'] })
+  queryClient.setQueryData<number>(userQueryKey('txRevision'), (revision = 0) => revision + 1)
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('aliases') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('txPage') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('transactions') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('receipts') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('summary') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('analytics') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('stores') })
+  void queryClient.invalidateQueries({ queryKey: userQueryKey('user-limits') })
 }
 
 function updateSellerFilterAfterAlias(scope: AliasScope, originalName: string, aliasName: string) {
