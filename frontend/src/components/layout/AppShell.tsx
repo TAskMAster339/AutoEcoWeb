@@ -78,7 +78,7 @@ export function AppShell() {
             WebkitOverflowScrolling: 'touch',
           }}
         >
-          <Outlet />
+          <Outlet context={mainElement} />
         </Box>
 
         <Footer />

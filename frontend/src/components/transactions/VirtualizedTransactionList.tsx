@@ -7,6 +7,7 @@ interface Identifiable {
 
 interface VirtualizedTransactionListProps<T extends Identifiable> {
   items: T[]
+  scrollContainer: HTMLElement | null
   renderItem: (item: T, index: number) => ReactNode
   estimatedItemHeight?: number
   gap?: number
@@ -20,6 +21,7 @@ interface VirtualizedTransactionListProps<T extends Identifiable> {
  */
 export function VirtualizedTransactionList<T extends Identifiable>({
   items,
+  scrollContainer,
   renderItem,
   estimatedItemHeight = 112,
   gap = 10,
@@ -58,35 +60,33 @@ export function VirtualizedTransactionList<T extends Identifiable>({
   }, [estimatedItemHeight])
 
   const updateViewport = useCallback(() => {
-    const scrollRoot = document.querySelector<HTMLElement>('main')
-    if (!scrollRoot || listOriginRef.current === null) return
-    const nextTop = Math.max(0, scrollRoot.scrollTop - listOriginRef.current)
-    commitViewport(nextTop, scrollRoot.clientHeight)
-  }, [commitViewport])
+    if (!scrollContainer || listOriginRef.current === null) return
+    const nextTop = Math.max(0, scrollContainer.scrollTop - listOriginRef.current)
+    commitViewport(nextTop, scrollContainer.clientHeight)
+  }, [commitViewport, scrollContainer])
 
   const measureLayout = useCallback(() => {
     const container = containerRef.current
-    const scrollRoot = document.querySelector<HTMLElement>('main')
-    if (!container || !scrollRoot) return
+    if (!container || !scrollContainer) return
     const containerRect = container.getBoundingClientRect()
-    const rootRect = scrollRoot.getBoundingClientRect()
-    listOriginRef.current = containerRect.top - rootRect.top + scrollRoot.scrollTop
+    const rootRect = scrollContainer.getBoundingClientRect()
+    listOriginRef.current = containerRect.top - rootRect.top + scrollContainer.scrollTop
     updateViewport()
-  }, [updateViewport])
+  }, [scrollContainer, updateViewport])
 
   useLayoutEffect(() => {
-    const scrollRoot = document.querySelector<HTMLElement>('main')
+    if (!scrollContainer) return
     measureLayout()
-    scrollRoot?.addEventListener('scroll', updateViewport, { passive: true })
+    scrollContainer.addEventListener('scroll', updateViewport, { passive: true })
     window.addEventListener('resize', measureLayout, { passive: true })
     const resizeObserver = new ResizeObserver(measureLayout)
-    if (scrollRoot) resizeObserver.observe(scrollRoot)
+    resizeObserver.observe(scrollContainer)
     return () => {
-      scrollRoot?.removeEventListener('scroll', updateViewport)
+      scrollContainer.removeEventListener('scroll', updateViewport)
       window.removeEventListener('resize', measureLayout)
       resizeObserver.disconnect()
     }
-  }, [measureLayout, updateViewport])
+  }, [measureLayout, scrollContainer, updateViewport])
 
   // Also remeasure after parent layout changes (for example when the swipe
   // hint disappears). Scroll events themselves now avoid forced layout reads.

@@ -20,12 +20,6 @@ export function matchesOptionSearch(label: string, query: string): boolean
 export function replaceQuickEditTarget<T>(current: T | null, next: T): T
 export function toggleSelectedId(selectedIds: string[], id: string): string[]
 export function canStartMobileSelection(editorOpen: boolean, editorOpening: boolean): boolean
-export function isNearScrollEnd(
-  scrollTop: number,
-  clientHeight: number,
-  scrollHeight: number,
-  threshold?: number,
-): boolean
 export function replaceTransactionInPlace(
   rows: readonly TransactionView[],
   updatedView: TransactionView,

@@ -21,7 +21,8 @@ import AddIcon from '@mui/icons-material/Add'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
 import CloseIcon from '@mui/icons-material/Close'
 import SelectAllIcon from '@mui/icons-material/SelectAll'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import { useOutletContext } from 'react-router-dom'
 
 import { StatisticCard } from '../components/common/StatisticCard'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
@@ -35,6 +36,7 @@ import { useSummary } from '../hooks/useSummary'
 import { useStores, useDeleteTransaction } from '../hooks/useTransactions'
 import { useTags } from '../hooks/useTags'
 import { useOnline } from '../hooks/useOnline'
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll'
 import { useUiStore } from '../store/uiStore'
 import { useFilterParams } from '../lib/filters'
 import { fetchTransactionsPage, toTransactionView } from '../api/transactions'
@@ -43,10 +45,39 @@ import { normalizeAmountFilter } from '../lib/numbers'
 import { colors, softBg, softFg } from '../theme'
 import { PageSearch } from '../components/common/PageSearch'
 import type { Transaction, TransactionUpdatePatch, TransactionView } from '../api/types'
-import { canStartMobileSelection, hasActiveTableFilters, isNearScrollEnd, nextOpenSwipeId, replaceTransactionInPlace, toggleSelectedId } from '../lib/transactionInteractions.mjs'
+import { canStartMobileSelection, hasActiveTableFilters, nextOpenSwipeId, replaceTransactionInPlace, toggleSelectedId } from '../lib/transactionInteractions.mjs'
+import { nextPageOffset } from '../lib/mobilePagination.mjs'
 
 /** Размер автоматически подгружаемой страницы мобильного списка. */
 const MOBILE_PAGE = 50
+interface MobileTransactionPage {
+    items: TransactionView[]
+    total: number | null
+}
+
+function replaceTransactionInPages(
+    data: InfiniteData<MobileTransactionPage> | undefined,
+    updated: Transaction,
+    patch: TransactionUpdatePatch,
+): InfiniteData<MobileTransactionPage> | undefined {
+    if (!data || !updated.id) return data
+    const currentRows = data.pages.flatMap((page) => page.items)
+    const updatedView = toTransactionView(updated)
+    const preserveInheritedStore = !('seller_name' in patch) && updatedView.store === null
+    const nextRows = replaceTransactionInPlace(currentRows, updatedView, preserveInheritedStore)
+    if (nextRows === currentRows) return data
+
+    let cursor = 0
+    return {
+        ...data,
+        pages: data.pages.map((page) => {
+            const items = nextRows.slice(cursor, cursor + page.items.length)
+            cursor += page.items.length
+            return { ...page, items }
+        }),
+    }
+}
+
 const TransactionsGrid = lazy(() =>
     import('../components/transactions/TransactionsGrid').then((module) => ({ default: module.TransactionsGrid })),
 )
@@ -123,6 +154,7 @@ export function TransactionsPage() {
     const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
     const online = useOnline()
     const queryClient = useQueryClient()
+    const scrollContainer = useOutletContext<HTMLElement | null>()
 
     const storeFilters = useUiStore((s) => s.storeFilters)
     const amountMin = useUiStore((s) => s.amountMin)
@@ -155,21 +187,60 @@ export function TransactionsPage() {
         staleTime: 30_000,
     })
 
-    // Общее число строк с фильтрами — приходит из datasource таблицы
-    // или из мобильного списка (для пустых состояний).
-    const [total, setTotal] = useState<number | null>(null)
+    const [desktopTotal, setDesktopTotal] = useState<number | null>(null)
+    const mobileQueryKey = useMemo(
+        () => ['txPage', 'mobile', params, 'date', 'asc', MOBILE_PAGE, txRevision] as const,
+        [params, txRevision],
+    )
 
-    // Мобильный список: автоматическая догрузка страниц при приближении к низу.
-    const [mobileRows, setMobileRows] = useState<TransactionView[]>([])
-    const [mobileLoading, setMobileLoading] = useState(true)
-    const [mobileLoadingMore, setMobileLoadingMore] = useState(false)
-    const [mobileLoadError, setMobileLoadError] = useState(false)
+    const mobileQuery = useInfiniteQuery({
+        queryKey: mobileQueryKey,
+        queryFn: async ({ pageParam }) => {
+            const page = await fetchTransactionsPage({
+                limit: MOBILE_PAGE,
+                offset: pageParam,
+                ...params,
+                sort_by: 'date',
+                sort_dir: 'asc',
+            })
+            return {
+                items: page.items.map(toTransactionView),
+                total: page.total ?? 0,
+            } satisfies MobileTransactionPage
+        },
+        initialPageParam: 0,
+        getNextPageParam: (_lastPage, pages) => nextPageOffset(pages),
+        enabled: isMobile && online,
+        staleTime: 30_000,
+    })
+    const mobileRows = useMemo(
+        () => mobileQuery.data?.pages.flatMap((page) => page.items) ?? [],
+        [mobileQuery.data],
+    )
+    const mobilePages = mobileQuery.data?.pages
+    const mobileTotal = mobilePages && mobilePages.length > 0
+        ? mobilePages[mobilePages.length - 1]?.total ?? null
+        : null
+    const total = isMobile ? mobileTotal : desktopTotal
+    const loadMoreMobile = useCallback(async () => {
+        await mobileQuery.fetchNextPage().catch(() => undefined)
+    }, [mobileQuery.fetchNextPage])
+
+    useInfiniteScroll({
+        container: scrollContainer,
+        enabled: isMobile
+            && online
+            && mobileQuery.hasNextPage
+            && !mobileQuery.isFetchingNextPage
+            && !mobileQuery.isFetchNextPageError,
+        itemCount: mobileRows.length,
+        onLoadMore: loadMoreMobile,
+    })
+
     const [mobileSwipeId, setMobileSwipeId] = useState<string | null>(null)
     const [expandedMobileId, setExpandedMobileId] = useState<string | null>(null)
     const [showSwipeHint, setShowSwipeHint] = useState(() => !hasSeenSwipeHint())
     const [highlightedMobileId, setHighlightedMobileId] = useState<string | null>(null)
-    const mobileSentinelRef = useRef<HTMLDivElement | null>(null)
-    const mobileLoadInFlightRef = useRef(false)
     const highlightTimerRef = useRef<number | null>(null)
     const editOpenFrameRef = useRef<number | null>(null)
     const editOpenRef = useRef(false)
@@ -181,21 +252,20 @@ export function TransactionsPage() {
     }, [])
 
     useEffect(() => {
-        if (!isMobile || !mobileSwipeId) return
-        const scrollRoot = document.querySelector<HTMLElement>('main')
+        if (!isMobile || !mobileSwipeId || !scrollContainer) return
         const closeSwipe = () => setMobileSwipeId(null)
         const closeOnOutsidePointer = (event: PointerEvent) => {
             const target = event.target instanceof Element ? event.target : null
             const card = target?.closest<HTMLElement>('[data-mobile-transaction-id]')
             if (card?.dataset.mobileTransactionId !== mobileSwipeId) closeSwipe()
         }
-        scrollRoot?.addEventListener('scroll', closeSwipe, { passive: true })
+        scrollContainer.addEventListener('scroll', closeSwipe, { passive: true })
         document.addEventListener('pointerdown', closeOnOutsidePointer)
         return () => {
-            scrollRoot?.removeEventListener('scroll', closeSwipe)
+            scrollContainer.removeEventListener('scroll', closeSwipe)
             document.removeEventListener('pointerdown', closeOnOutsidePointer)
         }
-    }, [isMobile, mobileSwipeId])
+    }, [isMobile, mobileSwipeId, scrollContainer])
 
     const handleSwipeOpen = useCallback((id: string | null) => {
         setMobileSwipeId(nextOpenSwipeId(id))
@@ -214,88 +284,9 @@ export function TransactionsPage() {
         }, 1600)
     }, [])
 
-    // Смена фильтров/периода → сброс списка и первая страница.
     useEffect(() => {
-        let cancelled = false
-        setMobileLoading(true)
-        setMobileLoadError(false)
         setMobileSwipeId(null)
-        void queryClient
-            .fetchQuery({
-                queryKey: ['txPage', params, 'date', 'asc', MOBILE_PAGE, 0],
-                // Мобильный список всегда по возрастанию даты: старые сверху
-                // (бэкенд по умолчанию сортирует desc — сортировку шлём явно).
-                queryFn: () => fetchTransactionsPage({ limit: MOBILE_PAGE, offset: 0, ...params, sort_by: 'date', sort_dir: 'asc' }),
-                staleTime: 30_000,
-            })
-            .then((page) => {
-                if (cancelled) return
-                setMobileRows(page.items.map(toTransactionView))
-                setTotal(page.total ?? 0)
-            })
-            .catch(() => undefined)
-            .finally(() => {
-                if (!cancelled) setMobileLoading(false)
-            })
-        return () => {
-            cancelled = true
-        }
-    }, [params, queryClient, txRevision])
-
-    const loadMoreMobile = useCallback(async () => {
-        if (mobileLoadInFlightRef.current || total === null || mobileRows.length >= total) return
-        mobileLoadInFlightRef.current = true
-        setMobileLoadingMore(true)
-        setMobileLoadError(false)
-        try {
-            const page = await queryClient.fetchQuery({
-                queryKey: ['txPage', params, 'date', 'asc', MOBILE_PAGE, mobileRows.length],
-                queryFn: () => fetchTransactionsPage({ limit: MOBILE_PAGE, offset: mobileRows.length, ...params, sort_by: 'date', sort_dir: 'asc' }),
-                staleTime: 30_000,
-            })
-            setMobileRows((prev) => [...prev, ...page.items.map(toTransactionView)])
-            setTotal(page.total ?? 0)
-        } catch {
-            setMobileLoadError(true)
-        } finally {
-            mobileLoadInFlightRef.current = false
-            setMobileLoadingMore(false)
-        }
-    }, [mobileRows.length, params, queryClient, total])
-
-    useEffect(() => {
-        if (!isMobile || mobileLoading || mobileLoadingMore || mobileLoadError) return
-        if (total === null || mobileRows.length >= total) return
-        const scrollRoot = document.querySelector<HTMLElement>('main')
-        const sentinel = mobileSentinelRef.current
-        if (!scrollRoot || !sentinel) return
-
-        // The fixed app frame scrolls <main>, not window. A direct distance
-        // check is reliable on iOS/Android WebViews where an observer rooted
-        // at an overflow container can miss the sentinel after virtualization.
-        const requestNextPageNearBottom = () => {
-            if (isNearScrollEnd(scrollRoot.scrollTop, scrollRoot.clientHeight, scrollRoot.scrollHeight)) {
-                void loadMoreMobile()
-            }
-        }
-        scrollRoot.addEventListener('scroll', requestNextPageNearBottom, { passive: true })
-        const frame = window.requestAnimationFrame(requestNextPageNearBottom)
-
-        const observer = typeof IntersectionObserver === 'undefined'
-            ? null
-            : new IntersectionObserver(
-                ([entry]) => {
-                    if (entry?.isIntersecting) void loadMoreMobile()
-                },
-                { root: scrollRoot, rootMargin: '0px 0px 320px 0px' },
-            )
-        observer?.observe(sentinel)
-        return () => {
-            window.cancelAnimationFrame(frame)
-            scrollRoot.removeEventListener('scroll', requestNextPageNearBottom)
-            observer?.disconnect()
-        }
-    }, [isMobile, loadMoreMobile, mobileLoadError, mobileLoading, mobileLoadingMore, mobileRows.length, total])
+    }, [params, txRevision])
 
     // Выбранные в таблице строки (чекбоксы) → панель «Удалить (N)».
     const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -353,14 +344,13 @@ export function TransactionsPage() {
     const handleTransactionUpdated = useCallback((updated: Transaction, patch: TransactionUpdatePatch) => {
         if (!updated.id) return
         if (patch.datetime === undefined) {
-            setMobileRows((rows) => {
-                const updatedView = toTransactionView(updated)
-                const preserveInheritedStore = !('seller_name' in patch) && updatedView.store === null
-                return replaceTransactionInPlace(rows, updatedView, preserveInheritedStore)
-            })
+            queryClient.setQueryData<InfiniteData<MobileTransactionPage>>(
+                mobileQueryKey,
+                (data) => replaceTransactionInPages(data, updated, patch),
+            )
         }
         handleTransactionSaved(updated.id)
-    }, [handleTransactionSaved])
+    }, [handleTransactionSaved, mobileQueryKey, queryClient])
 
     const openTagEditor = useCallback((tx: TransactionView) => {
         setTagEditingTx(tx)
@@ -600,8 +590,13 @@ export function TransactionsPage() {
                 />
             ) : isMobile ? (
                 <Stack spacing={1.25}>
-                    {mobileLoading ? (
+                    {mobileQuery.isPending ? (
                         <LoadingState label="Загружаем операции…" />
+                    ) : mobileQuery.isError && mobileRows.length === 0 ? (
+                        <ErrorState
+                            message="Не удалось загрузить операции"
+                            onRetry={() => void mobileQuery.refetch()}
+                        />
                     ) : (
                         <>
                             <Box sx={{ position: 'sticky', top: 0, zIndex: 8 }}>
@@ -677,6 +672,7 @@ export function TransactionsPage() {
                             )}
                             <VirtualizedTransactionList
                                 items={mobileRows}
+                                scrollContainer={scrollContainer}
                                 renderItem={(t, index) => (
                                     <TransactionCard
                                         tx={t}
@@ -701,15 +697,28 @@ export function TransactionsPage() {
                                     ? `Показано ${mobileRows.length} из ${total ?? 0} · касание — выбрать`
                                     : `Показано ${mobileRows.length} из ${total ?? 0} · удерживайте для выбора`}
                             </Typography>
-                            {total !== null && mobileRows.length < total && !mobileLoadError && (
-                                <Box ref={mobileSentinelRef} sx={{ minHeight: 52, display: 'grid', placeItems: 'center' }} aria-live="polite">
-                                    {mobileLoadingMore && <CircularProgress size={22} aria-label="Загружаем следующие транзакции" />}
-                                </Box>
-                            )}
-                            {mobileLoadError && (
-                                <Button variant="outlined" color="inherit" onClick={() => void loadMoreMobile()} sx={{ color: 'text.primary', borderColor: 'divider' }}>
-                                    Не удалось загрузить. Повторить
-                                </Button>
+                            {mobileQuery.hasNextPage && (
+                                <Stack spacing={0.75} sx={{ alignItems: 'center', py: 0.5 }} aria-live="polite">
+                                    {mobileQuery.isFetchNextPageError && (
+                                        <Typography variant="caption" color="error.main">
+                                            Не удалось загрузить следующие транзакции
+                                        </Typography>
+                                    )}
+                                    <Button
+                                        variant="outlined"
+                                        color="inherit"
+                                        onClick={() => void loadMoreMobile()}
+                                        disabled={mobileQuery.isFetchingNextPage}
+                                        startIcon={mobileQuery.isFetchingNextPage ? <CircularProgress size={16} color="inherit" /> : undefined}
+                                        sx={{ color: 'text.primary', borderColor: 'divider' }}
+                                    >
+                                        {mobileQuery.isFetchingNextPage
+                                            ? 'Загружаем…'
+                                            : mobileQuery.isFetchNextPageError
+                                                ? 'Повторить загрузку'
+                                                : 'Загрузить ещё'}
+                                    </Button>
+                                </Stack>
                             )}
                         </>
                     )}
@@ -730,7 +739,7 @@ export function TransactionsPage() {
                             params={params}
                             tagsMap={tagsMap}
                             total={total}
-                            onTotalChange={setTotal}
+                            onTotalChange={setDesktopTotal}
                             onSelectionChange={setSelectedIds}
                             selectionResetRevision={selectionResetRevision}
                             onEdit={openTransactionEditor}

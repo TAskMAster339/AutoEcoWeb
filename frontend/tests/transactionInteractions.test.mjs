@@ -6,7 +6,6 @@ import {
   clampSwipeOffset,
   detectSwipeAxis,
   hasActiveTableFilters,
-  isNearScrollEnd,
   matchesOptionSearch,
   medianOf,
   nextOpenSwipeId,
@@ -17,6 +16,12 @@ import {
   swipeEditAction,
   toggleSelectedId,
 } from '../src/lib/transactionInteractions.mjs'
+import {
+  createFrameScheduler,
+  createRequestGate,
+  isNearScrollEnd,
+  nextPageOffset,
+} from '../src/lib/mobilePagination.mjs'
 import { getKeyboardViewport } from '../src/lib/visualViewport.mjs'
 
 const transactionView = (id, balance, expense) => ({
@@ -69,6 +74,60 @@ test('mobile pagination starts before the app scroll frame reaches the end', () 
   assert.equal(isNearScrollEnd(4120, 800, 5200), true)
   assert.equal(isNearScrollEnd(4000, 800, 5200), false)
   assert.equal(isNearScrollEnd(-40, 800, 5200), false)
+})
+
+test('mobile pagination advances by received rows and stops at the total', () => {
+  const firstPage = { items: Array.from({ length: 50 }), total: 79 }
+  const lastPage = { items: Array.from({ length: 29 }), total: 79 }
+
+  assert.equal(nextPageOffset([firstPage]), 50)
+  assert.equal(nextPageOffset([firstPage, lastPage]), undefined)
+  assert.equal(nextPageOffset([{ items: [], total: 79 }]), undefined)
+})
+
+test('scroll checks are coalesced into one animation frame', () => {
+  let callbackCount = 0
+  let requestCount = 0
+  let queuedFrame = null
+  const scheduler = createFrameScheduler(
+    () => { callbackCount += 1 },
+    (callback) => {
+      requestCount += 1
+      queuedFrame = callback
+      return requestCount
+    },
+    () => { queuedFrame = null },
+  )
+
+  scheduler.schedule()
+  scheduler.schedule()
+  scheduler.schedule()
+  assert.equal(requestCount, 1)
+  queuedFrame(0)
+  assert.equal(callbackCount, 1)
+})
+
+test('an active page request is shared instead of started twice', async () => {
+  let requestCount = 0
+  let resolveRequest
+  const request = createRequestGate(() => {
+    requestCount += 1
+    return new Promise((resolve) => { resolveRequest = resolve })
+  })
+
+  const first = request()
+  const second = request()
+  await Promise.resolve()
+  assert.equal(requestCount, 1)
+  resolveRequest('done')
+  assert.equal(await first, 'done')
+  assert.equal(await second, 'done')
+
+  const third = request()
+  await Promise.resolve()
+  assert.equal(requestCount, 2)
+  resolveRequest('again')
+  assert.equal(await third, 'again')
 })
 
 test('keyboard viewport handles overlay and resized mobile browsers without double offset', () => {
