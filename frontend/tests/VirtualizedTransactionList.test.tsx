@@ -11,7 +11,7 @@ function createItems(count: number) {
   return Array.from({ length: count }, (_, index) => ({ id: `transaction-${index}` }))
 }
 
-async function renderList(count: number) {
+async function renderList(count: number, passScrollContainer = true) {
   const scrollContainer = document.createElement('main')
   Object.defineProperty(scrollContainer, 'clientHeight', { configurable: true, value: VIEWPORT_HEIGHT })
   Object.defineProperty(scrollContainer, 'offsetHeight', { configurable: true, value: VIEWPORT_HEIGHT })
@@ -25,7 +25,7 @@ async function renderList(count: number) {
   const rendered = render(
     <VirtualizedTransactionList
       items={createItems(count)}
-      scrollContainer={scrollContainer}
+      scrollContainer={passScrollContainer ? scrollContainer : null}
       renderItem={(item) => <div data-testid={item.id}>{item.id}</div>}
     />,
     { container: scrollContainer },
@@ -38,6 +38,21 @@ async function renderList(count: number) {
 }
 
 describe('VirtualizedTransactionList', () => {
+  it('renders on first mount while the outlet scroll element is still null', async () => {
+    const { list, scrollContainer } = await renderList(80, false)
+
+    await waitFor(() => {
+      expect(Number(list.dataset.virtualEnd)).toBeGreaterThan(0)
+      expect(screen.getByTestId('transaction-0')).toBeTruthy()
+    })
+
+    await act(async () => {
+      scrollContainer.scrollTop = 40 * (ROW_HEIGHT + GAP)
+      fireEvent.scroll(scrollContainer)
+    })
+    await waitFor(() => expect(screen.getByTestId('transaction-40')).toBeTruthy())
+  })
+
   it.each([13, 50, 51, 80])('keeps a correctly sized virtual surface for %i transactions', async (count) => {
     const { list } = await renderList(count)
 

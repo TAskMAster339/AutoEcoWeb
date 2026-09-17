@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useLayoutEffect, useState, type ReactNode } from 'react'
 import { Box } from '@mui/material'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
@@ -28,22 +28,21 @@ export function VirtualizedTransactionList<T extends Identifiable>({
   gap = 10,
   overscan = 6,
 }: VirtualizedTransactionListProps<T>) {
-  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [containerElement, setContainerElement] = useState<HTMLDivElement | null>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
+  const resolvedScrollContainer = scrollContainer ?? containerElement?.closest<HTMLElement>('main') ?? null
 
   const measureScrollMargin = useCallback(() => {
-    const container = containerRef.current
-    if (!container || !scrollContainer) return
+    if (!containerElement || !resolvedScrollContainer) return
 
-    const containerRect = container.getBoundingClientRect()
-    const scrollRect = scrollContainer.getBoundingClientRect()
-    const nextMargin = Math.max(0, containerRect.top - scrollRect.top + scrollContainer.scrollTop)
+    const containerRect = containerElement.getBoundingClientRect()
+    const scrollRect = resolvedScrollContainer.getBoundingClientRect()
+    const nextMargin = Math.max(0, containerRect.top - scrollRect.top + resolvedScrollContainer.scrollTop)
     setScrollMargin((current) => Math.abs(current - nextMargin) < 0.5 ? current : nextMargin)
-  }, [scrollContainer])
+  }, [containerElement, resolvedScrollContainer])
 
   useLayoutEffect(() => {
-    const container = containerRef.current
-    if (!container || !scrollContainer) return
+    if (!containerElement || !resolvedScrollContainer) return
 
     let animationFrame = 0
     const scheduleMeasurement = () => {
@@ -53,8 +52,8 @@ export function VirtualizedTransactionList<T extends Identifiable>({
 
     measureScrollMargin()
     const resizeObserver = new ResizeObserver(scheduleMeasurement)
-    resizeObserver.observe(scrollContainer)
-    if (container.parentElement) resizeObserver.observe(container.parentElement)
+    resizeObserver.observe(resolvedScrollContainer)
+    if (containerElement.parentElement) resizeObserver.observe(containerElement.parentElement)
     window.addEventListener('resize', scheduleMeasurement, { passive: true })
 
     return () => {
@@ -62,7 +61,7 @@ export function VirtualizedTransactionList<T extends Identifiable>({
       resizeObserver.disconnect()
       window.removeEventListener('resize', scheduleMeasurement)
     }
-  }, [measureScrollMargin, scrollContainer])
+  }, [containerElement, measureScrollMargin, resolvedScrollContainer])
 
   // Preceding mobile controls can appear or disappear without resizing the
   // scroll element itself. One layout read after such a React commit keeps the
@@ -71,7 +70,7 @@ export function VirtualizedTransactionList<T extends Identifiable>({
 
   const rowVirtualizer = useVirtualizer({
     count: items.length,
-    getScrollElement: () => scrollContainer,
+    getScrollElement: () => resolvedScrollContainer,
     estimateSize: () => estimatedItemHeight,
     getItemKey: (index) => items[index]?.id ?? index,
     gap,
@@ -85,7 +84,7 @@ export function VirtualizedTransactionList<T extends Identifiable>({
 
   return (
     <Box
-      ref={containerRef}
+      ref={setContainerElement}
       role="list"
       aria-label="Транзакции"
       data-virtual-start={firstVirtualRow?.index ?? 0}
