@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { Navigate, Outlet, useLocation, useOutletContext } from 'react-router-dom'
 import { Box, CircularProgress } from '@mui/material'
 import { Logo } from './Logo'
 import { useAuthStore } from '../../store/authStore'
@@ -39,10 +39,13 @@ export function ProtectedRoute() {
 export function VerifiedAccessRoute() {
   const user = useAuthStore((s) => s.user)
   const location = useLocation()
+  const outletContext = useOutletContext<HTMLElement | null>()
   if (user?.status === 'verified' && !['/profile', '/about', '/feedback'].includes(location.pathname)) {
     return <Navigate to="/feedback" replace />
   }
-  return <Outlet />
+  // Each Outlet creates its own context provider. Preserve AppShell's scroll
+  // element so child pages can subscribe to the actual scrolling surface.
+  return <Outlet context={outletContext} />
 }
 
 /** /login — redirects signed-in users to the app. */
