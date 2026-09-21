@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from src.core.config import settings
 from src.core.cookies import REFRESH_COOKIE, clear_auth_cookies, set_auth_cookies
 from src.core.dependencies import (
+    AuthLimiter,
     CurrentUser,
     EmailCodeRepo,
     EmailSvc,
@@ -32,9 +33,35 @@ from src.schemas.user import (
     UserUpdate,
 )
 from src.services.auth import AuthService
+from src.services.rate_limit import client_ip
 from src.services.user import UserService
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+_REGISTER_LIMIT = (10, 5, 3600)
+_LOGIN_LIMIT = (30, 10, 900)
+_CODE_REQUEST_LIMIT = (10, 5, 3600)
+_CODE_VERIFY_LIMIT = (30, 10, 900)
+_REFRESH_LIMIT = (120, 120, 900)
+
+
+async def _limit_auth(
+    limiter: AuthLimiter,
+    request: Request,
+    *,
+    action: str,
+    email: str | None,
+    policy: tuple[int, int, int],
+) -> None:
+    ip_limit, email_limit, window_seconds = policy
+    await limiter.check(
+        action=action,
+        ip=client_ip(request),
+        email=email,
+        ip_limit=ip_limit,
+        email_limit=email_limit,
+        window_seconds=window_seconds,
+    )
 
 
 def _auth_service(
@@ -53,6 +80,8 @@ def _auth_service(
 )
 async def register(
     data: UserCreate,
+    request: Request,
+    limiter: AuthLimiter,
     user_repo: UserRepo,
     refresh_repo: RefreshRepo,
     code_repo: EmailCodeRepo,
@@ -60,6 +89,13 @@ async def register(
 ) -> User:
     """Регистрация: создаёт пользователя (status=pending) и отправляет
     6-значный код подтверждения на почту."""
+    await _limit_auth(
+        limiter,
+        request,
+        action="register",
+        email=data.email,
+        policy=_REGISTER_LIMIT,
+    )
     return await _auth_service(
         user_repo,
         refresh_repo,
@@ -71,12 +107,21 @@ async def register(
 @router.post("/verify-email", response_model=UserResponse)
 async def verify_email(
     data: VerifyEmailRequest,
+    request: Request,
+    limiter: AuthLimiter,
     user_repo: UserRepo,
     refresh_repo: RefreshRepo,
     code_repo: EmailCodeRepo,
     email_service: EmailSvc,
 ) -> User:
     """Подтверждение почты кодом из письма: pending → verified."""
+    await _limit_auth(
+        limiter,
+        request,
+        action="verify_email",
+        email=str(data.email),
+        policy=_CODE_VERIFY_LIMIT,
+    )
     return await _auth_service(
         user_repo,
         refresh_repo,
@@ -91,12 +136,21 @@ async def verify_email(
 @router.post("/verify-email/resend", status_code=status.HTTP_204_NO_CONTENT)
 async def resend_verification(
     data: ResendVerificationRequest,
+    request: Request,
+    limiter: AuthLimiter,
     user_repo: UserRepo,
     refresh_repo: RefreshRepo,
     code_repo: EmailCodeRepo,
     email_service: EmailSvc,
 ) -> None:
     """Новый код подтверждения почты (старые коды аннулируются)."""
+    await _limit_auth(
+        limiter,
+        request,
+        action="resend_verification",
+        email=str(data.email),
+        policy=_CODE_REQUEST_LIMIT,
+    )
     await _auth_service(
         user_repo,
         refresh_repo,
@@ -110,6 +164,8 @@ async def resend_verification(
 @router.post("/password-recovery/request", status_code=status.HTTP_204_NO_CONTENT)
 async def password_recovery_request(
     data: PasswordRecoveryRequest,
+    request: Request,
+    limiter: AuthLimiter,
     user_repo: UserRepo,
     refresh_repo: RefreshRepo,
     code_repo: EmailCodeRepo,
@@ -119,6 +175,13 @@ async def password_recovery_request(
 
     Всегда отвечает 204 — не раскрывает, существует ли такой email.
     """
+    await _limit_auth(
+        limiter,
+        request,
+        action="password_recovery_request",
+        email=str(data.email),
+        policy=_CODE_REQUEST_LIMIT,
+    )
     await _auth_service(
         user_repo,
         refresh_repo,
@@ -132,12 +195,21 @@ async def password_recovery_request(
 @router.post("/password-recovery/verify", status_code=status.HTTP_204_NO_CONTENT)
 async def password_recovery_verify(
     data: PasswordRecoveryVerify,
+    request: Request,
+    limiter: AuthLimiter,
     user_repo: UserRepo,
     refresh_repo: RefreshRepo,
     code_repo: EmailCodeRepo,
     email_service: EmailSvc,
 ) -> None:
     """Проверка кода восстановления (без побочных эффектов)."""
+    await _limit_auth(
+        limiter,
+        request,
+        action="password_recovery_verify",
+        email=str(data.email),
+        policy=_CODE_VERIFY_LIMIT,
+    )
     await _auth_service(
         user_repo,
         refresh_repo,
@@ -152,12 +224,21 @@ async def password_recovery_verify(
 @router.post("/password-recovery/reset", status_code=status.HTTP_204_NO_CONTENT)
 async def password_recovery_reset(
     data: PasswordReset,
+    request: Request,
+    limiter: AuthLimiter,
     user_repo: UserRepo,
     refresh_repo: RefreshRepo,
     code_repo: EmailCodeRepo,
     email_service: EmailSvc,
 ) -> None:
     """Смена пароля по коду: код одноразовый, все сессии отзываются."""
+    await _limit_auth(
+        limiter,
+        request,
+        action="password_recovery_reset",
+        email=str(data.email),
+        policy=_CODE_VERIFY_LIMIT,
+    )
     await _auth_service(
         user_repo,
         refresh_repo,
@@ -173,12 +254,21 @@ async def password_recovery_reset(
 @router.post("/login", response_model=UserResponse)
 async def login(  # noqa: PLR0913
     data: UserLogin,
+    request: Request,
+    limiter: AuthLimiter,
     user_repo: UserRepo,
     refresh_repo: RefreshRepo,
     code_repo: EmailCodeRepo,
     email_service: EmailSvc,
     response: Response,
 ) -> User:
+    await _limit_auth(
+        limiter,
+        request,
+        action="login",
+        email=data.email,
+        policy=_LOGIN_LIMIT,
+    )
     tokens = await _auth_service(
         user_repo,
         refresh_repo,
@@ -198,12 +288,20 @@ async def login(  # noqa: PLR0913
 async def refresh(  # noqa: PLR0913
     request: Request,
     response: Response,
+    limiter: AuthLimiter,
     user_repo: UserRepo,
     refresh_repo: RefreshRepo,
     code_repo: EmailCodeRepo,
     email_service: EmailSvc,
     data: RefreshRequest | None = None,
 ) -> TokenPair:
+    await _limit_auth(
+        limiter,
+        request,
+        action="refresh",
+        email=None,
+        policy=_REFRESH_LIMIT,
+    )
     raw = data.refresh_token if data else request.cookies.get(REFRESH_COOKIE)
     if not raw:
         clear_auth_cookies(response)
@@ -318,11 +416,20 @@ async def change_password(  # noqa: PLR0913
 @router.post("/token", response_model=TokenPair)
 async def token(
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
+    request: Request,
+    limiter: AuthLimiter,
     user_repo: UserRepo,
     refresh_repo: RefreshRepo,
     code_repo: EmailCodeRepo,
     email_service: EmailSvc,
 ) -> TokenPair:
+    await _limit_auth(
+        limiter,
+        request,
+        action="token",
+        email=form.username,
+        policy=_LOGIN_LIMIT,
+    )
     return await _auth_service(user_repo, refresh_repo, code_repo, email_service).login(
         UserLogin(email=form.username, password=form.password),
     )
