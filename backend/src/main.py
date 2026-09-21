@@ -13,17 +13,19 @@ from src.api.v1.sellers import router as sellers_router
 from src.api.v1.tags import router as tags_router
 from src.api.v1.transactions import router as transactions_router
 from src.core.config import settings
+from src.core.csrf import CookieCSRFMiddleware
 
 app = FastAPI(title=settings.app_name)
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+app.add_middleware(CookieCSRFMiddleware, allowed_origins=settings.allowed_origins)
 
 app.include_router(auth_router)
 app.include_router(auto_tagging_router)

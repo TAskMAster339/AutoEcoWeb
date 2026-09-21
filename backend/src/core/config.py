@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,6 +24,8 @@ class Settings(BaseSettings):
 
     # Публичный адрес фронтенда для ссылок из email.
     app_url: str = "https://autoeco.mooo.com"
+    # Comma-separated extra browser origins. APP_URL is always included.
+    cors_origins: str = "http://localhost:5173"
 
     # Клиент proverkacheka.com (см. src/services/proverkacheka.py).
     # Токена в settings НЕТ — каждый пользователь хранит свой в БД  # noqa: RUF003
@@ -56,6 +60,19 @@ class Settings(BaseSettings):
         env_file=".env",
         extra="ignore",
     )
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        values = [self.app_url, *self.cors_origins.split(",")]
+        origins: list[str] = []
+        for value in values:
+            parsed = urlsplit(value.strip())
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                continue
+            origin = f"{parsed.scheme}://{parsed.netloc}"
+            if origin not in origins:
+                origins.append(origin)
+        return origins
 
 
 settings = Settings()
