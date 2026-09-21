@@ -21,6 +21,7 @@ from src.schemas.alias import AliasCreate
 from src.schemas.tag import TagCreate
 from src.schemas.transaction import (
     TransactionCreate,
+    TransactionBulkUpdate,
     TransactionInReceipt,
     TransactionManualIn,
     TransactionOut,
@@ -599,6 +600,56 @@ async def test_delete_other_users_transaction_404(session):
     with pytest.raises(HTTPException) as exc_info:
         await _tx_service(session).delete(other, tx.id)
     assert exc_info.value.status_code == 404  # noqa: PLR2004
+
+
+async def test_bulk_update_changes_all_owned_transactions(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    first = await service.create_standalone(
+        user, TransactionCreate(name="First", amount=Decimal("10.00"))
+    )
+    second = await service.create_standalone(
+        user, TransactionCreate(name="Second", amount=Decimal("20.00"))
+    )
+
+    updated = await service.bulk_update(
+        user,
+        TransactionBulkUpdate(
+            ids=[first.id, second.id],
+            patch=TransactionUpdate(comment="Reviewed"),
+        ),
+    )
+
+    assert updated == 2  # noqa: PLR2004
+    assert (await service.get(user, first.id)).comment == "Reviewed"
+    assert (await service.get(user, second.id)).comment == "Reviewed"
+
+
+async def test_bulk_update_checks_every_id_before_mutating(session):
+    owner = await _make_user(session)
+    other = await UserRepository(session).create(
+        email="bulk-other@test.ru",
+        password_hash="x" * 60,
+    )
+    service = _tx_service(session)
+    owned = await service.create_standalone(
+        owner, TransactionCreate(name="Owned", amount=Decimal("10.00"))
+    )
+    foreign = await service.create_standalone(
+        other, TransactionCreate(name="Foreign", amount=Decimal("20.00"))
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.bulk_update(
+            owner,
+            TransactionBulkUpdate(
+                ids=[owned.id, foreign.id],
+                patch=TransactionUpdate(comment="Must not persist"),
+            ),
+        )
+
+    assert exc_info.value.status_code == HTTPStatus.NOT_FOUND
+    assert (await service.get(owner, owned.id)).comment is None
 
 
 # ---------- список / пагинация / фильтры ----------

@@ -29,6 +29,7 @@ from src.schemas.transaction import (
     TransactionOut,
     TransactionSummary,
     TransactionUpdate,
+    TransactionBulkUpdate,
 )
 from src.services.aliases import AliasService
 from src.services.auto_tagging import AutoTagInput, AutoTaggingService
@@ -740,6 +741,22 @@ class TransactionService:
         if training_changed and self._auto_tagging is not None:
             await self._auto_tagging.bump_revision(user.id)
         return updated
+
+    async def bulk_update(
+        self,
+        user: User,
+        data: TransactionBulkUpdate,
+    ) -> int:
+        """Validate ownership of the complete set before changing any row."""
+        owned = await self._tx_repo.list_owned_for_update(user.id, data.ids)
+        if len(owned) != len(data.ids):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Одна или несколько транзакций не найдены",
+            )
+        for tx_id in data.ids:
+            await self.update(user, tx_id, data.patch)
+        return len(owned)
 
     async def delete(self, user: User, tx_id: UUID) -> None:
         tx = await self.get(user, tx_id)

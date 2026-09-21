@@ -9,6 +9,8 @@ from src.schemas.pagination import CursorPage
 from src.schemas.transaction import (
     StoreResponse,
     TransactionCreate,
+    TransactionBulkUpdate,
+    TransactionBulkUpdateResult,
     TransactionOut,
     TransactionSummary,
     TransactionUpdate,
@@ -125,6 +127,16 @@ async def create_transaction(
     """Ручная транзакция без чека — минимальная единица учёта."""
     tx = await transaction_service.create_standalone(_current_user, data)
     return TransactionOut.from_model(tx)
+
+
+@router.patch("/bulk", response_model=TransactionBulkUpdateResult)
+async def bulk_update_transactions(
+    data: TransactionBulkUpdate,
+    _current_user: CurrentUser,
+    transaction_service: TransactionSvc,
+) -> TransactionBulkUpdateResult:
+    updated = await transaction_service.bulk_update(_current_user, data)
+    return TransactionBulkUpdateResult(updated=updated)
 
 
 @router.patch("/{transaction_id}", response_model=TransactionOut)

@@ -111,6 +111,17 @@ export function updateTransaction(
   return api.patch<Transaction>(`/api/v1/transactions/${id}`, patch)
 }
 
+export async function bulkUpdateTransactions(
+  ids: string[],
+  patch: TransactionUpdatePatch,
+): Promise<number> {
+  const result = await api.patch<{ updated: number }>('/api/v1/transactions/bulk', {
+    ids,
+    patch,
+  })
+  return result.updated
+}
+
 export function deleteTransaction(id: string): Promise<void> {
   return api.del(`/api/v1/transactions/${id}`)
 }

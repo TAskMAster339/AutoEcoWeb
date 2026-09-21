@@ -211,6 +211,20 @@ class TransactionRepository:
         )
         return await self._session.scalar(stmt)
 
+    async def list_owned_for_update(
+        self,
+        user_id: UUID,
+        tx_ids: list[UUID],
+    ) -> list[Transaction]:
+        if not tx_ids:
+            return []
+        stmt = (
+            select(Transaction)
+            .where(Transaction.user_id == user_id, Transaction.id.in_(tx_ids))
+            .with_for_update()
+        )
+        return list((await self._session.scalars(stmt)).all())
+
     async def list_page(  # noqa: PLR0913
         self,
         *,
