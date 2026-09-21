@@ -68,6 +68,8 @@ interface RequestOptions {
   auth?: boolean
   /** return the raw body as a Blob (file downloads) instead of parsed JSON */
   asBlob?: boolean
+  /** internal guard: an original request may refresh the session only once */
+  retryAfterRefresh?: boolean
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -92,15 +94,24 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   // One transparent refresh attempt on 401 (except auth-less calls like login).
-  if (res.status === 401 && options.auth !== false) {
+  if (
+    res.status === 401
+    && options.auth !== false
+    && options.retryAfterRefresh !== false
+  ) {
     refreshPromise ??= tryRefresh().finally(() => {
       refreshPromise = null
     })
     const refreshed = await refreshPromise
     if (refreshed) {
-      return request<T>(path, options)
+      return request<T>(path, { ...options, retryAfterRefresh: false })
     }
     // Refresh failed: the backend has already cleared the cookies — sign out.
+    unauthorizedHandler?.()
+    throw new ApiError(401, 'Сессия истекла. Войдите снова.')
+  }
+
+  if (res.status === 401 && options.auth !== false) {
     unauthorizedHandler?.()
     throw new ApiError(401, 'Сессия истекла. Войдите снова.')
   }
