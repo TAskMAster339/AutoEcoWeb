@@ -35,7 +35,13 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("PROVERKACHECKA_URL", "PROVERKA_URL"),
     )
     # Separate base64-encoded 32-byte KEK for envelope-encrypted user tokens.
-    proverkacheka_encryption_key: str | None = None
+    proverkacheka_encryption_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "PROVERKACHECKA_ENCRYPTION_KEY",
+            "PROVERKACHEKA_ENCRYPTION_KEY",
+        ),
+    )
 
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 30

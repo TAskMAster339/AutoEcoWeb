@@ -2,6 +2,7 @@ import base64
 
 import pytest
 
+from src.core.config import Settings
 from src.core.encryption import EncryptedValueError, EnvelopeEncryption
 
 
@@ -28,3 +29,21 @@ def test_envelope_encryption_rejects_tampering():
 
     with pytest.raises(EncryptedValueError):
         cipher.decrypt(tampered)
+
+
+def test_settings_reads_documented_encryption_key(monkeypatch):
+    required_environment = {
+        "POSTGRES_USER": "autoeco",
+        "POSTGRES_PASSWORD": "test-password",
+        "POSTGRES_HOST": "postgres",
+        "POSTGRES_PORT": "5432",
+        "POSTGRES_DB_NAME": "autoeco",
+        "JWT_SECRET": "test-secret",
+        "PROVERKACHECKA_ENCRYPTION_KEY": _key(),
+    }
+    for name, value in required_environment.items():
+        monkeypatch.setenv(name, value)
+
+    loaded = Settings(_env_file=None)
+
+    assert loaded.proverkacheka_encryption_key == _key()
