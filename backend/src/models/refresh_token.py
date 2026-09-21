@@ -34,4 +34,21 @@ class RefreshToken(BaseModel):
         nullable=True,
     )
 
+    family_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        default=uuid.uuid4,
+        index=True,
+        nullable=False,
+    )
+
+    replaced_by_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    grace_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     user: Mapped[User] = relationship()
