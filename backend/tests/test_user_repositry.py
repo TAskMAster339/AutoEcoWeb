@@ -8,6 +8,8 @@ from src.repositories.user import UserRepository
 from src.repositories.tag import TagRepository
 from src.schemas.user import ProverkachekaTokenUpdate
 from src.services.user import AdminUserService, UserService
+from src.core.config import settings
+from src.core.encryption import EnvelopeEncryption, is_encrypted
 
 
 async def test_list_cursor_paginates(repo, session):
@@ -136,18 +138,20 @@ async def test_update_proverkacheka_token(repo: UserRepository, session):
 
     service = UserService(repo)
     updated = await service.update_proverkacheka_token(user, "  secret-token-1  ")
-    assert updated.proverkacheka_token == "secret-token-1"  # trim
+    assert is_encrypted(updated.proverkacheka_token)
+    cipher = EnvelopeEncryption(settings.proverkacheka_encryption_key)
+    assert cipher.decrypt(updated.proverkacheka_token) == "secret-token-1"  # trim
     assert updated.id == user.id
 
     # обновление существующего
     again = await service.update_proverkacheka_token(updated, "secret-token-2")
-    assert again.proverkacheka_token == "secret-token-2"
+    assert cipher.decrypt(again.proverkacheka_token) == "secret-token-2"
 
     # переживает перезагрузку из БД
     await session.commit()
     reloaded = await repo.get(user.id)
     assert reloaded is not None
-    assert reloaded.proverkacheka_token == "secret-token-2"
+    assert cipher.decrypt(reloaded.proverkacheka_token) == "secret-token-2"
 
 
 async def test_update_proverkacheka_token_blank_rejected(repo):

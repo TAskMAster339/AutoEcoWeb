@@ -34,6 +34,8 @@ class Settings(BaseSettings):
         default="https://proverkacheka.com/api/v1/check/get",
         validation_alias=AliasChoices("PROVERKACHECKA_URL", "PROVERKA_URL"),
     )
+    # Separate base64-encoded 32-byte KEK for envelope-encrypted user tokens.
+    proverkacheka_encryption_key: str | None = None
 
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 30

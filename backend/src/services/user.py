@@ -4,6 +4,8 @@ from src.core.enums.user_role import UserRole
 from src.core.enums.user_status import UserStatus
 from src.core.security import hash_password
 from src.models.user import User
+from src.core.config import settings
+from src.core.encryption import EncryptionConfigurationError, EnvelopeEncryption
 from src.repositories.user import UserRepository
 from src.schemas.user import AdminUserUpdate, UserUpdate
 
@@ -35,7 +37,16 @@ class UserService:
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Токен не может быть пустым",
             )
-        return await self._repo.update(user, proverkacheka_token=token)
+        try:
+            encrypted = EnvelopeEncryption(
+                settings.proverkacheka_encryption_key
+            ).encrypt(token)
+        except EncryptionConfigurationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Шифрование внешних токенов не настроено",
+            ) from exc
+        return await self._repo.update(user, proverkacheka_token=encrypted)
 
 
 class AdminUserService:

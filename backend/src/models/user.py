@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Enum, Index, Integer, String
+from sqlalchemy import Boolean, Enum, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.core.enums.user_role import UserRole
 from src.core.enums.user_status import UserStatus
@@ -44,7 +44,7 @@ class User(BaseModel):
 
     # Персональный токен proverkacheka.com; используется при автозагрузке
     proverkacheka_token: Mapped[str | None] = mapped_column(
-        String(256),
+        Text,
         nullable=True,
     )
 

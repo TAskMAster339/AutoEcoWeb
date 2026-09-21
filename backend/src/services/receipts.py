@@ -3,6 +3,12 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from src.core.cursor import decode_cursor, encode_cursor
+from src.core.config import settings
+from src.core.encryption import (
+    EncryptedValueError,
+    EncryptionConfigurationError,
+    EnvelopeEncryption,
+)
 from src.models.receipt import Receipt
 from src.models.user import User
 from src.repositories.alias import AliasRepository
@@ -241,8 +247,8 @@ class ReceiptService:
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Сервис загрузки чеков proverkacheka не настроен",
                 )
-            token = user.proverkacheka_token
-            if not token:
+            encrypted_token = user.proverkacheka_token
+            if not encrypted_token:
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
                     detail=(
@@ -250,6 +256,15 @@ class ReceiptService:
                         "(PUT /auth/me/proverkacheka-token)"
                     ),
                 )
+            try:
+                token = EnvelopeEncryption(
+                    settings.proverkacheka_encryption_key
+                ).decrypt(encrypted_token)
+            except (EncryptionConfigurationError, EncryptedValueError) as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Не удалось расшифровать токен proverkacheka",
+                ) from exc
             try:
                 payload = await self._proverkacheka.fetch(data.qr, token=token)
             except ProverkachekaError as exc:
