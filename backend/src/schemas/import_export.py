@@ -150,7 +150,7 @@ class ImportRowIn(BaseModel):
 
 
 class ImportRequest(BaseModel):
-    rows: list[ImportRowIn]
+    rows: list[ImportRowIn] = Field(max_length=50_000)
 
 
 class ImportResult(BaseModel):

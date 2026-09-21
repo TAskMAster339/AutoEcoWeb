@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from datetime import date, datetime
 from decimal import Decimal
 from typing import cast
@@ -190,6 +191,53 @@ class TransactionRepository:
         )
         rows = (await self._session.execute(stmt)).all()
         return [(tx, seller_name) for tx, seller_name in rows]
+
+    async def iter_all_chunks(
+        self,
+        user_id: UUID,
+        *,
+        chunk_size: int = 1000,
+    ) -> AsyncIterator[list[tuple[Transaction, str | None]]]:
+        """Keyset-page transactions so large exports do not retain ORM rows."""
+        last_datetime: datetime | None = None
+        last_id: UUID | None = None
+        while True:
+            stmt = (
+                select(
+                    Transaction,
+                    func.coalesce(
+                        OwnSeller.normalized_name,
+                        ReceiptSeller.normalized_name,
+                    ),
+                )
+                .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+                .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+                .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
+                .where(Transaction.user_id == user_id)
+            )
+            if last_datetime is not None and last_id is not None:
+                stmt = stmt.where(
+                    or_(
+                        Transaction.check_datetime > last_datetime,
+                        and_(
+                            Transaction.check_datetime == last_datetime,
+                            Transaction.id > last_id,
+                        ),
+                    )
+                )
+            stmt = stmt.order_by(
+                Transaction.check_datetime.asc(),
+                Transaction.id.asc(),
+            ).limit(chunk_size)
+            result = (await self._session.execute(stmt)).all()
+            if not result:
+                break
+            chunk = [(tx, seller_name) for tx, seller_name in result]
+            yield chunk
+            last_datetime = chunk[-1][0].check_datetime
+            last_id = chunk[-1][0].id
+            if len(chunk) < chunk_size:
+                break
 
     async def list_by_receipts(self, receipt_ids: list[UUID]) -> list[Transaction]:
         if not receipt_ids:
