@@ -84,12 +84,6 @@ class ReceiptService:
             user.id,
             normalized.seller_name,
         )
-        # Seller creation can commit and release the first quota lock.
-        await self._transaction_service.ensure_new_receipt(
-            user.id,
-            len(normalized.items),
-        )
-
         receipt = await self._repo.create(
             user_id=user.id,
             qr=normalized.qr,
@@ -103,17 +97,12 @@ class ReceiptService:
             balance_after=data.balance_after,
             raw_json=normalized.raw_json,
         )
-        # транзакции — ответственность TransactionService
-        try:
-            await self._transaction_service.create_for_receipt(
-                receipt,
-                normalized.items,
-                user,
-            )
-        except Exception:
-            await self._repo.delete(receipt)
-            await self._seller_service.delete_if_unused(user.id, seller.id)
-            raise
+        # Транзакции и чек пишутся в одной use-case транзакции.
+        await self._transaction_service.create_for_receipt(
+            receipt,
+            normalized.items,
+            user,
+        )
         return receipt
 
     async def create_manual(
@@ -134,11 +123,6 @@ class ReceiptService:
             user.id,
             data.seller_name,
         )
-        await self._transaction_service.ensure_new_receipt(
-            user.id,
-            len(data.transactions or []),
-        )
-
         receipt = await self._repo.create(
             user_id=user.id,
             qr=None,
@@ -152,17 +136,12 @@ class ReceiptService:
             balance_after=data.balance_after,
             raw_json={},
         )
-        # транзакции ручного чека — ответственность TransactionService
-        try:
-            await self._transaction_service.create_manual_for_receipt(
-                receipt,
-                data.transactions or [],
-                user,
-            )
-        except Exception:
-            await self._repo.delete(receipt)
-            await self._seller_service.delete_if_unused(user.id, seller.id)
-            raise
+        # Ручной чек и его строки атомарны.
+        await self._transaction_service.create_manual_for_receipt(
+            receipt,
+            data.transactions or [],
+            user,
+        )
         return receipt
 
     async def update(

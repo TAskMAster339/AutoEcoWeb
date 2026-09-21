@@ -41,7 +41,7 @@ class ReceiptRepository:
             raw_json=raw_json,
         )
         self._session.add(receipt)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(receipt)
         return receipt
 
@@ -109,10 +109,10 @@ class ReceiptRepository:
     async def update(self, receipt: Receipt, **fields: object) -> Receipt:
         for field, value in fields.items():
             setattr(receipt, field, value)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(receipt)
         return receipt
 
     async def delete(self, receipt: Receipt) -> None:
         await self._session.delete(receipt)
-        await self._session.commit()
+        await self._session.flush()

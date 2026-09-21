@@ -20,7 +20,7 @@ class FeedbackRepository:
     ) -> Feedback:
         item = Feedback(user_id=user_id, email=email, subject=subject, message=message)
         self._session.add(item)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(item)
         return item
 
@@ -64,12 +64,12 @@ class FeedbackRepository:
         item.replied_by_id = admin_id
         item.replied_at = datetime.now(timezone.utc)
         item.status = "answered"
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(item)
         return item
 
     async def close(self, item: Feedback) -> Feedback:
         item.status = "closed"
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(item)
         return item

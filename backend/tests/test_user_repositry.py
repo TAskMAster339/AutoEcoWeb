@@ -5,6 +5,7 @@ import pytest
 from fastapi import HTTPException
 from src.models.user import User
 from src.repositories.user import UserRepository
+from src.repositories.tag import TagRepository
 from src.schemas.user import ProverkachekaTokenUpdate
 from src.services.user import AdminUserService, UserService
 
@@ -104,6 +105,26 @@ async def test_create_and_get_by_email(repo: UserRepository):
 
 async def test_get_missing(repo: UserRepository):
     assert await repo.get_by_email("nobody@example.com") is None
+
+
+async def test_repository_writes_rollback_as_one_use_case(session):
+    await session.rollback()
+
+    with pytest.raises(RuntimeError, match="abort use case"):
+        async with session.begin():
+            user = await UserRepository(session).create(
+                email="atomic@example.com",
+                password_hash="hashed",
+            )
+            await TagRepository(session).create(
+                user_id=user.id,
+                name="Atomic tag",
+                color="#000000",
+                icon=None,
+            )
+            raise RuntimeError("abort use case")
+
+    assert await UserRepository(session).get_by_email("atomic@example.com") is None
 
 
 # ---------- персональный токен proverkacheka ----------

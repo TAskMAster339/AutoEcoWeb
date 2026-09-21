@@ -22,7 +22,7 @@ class RefreshTokenRepository:
             expires_at=expires_at,
         )
         self._session.add(token)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(token)
         return token
 
@@ -40,7 +40,7 @@ class RefreshTokenRepository:
 
     async def revoke(self, token: RefreshToken) -> None:
         token.revoked_at = datetime.now(timezone.utc)
-        await self._session.commit()
+        await self._session.flush()
 
     async def revoke_all_for_user(self, user_id: UUID) -> None:
         """Отзывает ВСЕ активные refresh-токены пользователя (смена пароля)."""
@@ -52,4 +52,4 @@ class RefreshTokenRepository:
             )
             .values(revoked_at=datetime.now(timezone.utc))
         )
-        await self._session.commit()
+        await self._session.flush()

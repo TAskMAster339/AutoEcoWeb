@@ -17,7 +17,7 @@ class UserRepository:
         user = User(email=email, password_hash=password_hash)
         user.limits = UserLimits()
         self._session.add(user)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(user)
         return user
 
@@ -66,10 +66,10 @@ class UserRepository:
     async def update(self, user: User, **fields: object) -> User:
         for field, value in fields.items():
             setattr(user, field, value)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(user)
         return user
 
     async def delete(self, user: User) -> None:
         await self._session.delete(user)
-        await self._session.commit()
+        await self._session.flush()

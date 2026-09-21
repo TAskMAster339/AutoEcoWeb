@@ -25,7 +25,7 @@ class EmailCodeRepository:
             expires_at=expires_at,
         )
         self._session.add(code)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(code)
         return code
 
@@ -64,12 +64,12 @@ class EmailCodeRepository:
             )
             .values(used_at=datetime.now(timezone.utc)),
         )
-        await self._session.commit()
+        await self._session.flush()
 
     async def mark_used(self, code: EmailCode) -> None:
         code.used_at = datetime.now(timezone.utc)
-        await self._session.commit()
+        await self._session.flush()
 
     async def bump_attempts(self, code: EmailCode) -> None:
         code.attempts += 1
-        await self._session.commit()
+        await self._session.flush()

@@ -136,7 +136,7 @@ class TransactionRepository:
 
     async def create(self, tx: Transaction) -> Transaction:
         self._session.add(tx)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(tx)
         return tx
 
@@ -150,7 +150,7 @@ class TransactionRepository:
         for tx in transactions:
             tx.receipt_id = receipt_id
         self._session.add_all(transactions)
-        await self._session.commit()
+        await self._session.flush()
         return transactions
 
     async def create_many_standalone(
@@ -161,7 +161,7 @@ class TransactionRepository:
         if not transactions:
             return []
         self._session.add_all(transactions)
-        await self._session.commit()
+        await self._session.flush()
         return transactions
 
     async def list_by_receipt(self, receipt_id: UUID) -> list[Transaction]:
@@ -817,13 +817,13 @@ class TransactionRepository:
     async def update(self, tx: Transaction, **fields: object) -> Transaction:
         for field, value in fields.items():
             setattr(tx, field, value)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(tx)
         return tx
 
     async def delete(self, tx: Transaction) -> None:
         await self._session.delete(tx)
-        await self._session.commit()
+        await self._session.flush()
 
     # ---------- применение алиасов ----------
 
@@ -871,4 +871,4 @@ class TransactionRepository:
                 for tx_id, _name, normalized, alias_id in changes
             ],
         )
-        await self._session.commit()
+        await self._session.flush()

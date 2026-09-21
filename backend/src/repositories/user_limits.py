@@ -40,7 +40,7 @@ class UserLimitsRepository:
             return limits
         limits = UserLimits(user_id=user_id)
         self._session.add(limits)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(limits)
         return limits
 
@@ -75,6 +75,6 @@ class UserLimitsRepository:
     async def update(self, limits: UserLimits, **fields: object) -> UserLimits:
         for field, value in fields.items():
             setattr(limits, field, value)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(limits)
         return limits

@@ -20,7 +20,7 @@ class TagRepository:
     ) -> Tag:
         tag = Tag(user_id=user_id, name=name, color=color, icon=icon)
         self._session.add(tag)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(tag)
         return tag
 
@@ -37,7 +37,7 @@ class TagRepository:
         if not tags:
             return []
         self._session.add_all(tags)
-        await self._session.commit()
+        await self._session.flush()
         return tags
 
     async def get(self, user_id: UUID, tag_id: UUID) -> Tag | None:
@@ -125,10 +125,10 @@ class TagRepository:
     async def update(self, tag: Tag, **fields: object) -> Tag:
         for field, value in fields.items():
             setattr(tag, field, value)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(tag)
         return tag
 
     async def delete(self, tag: Tag) -> None:
         await self._session.delete(tag)
-        await self._session.commit()
+        await self._session.flush()
