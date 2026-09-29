@@ -16,6 +16,7 @@ dependencies = [
     "pwdlib[argon2]>=0.3.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.13.1",
+    "prometheus-client>=0.23.1",
     "python-multipart>=0.0.20",
     "python-dotenv>=1.2.2",
     "python-jose[cryptography]>=3.5.0",

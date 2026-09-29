@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -37,6 +38,7 @@ from src.services.rate_limit import client_ip
 from src.services.user import UserService
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 _REGISTER_LIMIT = (10, 5, 3600)
 _LOGIN_LIMIT = (30, 10, 900)
@@ -347,8 +349,14 @@ async def logout(  # noqa: PLR0913
                 code_repo,
                 email_service,
             ).logout(raw)
-        except Exception:
-            pass  # best-effort: cookie cleanup must still happen
+        except Exception as exc:
+            logger.warning(
+                "Refresh token cleanup failed during logout",
+                extra={
+                    "event": "auth.logout_cleanup_failed",
+                    "error_type": type(exc).__name__,
+                },
+            )
     clear_auth_cookies(response)
 
 

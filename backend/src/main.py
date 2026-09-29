@@ -19,7 +19,13 @@ from src.api.v1.transactions import router as transactions_router
 from src.core.config import settings
 from src.core.csrf import CookieCSRFMiddleware
 from src.core.database import engine
+from src.core.observability import (
+    ObservabilityMiddleware,
+    configure_logging,
+    metrics_response,
+)
 
+configure_logging()
 app = FastAPI(title=settings.app_name)
 
 
@@ -29,8 +35,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
+    expose_headers=["X-Request-ID"],
 )
 app.add_middleware(CookieCSRFMiddleware, allowed_origins=settings.allowed_origins)
+app.add_middleware(ObservabilityMiddleware)
 
 app.include_router(auth_router)
 app.include_router(auto_tagging_router)
@@ -52,6 +60,9 @@ async def root():
         "app": settings.app_name,
         "status": "running",
     }
+
+
+app.add_api_route("/metrics", metrics_response, include_in_schema=False)
 
 
 async def _database_is_ready() -> bool:
