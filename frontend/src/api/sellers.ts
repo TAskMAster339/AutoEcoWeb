@@ -1,8 +1,8 @@
 import { api } from './client'
 import type { ManagedStore } from './types'
 
-export function fetchSellers(): Promise<ManagedStore[]> {
-  return api.get<ManagedStore[]>('/api/v1/sellers')
+export function fetchSellers(signal?: AbortSignal): Promise<ManagedStore[]> {
+  return api.get<ManagedStore[]>('/api/v1/sellers', { signal })
 }
 
 export function updateSeller(id: string, seller_name: string): Promise<ManagedStore> {

@@ -180,8 +180,8 @@ export function TransactionsPage() {
         refetch,
     } = useQuery({
         queryKey: queryKeys.transactions.total(),
-        queryFn: async () => {
-            const page = await fetchTransactionsPage({ limit: 1 })
+        queryFn: async ({ signal }) => {
+            const page = await fetchTransactionsPage({ limit: 1 }, signal)
             return page.total ?? 0
         },
         staleTime: 30_000,
@@ -192,14 +192,14 @@ export function TransactionsPage() {
 
     const mobileQuery = useInfiniteQuery({
         queryKey: mobileQueryKey,
-        queryFn: async ({ pageParam }) => {
+        queryFn: async ({ pageParam, signal }) => {
             const page = await fetchTransactionsPage({
                 limit: MOBILE_PAGE,
                 offset: pageParam,
                 ...params,
                 sort_by: 'date',
                 sort_dir: 'asc',
-            })
+            }, signal)
             return {
                 items: page.items.map(toTransactionView),
                 total: page.total ?? 0,

@@ -25,7 +25,7 @@ export interface ReceiptsPageParams {
 }
 
 /** GET /api/v1/receipts — cursor-пагинация, новые сверху. */
-export function fetchReceiptsPage(params: ReceiptsPageParams = {}): Promise<CursorPage<Receipt>> {
+export function fetchReceiptsPage(params: ReceiptsPageParams = {}, signal?: AbortSignal): Promise<CursorPage<Receipt>> {
     const search = new URLSearchParams()
     if (params.limit !== undefined) search.set('limit', String(params.limit))
     if (params.cursor) search.set('cursor', params.cursor)
@@ -34,7 +34,7 @@ export function fetchReceiptsPage(params: ReceiptsPageParams = {}): Promise<Curs
     if (params.seller) search.set('seller', params.seller)
     if (params.search) search.set('search', params.search)
     const qs = search.toString()
-    return api.get<CursorPage<Receipt>>(`/api/v1/receipts${qs ? `?${qs}` : ''}`)
+    return api.get<CursorPage<Receipt>>(`/api/v1/receipts${qs ? `?${qs}` : ''}`, { signal })
 }
 
 /** Все чеки (все страницы) — для дашборда. */
@@ -51,13 +51,13 @@ export async function fetchAllReceipts(): Promise<Receipt[]> {
     return items
 }
 
-export function getReceipt(id: string): Promise<Receipt> {
-    return api.get<Receipt>(`/api/v1/receipts/${id}`)
+export function getReceipt(id: string, signal?: AbortSignal): Promise<Receipt> {
+    return api.get<Receipt>(`/api/v1/receipts/${id}`, { signal })
 }
 
 /** GET /api/v1/receipts/{id}/raw — сырые данные чека (raw_json). */
-export async function fetchReceiptRaw(id: string): Promise<Record<string, unknown>> {
-    return api.get<Record<string, unknown>>(`/api/v1/receipts/${id}/raw`)
+export async function fetchReceiptRaw(id: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
+    return api.get<Record<string, unknown>>(`/api/v1/receipts/${id}/raw`, { signal })
 }
 
 /** POST /api/v1/receipts — авто-загрузка по QR из proverkacheka (нужен токен). */

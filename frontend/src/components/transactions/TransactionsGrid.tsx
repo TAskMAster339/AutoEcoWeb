@@ -460,14 +460,14 @@ export function TransactionsGrid({
       void queryClient
         .fetchQuery({
           queryKey: queryKeys.transactions.page(paramsRef.current, sortBy, sortDir, limit, startRow),
-          queryFn: () =>
+          queryFn: ({ signal }) =>
             fetchTransactionsPage({
               limit,
               offset: startRow,
               ...paramsRef.current,
               sort_by: sortBy,
               sort_dir: sortDir,
-            }),
+            }, signal),
           staleTime: 30_000,
         })
         .then((page) => {
@@ -549,7 +549,10 @@ export function TransactionsGrid({
       for (let offset = 0; offset < total; offset += 100) {
         const page = await queryClient.fetchQuery({
           queryKey: queryKeys.transactions.page(paramsRef.current, 'stats', 100, offset),
-          queryFn: () => fetchTransactionsPage({ limit: 100, offset, ...paramsRef.current, sort_by: 'date', sort_dir: 'asc' }),
+          queryFn: ({ signal }) => fetchTransactionsPage(
+            { limit: 100, offset, ...paramsRef.current, sort_by: 'date', sort_dir: 'asc' },
+            signal,
+          ),
           staleTime: 30_000,
         })
         if (generation !== statsGenerationRef.current) return

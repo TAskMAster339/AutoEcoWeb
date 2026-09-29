@@ -7,7 +7,10 @@ import { invalidateDeletedReceipt } from '../lib/queryInvalidation'
 export function useReceipts(search = '') {
   return useInfiniteQuery({
     queryKey: queryKeys.receipts.list(search),
-    queryFn: ({ pageParam }) => fetchReceiptsPage({ limit: 100, cursor: pageParam, search: search.trim() || undefined }),
+    queryFn: ({ pageParam, signal }) => fetchReceiptsPage(
+      { limit: 100, cursor: pageParam, search: search.trim() || undefined },
+      signal,
+    ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     placeholderData: keepPreviousData,

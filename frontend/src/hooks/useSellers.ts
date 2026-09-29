@@ -4,7 +4,11 @@ import { queryKeys } from '../lib/queryKeys'
 import { invalidateSellerDomain } from '../lib/queryInvalidation'
 
 export function useSellers() {
-  return useQuery({ queryKey: queryKeys.sellers.all(), queryFn: api.fetchSellers, staleTime: 30_000 })
+  return useQuery({
+    queryKey: queryKeys.sellers.all(),
+    queryFn: ({ signal }) => api.fetchSellers(signal),
+    staleTime: 30_000,
+  })
 }
 
 export function useUpdateSeller() {

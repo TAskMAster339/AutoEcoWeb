@@ -76,13 +76,13 @@ export function ReceiptDetailPage() {
 
     const receiptQuery = useQuery({
         queryKey: queryKeys.receipts.detail(id ?? ''),
-        queryFn: () => getReceipt(id!),
+        queryFn: ({ signal }) => getReceipt(id!, signal),
         enabled: Boolean(id),
     })
 
     const rawQuery = useQuery({
         queryKey: queryKeys.receipts.raw(id ?? ''),
-        queryFn: () => fetchReceiptRaw(id!),
+        queryFn: ({ signal }) => fetchReceiptRaw(id!, signal),
         enabled: Boolean(id),
     })
 

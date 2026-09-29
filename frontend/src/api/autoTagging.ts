@@ -1,8 +1,8 @@
 import { api } from './client'
 import type { AutoTaggingStatus } from './types'
 
-export function fetchAutoTaggingStatus(): Promise<AutoTaggingStatus> {
-  return api.get<AutoTaggingStatus>('/api/v1/auto-tagging')
+export function fetchAutoTaggingStatus(signal?: AbortSignal): Promise<AutoTaggingStatus> {
+  return api.get<AutoTaggingStatus>('/api/v1/auto-tagging', { signal })
 }
 
 export function updateAutoTagging(enabled: boolean): Promise<AutoTaggingStatus> {

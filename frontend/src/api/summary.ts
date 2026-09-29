@@ -41,8 +41,8 @@ interface RawSummary {
 }
 
 /** GET /api/v1/transactions/summary — показатели за выбранный период. */
-export async function fetchSummary(params: TransactionsPageParams = {}): Promise<Summary> {
-  const raw = await api.get<RawSummary>(`/api/v1/transactions/summary${buildQuery(params)}`)
+export async function fetchSummary(params: TransactionsPageParams = {}, signal?: AbortSignal): Promise<Summary> {
+  const raw = await api.get<RawSummary>(`/api/v1/transactions/summary${buildQuery(params)}`, { signal })
   return {
     balance: num(raw.balance),
     openingBalance: num(raw.opening_balance),
@@ -90,8 +90,8 @@ function mapCategory(c: RawAnalytics['by_category'][number]): AnalyticsByCategor
 }
 
 /** GET /api/v1/analytics — группировки за период (считает бэкенд). */
-export async function fetchAnalytics(params: TransactionsPageParams = {}): Promise<AnalyticsData> {
-  const raw = await api.get<RawAnalytics>(`/api/v1/analytics${buildQuery(params)}`)
+export async function fetchAnalytics(params: TransactionsPageParams = {}, signal?: AbortSignal): Promise<AnalyticsData> {
+  const raw = await api.get<RawAnalytics>(`/api/v1/analytics${buildQuery(params)}`, { signal })
   return {
     daily: raw.daily.map((d) => ({
       day: d.day,
@@ -137,13 +137,14 @@ export async function fetchPriceChart(
   name: string,
   isRegex: boolean,
   params: TransactionsPageParams = {},
+  signal?: AbortSignal,
 ): Promise<PriceChartData> {
   const search = new URLSearchParams()
   search.set('name', name)
   if (isRegex) search.set('is_regex', 'true')
   if (params.date_from) search.set('date_from', params.date_from)
   if (params.date_to) search.set('date_to', params.date_to)
-  const raw = await api.get<RawPriceChart>(`/api/v1/analytics/price-chart?${search.toString()}`)
+  const raw = await api.get<RawPriceChart>(`/api/v1/analytics/price-chart?${search.toString()}`, { signal })
   return {
     points: raw.points.map((p) => ({
       day: p.day,

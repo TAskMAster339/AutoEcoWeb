@@ -11,7 +11,7 @@ export function useSummary(params?: TransactionsPageParams) {
   const queryParams = params ?? tableParams
   return useQuery({
     queryKey: queryKeys.summary.filtered(queryParams),
-    queryFn: () => fetchSummary(queryParams),
+    queryFn: ({ signal }) => fetchSummary(queryParams, signal),
     staleTime: 30_000,
   })
 }
@@ -21,7 +21,7 @@ export function usePeriodSummary() {
   const params = usePeriodParams()
   return useQuery({
     queryKey: queryKeys.summary.filtered(params),
-    queryFn: () => fetchSummary(params),
+    queryFn: ({ signal }) => fetchSummary(params, signal),
     staleTime: 30_000,
   })
 }
@@ -31,7 +31,7 @@ export function useAnalytics() {
   const params = usePeriodParams()
   return useQuery({
     queryKey: queryKeys.analytics.filtered(params),
-    queryFn: () => fetchAnalytics(params),
+    queryFn: ({ signal }) => fetchAnalytics(params, signal),
     staleTime: 60_000,
   })
 }
@@ -44,7 +44,7 @@ export function usePriceChart(name: string, isRegex: boolean) {
   const enabled = query.length > 0
   return useQuery({
     queryKey: queryKeys.priceChart.filtered(query, isRegex, period),
-    queryFn: () => fetchPriceChart(query, isRegex, period),
+    queryFn: ({ signal }) => fetchPriceChart(query, isRegex, period, signal),
     enabled,
     staleTime: 60_000,
     retry: 1,

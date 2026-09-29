@@ -6,13 +6,16 @@ import { queryKeys } from '../lib/queryKeys'
 export function useFeedback(status?: string, page = 0, limit = 20) {
   return useQuery({
     queryKey: queryKeys.feedback.list(status, page, limit),
-    queryFn: () => api.fetchFeedback(status, limit, page * limit),
+    queryFn: ({ signal }) => api.fetchFeedback(status, limit, page * limit, signal),
     placeholderData: (previous) => previous,
   })
 }
 
 export function useMyFeedback() {
-  return useQuery({ queryKey: queryKeys.feedback.mine(), queryFn: api.fetchMyFeedback })
+  return useQuery({
+    queryKey: queryKeys.feedback.mine(),
+    queryFn: ({ signal }) => api.fetchMyFeedback(signal),
+  })
 }
 
 export function useCreateFeedback() {

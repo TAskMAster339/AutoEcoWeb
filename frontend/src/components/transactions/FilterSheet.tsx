@@ -56,7 +56,7 @@ export function FilterSheet({ tags, stores }: FilterSheetProps) {
     const [tagInput, setTagInput] = useState('')
     const { data: untaggedPage } = useQuery({
         queryKey: queryKeys.transactions.untaggedTotal(),
-        queryFn: () => fetchTransactionsPage({ limit: 1, untagged: true }),
+        queryFn: ({ signal }) => fetchTransactionsPage({ limit: 1, untagged: true }, signal),
         staleTime: 30_000,
     })
 

@@ -55,6 +55,7 @@ export interface TransactionsPageParams {
 /** GET /api/v1/transactions — offset-пагинация, фильтры считает бэкенд. */
 export function fetchTransactionsPage(
   params: TransactionsPageParams = {},
+  signal?: AbortSignal,
 ): Promise<CursorPage<Transaction>> {
   const search = new URLSearchParams()
   if (params.limit !== undefined) search.set('limit', String(params.limit))
@@ -74,12 +75,13 @@ export function fetchTransactionsPage(
   const qs = search.toString()
   return api.get<CursorPage<Transaction>>(
     `/api/v1/transactions${qs ? `?${qs}` : ''}`,
+    { signal },
   )
 }
 
 /** GET /api/v1/transactions/stores — все магазины пользователя (свои + из чеков). */
-export function fetchTransactionStores(): Promise<Store[]> {
-  return api.get<Store[]>('/api/v1/transactions/stores')
+export function fetchTransactionStores(signal?: AbortSignal): Promise<Store[]> {
+  return api.get<Store[]>('/api/v1/transactions/stores', { signal })
 }
 
 /** POST /api/v1/transactions — ручная транзакция без чека. */

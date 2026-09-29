@@ -9,7 +9,10 @@ const PAGE_SIZE = 50
 export function useAdminUsers(filters: AdminUserFilters) {
   return useInfiniteQuery({
     queryKey: queryKeys.adminUsers.list(filters),
-    queryFn: ({ pageParam }) => api.fetchUsers({ limit: PAGE_SIZE, cursor: pageParam, ...filters }),
+    queryFn: ({ pageParam, signal }) => api.fetchUsers(
+      { limit: PAGE_SIZE, cursor: pageParam, ...filters },
+      signal,
+    ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     // keep the previous page visible while filters change / next page loads

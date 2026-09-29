@@ -6,7 +6,7 @@ import { queryKeys } from '../lib/queryKeys'
 export function useTags() {
   return useQuery({
     queryKey: queryKeys.tags.all(),
-    queryFn: api.fetchTags,
+    queryFn: ({ signal }) => api.fetchTags(signal),
     staleTime: 30_000,
   })
 }
@@ -14,7 +14,7 @@ export function useTags() {
 export function useInfiniteTags() {
   return useInfiniteQuery({
     queryKey: queryKeys.tags.pages(),
-    queryFn: ({ pageParam }) => api.fetchTagsPage(30, pageParam),
+    queryFn: ({ pageParam, signal }) => api.fetchTagsPage(30, pageParam, signal),
     initialPageParam: 0,
     getNextPageParam: (last) => (last.next_cursor == null ? undefined : Number(last.next_cursor)),
     staleTime: 30_000,

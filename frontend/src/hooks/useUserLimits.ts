@@ -5,7 +5,7 @@ import { queryKeys } from '../lib/queryKeys'
 export function useUserLimits() {
   return useQuery({
     queryKey: queryKeys.userLimits.all(),
-    queryFn: fetchMyLimits,
+    queryFn: ({ signal }) => fetchMyLimits(signal),
     staleTime: 30_000,
   })
 }

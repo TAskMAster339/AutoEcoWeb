@@ -10,7 +10,10 @@ const PAGE_SIZE = 50
 export function useAliases(scope: AliasScope, search = '') {
   return useInfiniteQuery({
     queryKey: queryKeys.aliases.list(scope, search),
-    queryFn: ({ pageParam }) => api.fetchAliasesPage({ scope, limit: PAGE_SIZE, offset: pageParam, search: search.trim() || undefined }),
+    queryFn: ({ pageParam, signal }) => api.fetchAliasesPage(
+      { scope, limit: PAGE_SIZE, offset: pageParam, search: search.trim() || undefined },
+      signal,
+    ),
     initialPageParam: 0,
     getNextPageParam: (last, pages) => {
       const loaded = pages.reduce((n, p) => n + p.items.length, 0)

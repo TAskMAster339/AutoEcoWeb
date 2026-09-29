@@ -83,6 +83,8 @@ interface RequestOptions {
   asBlob?: boolean
   /** internal guard: an original request may refresh the session only once */
   retryAfterRefresh?: boolean
+  /** Cancels obsolete TanStack Query requests when their observer/key changes. */
+  signal?: AbortSignal
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -101,8 +103,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
           ? JSON.stringify(options.body)
           : undefined,
       credentials: 'include',
+      signal: options.signal,
     })
-  } catch {
+  } catch (error) {
+    if (options.signal?.aborted) throw error
     throw new ApiError(0, 'Нет соединения с сервером')
   }
 
@@ -150,7 +154,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 export const api = {
-  get: <T>(path: string): Promise<T> => request<T>(path),
+  get: <T>(path: string, options: { signal?: AbortSignal } = {}): Promise<T> =>
+    request<T>(path, options),
   post: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'POST', body }),
   put: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'PATCH', body }),

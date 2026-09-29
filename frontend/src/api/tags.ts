@@ -19,14 +19,15 @@ function toTag(t: TagResponse): Tag {
   return { id: t.id, name: t.name, color: t.color, icon: t.icon, count: t.count }
 }
 
-export async function fetchTags(): Promise<Tag[]> {
-  const tags = await api.get<TagResponse[]>('/api/v1/tags')
+export async function fetchTags(signal?: AbortSignal): Promise<Tag[]> {
+  const tags = await api.get<TagResponse[]>('/api/v1/tags', { signal })
   return tags.map(toTag)
 }
 
-export async function fetchTagsPage(limit: number, offset: number): Promise<CursorPage<Tag>> {
+export async function fetchTagsPage(limit: number, offset: number, signal?: AbortSignal): Promise<CursorPage<Tag>> {
   const page = await api.get<{ items: TagResponse[]; total: number | null }>(
     `/api/v1/tags/page?limit=${limit}&offset=${offset}`,
+    { signal },
   )
   return {
     items: page.items.map(toTag),

@@ -58,4 +58,18 @@ describe('API refresh retry boundary', () => {
 
     expect(onUnauthorized).not.toHaveBeenCalled()
   })
+
+  it('passes AbortSignal to fetch and preserves cancellation errors', async () => {
+    const controller = new AbortController()
+    const abortError = new DOMException('Aborted', 'AbortError')
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (_input, init) => {
+      expect(init?.signal).toBe(controller.signal)
+      controller.abort()
+      throw abortError
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(api.get('/api/v1/search', { signal: controller.signal }))
+      .rejects.toBe(abortError)
+  })
 })

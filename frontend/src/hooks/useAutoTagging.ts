@@ -7,7 +7,10 @@ import {
 import { queryKeys } from '../lib/queryKeys'
 
 export function useAutoTagging() {
-  return useQuery({ queryKey: queryKeys.autoTagging.all(), queryFn: fetchAutoTaggingStatus })
+  return useQuery({
+    queryKey: queryKeys.autoTagging.all(),
+    queryFn: ({ signal }) => fetchAutoTaggingStatus(signal),
+  })
 }
 
 export function useUpdateAutoTagging() {

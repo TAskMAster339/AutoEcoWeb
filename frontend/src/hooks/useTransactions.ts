@@ -7,7 +7,7 @@ import { invalidateTransactionDomain } from '../lib/queryInvalidation'
 export function useStores() {
   return useQuery<Store[]>({
     queryKey: queryKeys.stores.all(),
-    queryFn: api.fetchTransactionStores,
+    queryFn: ({ signal }) => api.fetchTransactionStores(signal),
     staleTime: 60_000,
   })
 }
