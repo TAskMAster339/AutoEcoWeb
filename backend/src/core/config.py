@@ -1,13 +1,15 @@
+from typing import Literal, Self
 from urllib.parse import urlsplit
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-__all__ = ["settings"]
+__all__ = ["Settings", "settings"]
 
 
 class Settings(BaseSettings):
     app_name: str = "AutoEco Backend"
+    app_env: Literal["development", "test", "production"]
 
     debug: bool = False
 
@@ -68,6 +70,46 @@ class Settings(BaseSettings):
         env_file=".env",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> Self:
+        if self.app_env != "production":
+            return self
+
+        errors: list[str] = []
+        weak_secrets = {
+            "very_secret_key",
+            "test-secret",
+            "change-me",
+            "replace-me",
+        }
+        normalized_secret = self.jwt_secret.strip().lower()
+        is_placeholder = normalized_secret.startswith(("change-", "replace-"))
+        if (
+            len(self.jwt_secret) < 32
+            or normalized_secret in weak_secrets
+            or is_placeholder
+        ):
+            errors.append("JWT_SECRET must be a unique value of at least 32 characters")
+        if not self.cookie_secure:
+            errors.append("COOKIE_SECURE must be true")
+
+        missing_smtp = [
+            name
+            for name, value in {
+                "SMTP_HOST": self.smtp_host,
+                "SMTP_USERNAME": self.smtp_username,
+                "SMTP_PASSWORD": self.smtp_password,
+                "SMTP_FROM": self.smtp_from,
+            }.items()
+            if not value
+        ]
+        if missing_smtp:
+            errors.append(f"SMTP is incomplete ({', '.join(missing_smtp)})")
+
+        if errors:
+            raise ValueError("Unsafe production configuration: " + "; ".join(errors))
+        return self
 
     @property
     def allowed_origins(self) -> list[str]:

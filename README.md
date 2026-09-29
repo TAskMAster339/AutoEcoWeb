@@ -53,6 +53,7 @@ cp .env.example .env
 
 Перед запуском обязательно измените как минимум:
 
+- `APP_ENV` — `development` локально или `production` на сервере;
 - `POSTGRES_PASSWORD` — пароль PostgreSQL;
 - `JWT_SECRET` — длинный случайный секрет для подписи токенов;
 - `COOKIE_SECURE=true` — включить для HTTPS;

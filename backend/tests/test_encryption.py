@@ -33,6 +33,7 @@ def test_envelope_encryption_rejects_tampering():
 
 def test_settings_reads_documented_encryption_key(monkeypatch):
     required_environment = {
+        "APP_ENV": "test",
         "POSTGRES_USER": "autoeco",
         "POSTGRES_PASSWORD": "test-password",
         "POSTGRES_HOST": "postgres",
