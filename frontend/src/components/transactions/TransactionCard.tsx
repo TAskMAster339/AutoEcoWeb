@@ -12,7 +12,7 @@ import {
   detectSwipeAxis,
   settleSwipe,
   swipeEditAction,
-} from '../../lib/transactionInteractions.mjs'
+} from '../../lib/transactionInteractions'
 
 interface TransactionCardProps {
   tx: TransactionView

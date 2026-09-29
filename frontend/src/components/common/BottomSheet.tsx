@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Box, IconButton, SwipeableDrawer, Typography, useMediaQuery, useTheme } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
-import { getKeyboardViewport } from '../../lib/visualViewport.mjs'
+import { getKeyboardViewport } from '../../lib/visualViewport'
 
 interface BottomSheetProps {
   open: boolean

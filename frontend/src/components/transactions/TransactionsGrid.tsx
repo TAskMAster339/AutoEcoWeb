@@ -16,7 +16,7 @@ import {
   type TransactionsPageParams,
 } from '../../api/transactions'
 import type { Tag, TransactionView } from '../../api/types'
-import { medianOf, replaceQuickEditTarget, selectionRange } from '../../lib/transactionInteractions.mjs'
+import { medianOf, replaceQuickEditTarget, selectionRange } from '../../lib/transactionInteractions'
 import {
   QuickEditPopover,
   type QuickEditField,

@@ -5,7 +5,18 @@ const KEYBOARD_THRESHOLD = 80
  * Android usually resizes the layout viewport, while iOS may only resize the
  * visual viewport and overlay the keyboard over fixed content.
  */
-export function getKeyboardViewport(layoutHeight, visualHeight, offsetTop, baselineHeight) {
+export interface KeyboardViewport {
+  keyboardOpen: boolean
+  bottomInset: number
+  maxHeight: number
+}
+
+export function getKeyboardViewport(
+  layoutHeight: number,
+  visualHeight: number,
+  offsetTop: number,
+  baselineHeight: number,
+): KeyboardViewport {
   const visibleBottom = visualHeight + offsetTop
   const overlayInset = Math.max(0, layoutHeight - visibleBottom)
   const baselineOcclusion = Math.max(0, baselineHeight - visibleBottom)

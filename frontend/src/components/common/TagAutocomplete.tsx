@@ -1,6 +1,6 @@
 import { Autocomplete, Box, TextField, Typography } from '@mui/material'
 import type { Tag } from '../../api/types'
-import { matchesOptionSearch } from '../../lib/transactionInteractions.mjs'
+import { matchesOptionSearch } from '../../lib/transactionInteractions'
 
 interface TagAutocompleteProps {
   tags: Tag[]

@@ -17,7 +17,7 @@ import PlaylistAddOutlinedIcon from '@mui/icons-material/PlaylistAddOutlined'
 import { messageFromError } from '../../api/client'
 import type { Alias, AliasScope } from '../../api/types'
 import { useAliases, useUpdateAlias } from '../../hooks/useAliases'
-import { appendAliasPattern } from '../../lib/aliasPatterns.mjs'
+import { appendAliasPattern } from '../../lib/aliasPatterns'
 
 const MAX_RULE_PATTERN_LENGTH = 1000
 

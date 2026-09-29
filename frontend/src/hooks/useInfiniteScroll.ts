@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { createFrameScheduler, createRequestGate, isNearScrollEnd } from '../lib/mobilePagination.mjs'
+import { createFrameScheduler, createRequestGate, isNearScrollEnd } from '../lib/mobilePagination'
 
 interface InfiniteScrollOptions {
   container: HTMLElement | null
