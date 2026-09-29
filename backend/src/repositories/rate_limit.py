@@ -26,6 +26,7 @@ class RateLimitRepository:
         """Consume one attempt and return Retry-After seconds, or zero."""
         now = now or datetime.now(timezone.utc)
         bucket = await self._get_for_update(key_hash)
+        created = False
         if bucket is None:
             try:
                 async with self._session.begin_nested():
@@ -36,11 +37,16 @@ class RateLimitRepository:
                     )
                     self._session.add(bucket)
                     await self._session.flush()
+                    created = True
             except IntegrityError:
                 bucket = await self._get_for_update(key_hash)
                 if bucket is None:
                     raise
-        else:
+
+        # A concurrent transaction may have inserted the missing bucket while
+        # this transaction waited on the unique key. That attempt still needs
+        # to be consumed after the savepoint rollback.
+        if not created:
             elapsed = (now - _as_utc(bucket.window_started_at)).total_seconds()
             if elapsed >= window_seconds:
                 bucket.window_started_at = now

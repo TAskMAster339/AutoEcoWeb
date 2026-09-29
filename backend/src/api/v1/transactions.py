@@ -32,7 +32,7 @@ def _decode_cursor(cursor: str) -> tuple[datetime, UUID]:
         timestamp, transaction_id = base64.urlsafe_b64decode(padded).decode().split("|", 1)
         return datetime.fromisoformat(timestamp), UUID(transaction_id)
     except (ValueError, UnicodeDecodeError, binascii.Error) as error:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid cursor") from error
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid cursor") from error
 
 
 def _day_bounds(day: date, end_of_day: bool) -> datetime:  # noqa: FBT001
@@ -75,7 +75,7 @@ async def list_transactions(  # noqa: PLR0913
     все фильтры считаются в БД, баланс строки — оконная функция."""
     if cursor is not None and (offset != 0 or sort_by != "date" or sort_dir != "asc"):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Cursor requires offset=0 and date ascending sort",
         )
     after_datetime, after_id = _decode_cursor(cursor) if cursor is not None else (None, None)
