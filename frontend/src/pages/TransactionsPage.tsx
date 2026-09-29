@@ -5,8 +5,6 @@ import {
     Button,
     CircularProgress,
     Collapse,
-    Grid2 as Grid,
-    Skeleton,
     Slide,
     Stack,
     IconButton,
@@ -21,10 +19,9 @@ import AddIcon from '@mui/icons-material/Add'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
 import CloseIcon from '@mui/icons-material/Close'
 import SelectAllIcon from '@mui/icons-material/SelectAll'
-import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useOutletContext } from 'react-router-dom'
 
-import { StatisticCard } from '../components/common/StatisticCard'
 import { ConfirmDialog } from '../components/common/ConfirmDialog'
 import { TransactionCard } from '../components/transactions/TransactionCard'
 import { VirtualizedTransactionList } from '../components/transactions/VirtualizedTransactionList'
@@ -32,52 +29,22 @@ import { FilterSheet } from '../components/transactions/FilterSheet'
 import { EditTransactionDialog } from '../components/transactions/EditTransactionDialog'
 import { QuickTagSheet } from '../components/transactions/QuickTagSheet'
 import { LoadingState, EmptyState, ErrorState, OfflineState } from '../components/common/States'
-import { useSummary } from '../hooks/useSummary'
-import { useStores, useDeleteTransaction } from '../hooks/useTransactions'
+import { useStores } from '../hooks/useTransactions'
 import { useTags } from '../hooks/useTags'
 import { useOnline } from '../hooks/useOnline'
-import { useInfiniteScroll } from '../hooks/useInfiniteScroll'
 import { useUiStore } from '../store/uiStore'
 import { useFilterParams } from '../lib/filters'
-import { fetchTransactionsPage, toTransactionView } from '../api/transactions'
-import { formatCurrency, pluralRu } from '../lib/format'
+import { fetchTransactionsPage } from '../api/transactions'
+import { pluralRu } from '../lib/format'
 import { colors, softBg, softFg } from '../theme'
 import { PageSearch } from '../components/common/PageSearch'
 import type { Transaction, TransactionUpdatePatch, TransactionView } from '../api/types'
-import { canStartMobileSelection, hasActiveTableFilters, nextOpenSwipeId, replaceTransactionInPlace, toggleSelectedId } from '../lib/transactionInteractions'
-import { nextPageOffset } from '../lib/mobilePagination'
+import { canStartMobileSelection, hasActiveTableFilters, nextOpenSwipeId } from '../lib/transactionInteractions'
 import { queryKeys } from '../lib/queryKeys'
 import { useTransactionFilterUrl } from '../hooks/useTransactionFilterUrl'
-
-/** Размер автоматически подгружаемой страницы мобильного списка. */
-const MOBILE_PAGE = 50
-interface MobileTransactionPage {
-    items: TransactionView[]
-    total: number | null
-}
-
-function replaceTransactionInPages(
-    data: InfiniteData<MobileTransactionPage> | undefined,
-    updated: Transaction,
-    patch: TransactionUpdatePatch,
-): InfiniteData<MobileTransactionPage> | undefined {
-    if (!data || !updated.id) return data
-    const currentRows = data.pages.flatMap((page) => page.items)
-    const updatedView = toTransactionView(updated)
-    const preserveInheritedStore = !('seller_name' in patch) && updatedView.store === null
-    const nextRows = replaceTransactionInPlace(currentRows, updatedView, preserveInheritedStore)
-    if (nextRows === currentRows) return data
-
-    let cursor = 0
-    return {
-        ...data,
-        pages: data.pages.map((page) => {
-            const items = nextRows.slice(cursor, cursor + page.items.length)
-            cursor += page.items.length
-            return { ...page, items }
-        }),
-    }
-}
+import { useMobileTransactionFeed } from '../hooks/useMobileTransactionFeed'
+import { useTransactionSelection } from '../hooks/useTransactionSelection'
+import { TransactionSummaryCards } from '../components/transactions/TransactionSummaryCards'
 
 const TransactionsGrid = lazy(() =>
     import('../components/transactions/TransactionsGrid').then((module) => ({ default: module.TransactionsGrid })),
@@ -102,52 +69,6 @@ function rememberSwipeHint(): void {
     }
 }
 
-function SummaryCards() {
-    const theme = useTheme()
-    const isMobile = useMediaQuery(theme.breakpoints.down('md'))
-    const { data, isLoading } = useSummary()
-
-    if (isLoading) {
-        return (
-            <Grid container spacing={1.5}>
-                {[0, 1, 2, 3].map((i) => (
-                    <Grid size={{ xs: 6, md: 3 }} key={i}>
-                        <Skeleton variant="rounded" height={108} sx={{ borderRadius: '8px' }} />
-                    </Grid>
-                ))}
-            </Grid>
-        )
-    }
-
-    if (!data) return null
-
-    // Разность доходов и расходов: зелёная, если доходы больше расходов, иначе красная.
-    const net = data.income - data.expenses
-
-    return (
-        <Grid container spacing={1.5}>
-            <Grid size={{ xs: 6, md: 3 }}>
-                <StatisticCard
-                    label="Баланс"
-                    value={formatCurrency(data.balance)}
-                    delta={net}
-                    // Спарклайн только на десктопе: на мобильном не помещается рядом с дельтой.
-                    sparkline={isMobile ? undefined : data.balanceTrend}
-                />
-            </Grid>
-            <Grid size={{ xs: 6, md: 3 }}>
-                <StatisticCard label="Доходы" value={formatCurrency(data.income)} delta={data.incomeDelta} />
-            </Grid>
-            <Grid size={{ xs: 6, md: 3 }}>
-                <StatisticCard label="Расходы" value={formatCurrency(data.expenses)} delta={data.expensesDelta} />
-            </Grid>
-            <Grid size={{ xs: 6, md: 3 }}>
-                <StatisticCard label="Транзакций" value={String(data.transactions)} hint="За этот период" />
-            </Grid>
-        </Grid>
-    )
-}
-
 /** Таблица — the main screen from the designer's mockup. */
 export function TransactionsPage() {
     useTransactionFilterUrl()
@@ -155,20 +76,17 @@ export function TransactionsPage() {
     const isMobile = useMediaQuery(theme.breakpoints.down('md'))
     const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
     const online = useOnline()
-    const queryClient = useQueryClient()
     const scrollContainer = useOutletContext<HTMLElement | null>()
 
     const storeFilters = useUiStore((s) => s.storeFilters)
     const amountMin = useUiStore((s) => s.amountMin)
     const amountMax = useUiStore((s) => s.amountMax)
     const operationFilter = useUiStore((s) => s.operationFilter)
-    const setTransactionSelectionMode = useUiStore((s) => s.setTransactionSelectionMode)
     // Параметры фильтров (период/тег/поиск/магазин) — применяет бэкенд.
     const params = useFilterParams()
 
     const { data: tags } = useTags()
     const { data: stores = [] } = useStores()
-    const deleteTx = useDeleteTransaction()
 
     // Сколько транзакций у пользователя ВООБЩЕ (без фильтров) — для различения
     // «Пока нет операций» (пустая учётка) и «Ничего не найдено» (пустой период).
@@ -188,51 +106,9 @@ export function TransactionsPage() {
     })
 
     const [desktopTotal, setDesktopTotal] = useState<number | null>(null)
-    const mobileQueryKey = queryKeys.transactions.page('mobile', params, 'date', 'asc', MOBILE_PAGE)
-
-    const mobileQuery = useInfiniteQuery({
-        queryKey: mobileQueryKey,
-        queryFn: async ({ pageParam, signal }) => {
-            const page = await fetchTransactionsPage({
-                limit: MOBILE_PAGE,
-                offset: pageParam,
-                ...params,
-                sort_by: 'date',
-                sort_dir: 'asc',
-            }, signal)
-            return {
-                items: page.items.map(toTransactionView),
-                total: page.total ?? 0,
-            } satisfies MobileTransactionPage
-        },
-        initialPageParam: 0,
-        getNextPageParam: (_lastPage, pages) => nextPageOffset(pages),
-        enabled: isMobile && online,
-        staleTime: 30_000,
-    })
-    const mobileRows = useMemo(
-        () => mobileQuery.data?.pages.flatMap((page) => page.items) ?? [],
-        [mobileQuery.data],
-    )
-    const mobilePages = mobileQuery.data?.pages
-    const mobileTotal = mobilePages && mobilePages.length > 0
-        ? mobilePages[mobilePages.length - 1]?.total ?? null
-        : null
+    const mobileFeed = useMobileTransactionFeed({ enabled: isMobile, online, params, scrollContainer })
+    const { query: mobileQuery, rows: mobileRows, total: mobileTotal, loadMore: loadMoreMobile } = mobileFeed
     const total = isMobile ? mobileTotal : desktopTotal
-    const loadMoreMobile = useCallback(async () => {
-        await mobileQuery.fetchNextPage().catch(() => undefined)
-    }, [mobileQuery.fetchNextPage])
-
-    useInfiniteScroll({
-        container: scrollContainer,
-        enabled: isMobile
-            && online
-            && mobileQuery.hasNextPage
-            && !mobileQuery.isFetchingNextPage
-            && !mobileQuery.isFetchNextPageError,
-        itemCount: mobileRows.length,
-        onLoadMore: loadMoreMobile,
-    })
 
     const [mobileSwipeId, setMobileSwipeId] = useState<string | null>(null)
     const [expandedMobileId, setExpandedMobileId] = useState<string | null>(null)
@@ -285,22 +161,12 @@ export function TransactionsPage() {
         setMobileSwipeId(null)
     }, [params])
 
-    // Выбранные в таблице строки (чекбоксы) → панель «Удалить (N)».
-    const [selectedIds, setSelectedIds] = useState<string[]>([])
-    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
-    const [bulkEditOpen, setBulkEditOpen] = useState(false)
-    const [mobileSelectionActive, setMobileSelectionActive] = useState(false)
-    const [selectionResetRevision, setSelectionResetRevision] = useState(0)
-    const [bulkError, setBulkError] = useState<string | null>(null)
-    const mobileSelectionMode = isMobile && mobileSelectionActive
-
-    useEffect(() => {
-        setTransactionSelectionMode(mobileSelectionMode)
-    }, [mobileSelectionMode, setTransactionSelectionMode])
-
-    useEffect(() => () => {
-        setTransactionSelectionMode(false)
-    }, [setTransactionSelectionMode])
+    const selection = useTransactionSelection(isMobile)
+    const {
+        selectedIds, setSelectedIds, confirmDeleteOpen, setConfirmDeleteOpen,
+        bulkEditOpen, setBulkEditOpen, selectionResetRevision, bulkError, setBulkError,
+        mobileSelectionMode, toggleMobileSelection, closeMobileSelection, resetSelection, bulkDelete,
+    } = selection
     // Данные остаются смонтированными во время закрытия, чтобы Drawer мог
     // доиграть exit-анимацию вместо мгновенного удаления из DOM.
     const [editingTx, setEditingTx] = useState<TransactionView | null>(null)
@@ -340,14 +206,9 @@ export function TransactionsPage() {
 
     const handleTransactionUpdated = useCallback((updated: Transaction, patch: TransactionUpdatePatch) => {
         if (!updated.id) return
-        if (patch.datetime === undefined) {
-            queryClient.setQueryData<InfiniteData<MobileTransactionPage>>(
-                mobileQueryKey,
-                (data) => replaceTransactionInPages(data, updated, patch),
-            )
-        }
+        mobileFeed.updateCachedTransaction(updated, patch)
         handleTransactionSaved(updated.id)
-    }, [handleTransactionSaved, mobileQueryKey, queryClient])
+    }, [handleTransactionSaved, mobileFeed])
 
     const openTagEditor = useCallback((tx: TransactionView) => {
         setTagEditingTx(tx)
@@ -362,43 +223,8 @@ export function TransactionsPage() {
         if (!canStartMobileSelection(editOpenRef.current, editOpenFrameRef.current !== null)) return
         setExpandedMobileId(null)
         setMobileSwipeId(null)
-        setMobileSelectionActive(true)
-        setSelectedIds([id])
-    }, [])
-
-    const toggleMobileSelection = useCallback((id: string) => {
-        const nextSelectedIds = toggleSelectedId(selectedIds, id)
-        setSelectedIds(nextSelectedIds)
-        if (nextSelectedIds.length === 0) setMobileSelectionActive(false)
-    }, [selectedIds])
-
-    const closeMobileSelection = useCallback(() => {
-        setMobileSelectionActive(false)
-        setSelectedIds([])
-        setBulkError(null)
-    }, [])
-
-    useEffect(() => {
-        if (!mobileSelectionMode) return
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') closeMobileSelection()
-        }
-        window.addEventListener('keydown', handleKeyDown)
-        return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [closeMobileSelection, mobileSelectionMode])
-
-    const bulkDelete = async () => {
-        setBulkError(null)
-        try {
-            await Promise.all(selectedIds.map((id) => deleteTx.mutateAsync(id)))
-            setSelectedIds([])
-            setMobileSelectionActive(false)
-            setSelectionResetRevision((revision) => revision + 1)
-            setConfirmDeleteOpen(false)
-        } catch (e) {
-            setBulkError(e instanceof Error ? e.message : 'Не удалось удалить транзакции')
-        }
-    }
+        selection.startMobileSelection(id)
+    }, [selection])
 
     const openFilterSheet = useUiStore((s) => s.openFilterSheet)
     const openAddMenu = useUiStore((s) => s.openAddMenu)
@@ -425,7 +251,7 @@ export function TransactionsPage() {
 
     return (
         <Stack spacing={{ xs: 1.5, md: 2.25 }} sx={{ height: { md: '100%' }, minHeight: 0 }}>
-            <SummaryCards />
+            <TransactionSummaryCards />
 
             {/* Toolbar: filters table-only; period lives in the shared header. */}
             <Box sx={{ display: 'grid', width: '100%', alignItems: 'center', gap: 1, gridTemplateColumns: { xs: '1fr auto', sm: 'minmax(200px, 1fr) auto auto auto' } }}>
@@ -800,9 +626,7 @@ export function TransactionsPage() {
                         stores={stores}
                         onClose={() => setBulkEditOpen(false)}
                         onSaved={() => {
-                            setSelectedIds([])
-                            setMobileSelectionActive(false)
-                            setSelectionResetRevision((revision) => revision + 1)
+                            resetSelection()
                         }}
                     />
                 </Suspense>
@@ -814,7 +638,7 @@ export function TransactionsPage() {
                 title={`Удалить ${pluralRu(selectedIds.length, ['транзакцию', 'транзакции', 'транзакций'])}?`}
                 message="Операция необратима. Транзакции, привязанные к чеку, будут удалены из чека."
                 confirmLabel="Удалить"
-                pending={deleteTx.isPending}
+                pending={selection.deletePending}
                 error={bulkError}
                 onConfirm={() => void bulkDelete()}
                 onClose={() => setConfirmDeleteOpen(false)}
