@@ -1,5 +1,9 @@
-from fastapi import FastAPI
+import asyncio
+
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from src.api.v1.admin import router as admin_router
 from src.api.v1.auto_tagging import router as auto_tagging_router
 from src.api.v1.aliases import router as aliases_router
@@ -14,6 +18,7 @@ from src.api.v1.tags import router as tags_router
 from src.api.v1.transactions import router as transactions_router
 from src.core.config import settings
 from src.core.csrf import CookieCSRFMiddleware
+from src.core.database import engine
 
 app = FastAPI(title=settings.app_name)
 
@@ -49,8 +54,34 @@ async def root():
     }
 
 
-@app.get("/health")
-async def health():
+async def _database_is_ready() -> bool:
+    try:
+        async with asyncio.timeout(2):
+            async with engine.connect() as connection:
+                await connection.execute(text("SELECT 1"))
+    except (TimeoutError, OSError, SQLAlchemyError):
+        return False
+    return True
+
+
+@app.get("/health/live")
+async def liveness():
     return {
         "status": "ok",
     }
+
+
+@app.get("/health/ready")
+async def readiness():
+    if not await _database_is_ready():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="database unavailable",
+        )
+    return {"status": "ok"}
+
+
+@app.get("/health", include_in_schema=False)
+async def health():
+    """Backward-compatible readiness endpoint for existing monitors."""
+    return await readiness()
