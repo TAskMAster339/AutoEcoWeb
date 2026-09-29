@@ -8,6 +8,8 @@ import { RecoveryPage } from './pages/RecoveryPage'
 import { EmailVerificationPage } from './pages/EmailVerificationPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { SeoMeta } from './components/common/SeoMeta'
+import { ErrorState, OfflineState } from './components/common/States'
+import { Box } from '@mui/material'
 
 // Route-level code splitting (AGENTS.md: lazy loading, route splitting).
 const CHUNK_RELOAD_KEY = 'autoeco:chunk-reload'
@@ -129,7 +131,32 @@ function Bootstrap() {
         void bootstrap()
     }, [bootstrap])
 
-    if (status === 'idle') return <FullPageSplash />
+    if (status === 'idle' || status === 'loading') return <FullPageSplash />
+    if (status === 'offline' || status === 'error') {
+        const retry = () => void bootstrap()
+        return (
+            <Box
+                role="alert"
+                aria-live="polite"
+                sx={{
+                    minHeight: '100dvh',
+                    display: 'grid',
+                    placeItems: 'center',
+                    bgcolor: 'background.default',
+                    px: 2,
+                }}
+            >
+                {status === 'offline' ? (
+                    <OfflineState onRetry={retry} />
+                ) : (
+                    <ErrorState
+                        message="Сервис временно недоступен. Ваша сессия сохранена."
+                        onRetry={retry}
+                    />
+                )}
+            </Box>
+        )
+    }
     return <RouterProvider router={router} />
 }
 

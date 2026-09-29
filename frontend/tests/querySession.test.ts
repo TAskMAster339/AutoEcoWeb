@@ -77,3 +77,47 @@ describe('query session boundary', () => {
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
   })
 })
+
+describe('auth bootstrap failures', () => {
+  it.each([
+    [0, 'offline'],
+    [503, 'error'],
+  ] as const)('keeps a temporary status for API error %s', async (apiStatus, expectedStatus) => {
+    authApi.fetchMe.mockRejectedValueOnce({ status: apiStatus })
+
+    await useAuthStore.getState().bootstrap()
+
+    expect(useAuthStore.getState()).toMatchObject({
+      user: null,
+      status: expectedStatus,
+      error: 'Ошибка',
+    })
+  })
+
+  it('allows retry after a temporary bootstrap failure', async () => {
+    authApi.fetchMe
+      .mockRejectedValueOnce({ status: 0 })
+      .mockResolvedValueOnce(alice)
+
+    await useAuthStore.getState().bootstrap()
+    await useAuthStore.getState().bootstrap()
+
+    expect(authApi.fetchMe).toHaveBeenCalledTimes(2)
+    expect(useAuthStore.getState()).toMatchObject({
+      user: alice,
+      status: 'authenticated',
+    })
+  })
+
+  it('treats only an explicit 401 as an ended session', async () => {
+    authApi.fetchMe.mockRejectedValueOnce({ status: 401 })
+
+    await useAuthStore.getState().bootstrap()
+
+    expect(useAuthStore.getState()).toMatchObject({
+      user: null,
+      status: 'unauthenticated',
+      error: null,
+    })
+  })
+})

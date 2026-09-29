@@ -45,9 +45,14 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
 
 export const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
-let refreshPromise: Promise<boolean> | null = null
+type RefreshResult =
+  | { kind: 'refreshed' }
+  | { kind: 'unauthorized' }
+  | { kind: 'error'; error: ApiError }
 
-async function tryRefresh(): Promise<boolean> {
+let refreshPromise: Promise<RefreshResult> | null = null
+
+async function tryRefresh(): Promise<RefreshResult> {
   // The refresh token lives in an HttpOnly cookie — the browser sends it with
   // the request automatically; the backend rotates both cookies on success.
   try {
@@ -55,9 +60,17 @@ async function tryRefresh(): Promise<boolean> {
       method: 'POST',
       credentials: 'include',
     })
-    return res.ok
+    if (res.ok) return { kind: 'refreshed' }
+    if (res.status === 401 || res.status === 403) return { kind: 'unauthorized' }
+    return {
+      kind: 'error',
+      error: new ApiError(res.status, `Ошибка сервера (${res.status})`),
+    }
   } catch {
-    return false
+    return {
+      kind: 'error',
+      error: new ApiError(0, 'Нет соединения с сервером'),
+    }
   }
 }
 
@@ -102,10 +115,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     refreshPromise ??= tryRefresh().finally(() => {
       refreshPromise = null
     })
-    const refreshed = await refreshPromise
-    if (refreshed) {
+    const refreshResult = await refreshPromise
+    if (refreshResult.kind === 'refreshed') {
       return request<T>(path, { ...options, retryAfterRefresh: false })
     }
+    if (refreshResult.kind === 'error') throw refreshResult.error
     // Refresh failed: the backend has already cleared the cookies — sign out.
     unauthorizedHandler?.()
     throw new ApiError(401, 'Сессия истекла. Войдите снова.')
