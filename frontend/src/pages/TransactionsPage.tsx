@@ -41,13 +41,13 @@ import { useUiStore } from '../store/uiStore'
 import { useFilterParams } from '../lib/filters'
 import { fetchTransactionsPage, toTransactionView } from '../api/transactions'
 import { formatCurrency, pluralRu } from '../lib/format'
-import { normalizeAmountFilter } from '../lib/numbers'
 import { colors, softBg, softFg } from '../theme'
 import { PageSearch } from '../components/common/PageSearch'
 import type { Transaction, TransactionUpdatePatch, TransactionView } from '../api/types'
 import { canStartMobileSelection, hasActiveTableFilters, nextOpenSwipeId, replaceTransactionInPlace, toggleSelectedId } from '../lib/transactionInteractions.mjs'
 import { nextPageOffset } from '../lib/mobilePagination.mjs'
 import { queryKeys } from '../lib/queryKeys'
+import { useTransactionFilterUrl } from '../hooks/useTransactionFilterUrl'
 
 /** Размер автоматически подгружаемой страницы мобильного списка. */
 const MOBILE_PAGE = 50
@@ -150,6 +150,7 @@ function SummaryCards() {
 
 /** Таблица — the main screen from the designer's mockup. */
 export function TransactionsPage() {
+    useTransactionFilterUrl()
     const theme = useTheme()
     const isMobile = useMediaQuery(theme.breakpoints.down('md'))
     const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
@@ -404,87 +405,11 @@ export function TransactionsPage() {
     const search = useUiStore((s) => s.search)
     const tagFilterIds = useUiStore((s) => s.tagFilterIds)
     const untaggedOnly = useUiStore((s) => s.untaggedOnly)
-    const periodKey = useUiStore((s) => s.periodKey)
-    const customFrom = useUiStore((s) => s.customFrom)
-    const customTo = useUiStore((s) => s.customTo)
-    const monthYear = useUiStore((s) => s.monthYear)
-    const dayDate = useUiStore((s) => s.dayDate)
     const resetFilters = useUiStore((s) => s.resetFilters)
 
     const handleResetFilters = () => {
         resetFilters()
-        window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash}`)
     }
-
-    // Применённые фильтры можно сохранить/открыть ссылкой.
-    const urlInitialized = useRef(false)
-    useEffect(() => {
-        if (urlInitialized.current) return
-        const query = new URLSearchParams(window.location.search)
-        const state = useUiStore.getState()
-        const urlSearch = query.get('search')
-        const urlTags = query.getAll('tag')
-        const urlUntagged = query.get('untagged') === '1'
-        const urlStores = query.getAll('store')
-        const urlAmountMin = query.get('amountMin')
-        const urlAmountMax = query.get('amountMax')
-        const urlOperation = query.get('type')
-        const urlPeriod = query.get('period')
-        const urlFrom = query.get('from')
-        const urlTo = query.get('to')
-        const urlMonth = query.get('month')
-        const urlDay = query.get('day')
-        const nextAmountMin = urlAmountMin === null ? state.amountMin : (normalizeAmountFilter(urlAmountMin) ?? '')
-        const nextAmountMax = urlAmountMax === null ? state.amountMax : (normalizeAmountFilter(urlAmountMax) ?? '')
-        const normalizedMin = normalizeAmountFilter(nextAmountMin)
-        const normalizedMax = normalizeAmountFilter(nextAmountMax)
-        const invalidAmountRange = (
-            normalizedMin !== null
-            && normalizedMax !== null
-            && normalizedMin !== ''
-            && normalizedMax !== ''
-            && Number(normalizedMin) > Number(normalizedMax)
-        )
-        state.applyFilters({
-            search: urlSearch ?? state.search,
-            tagFilterIds: urlTags.some(Boolean) ? urlTags.filter(Boolean) : state.tagFilterIds,
-            untaggedOnly: urlUntagged || (urlTags.some(Boolean) ? false : state.untaggedOnly),
-            storeFilters: urlStores.some(Boolean) ? urlStores.filter(Boolean) : state.storeFilters,
-            amountMin: invalidAmountRange ? '' : (normalizedMin ?? ''),
-            amountMax: invalidAmountRange ? '' : (normalizedMax ?? ''),
-            operationFilter: urlOperation === 'income' || urlOperation === 'expense' ? urlOperation : state.operationFilter,
-            periodKey: state.periodKey,
-        })
-        if (urlDay) state.setDayPeriod(urlDay)
-        else if (urlFrom && urlTo) state.setCustomRange(urlFrom, urlTo)
-        else if (urlMonth) state.setMonthPeriod(urlMonth)
-        else if (urlPeriod) state.setPeriodKey(urlPeriod as Parameters<typeof state.setPeriodKey>[0])
-        urlInitialized.current = true
-    }, [])
-
-    useEffect(() => {
-        if (!urlInitialized.current) return
-        const query = new URLSearchParams()
-        if (search) query.set('search', search)
-        if (tagFilterIds.length) tagFilterIds.forEach((id) => query.append('tag', id))
-        else if (untaggedOnly) query.set('untagged', '1')
-        if (storeFilters.length) storeFilters.forEach((store) => query.append('store', store))
-        if (amountMin !== '') query.set('amountMin', amountMin)
-        if (amountMax !== '') query.set('amountMax', amountMax)
-        if (operationFilter !== 'all') query.set('type', operationFilter)
-        if (periodKey !== 'all') query.set('period', periodKey)
-        if (periodKey === 'custom' && customFrom && customTo) {
-            query.set('from', customFrom)
-            query.set('to', customTo)
-        }
-        if (periodKey === 'month' && monthYear) query.set('month', monthYear)
-        if (periodKey === 'day' && dayDate) query.set('day', dayDate)
-        const next = query.toString()
-        const nextUrl = `${window.location.pathname}${next ? `?${next}` : ''}${window.location.hash}`
-        if (nextUrl !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
-            window.history.replaceState(null, '', nextUrl)
-        }
-    }, [search, tagFilterIds, untaggedOnly, storeFilters, amountMin, amountMax, operationFilter, periodKey, customFrom, customTo, monthYear, dayDate])
 
     const tagsMap = useMemo(() => new Map((tags ?? []).map((t) => [t.id, t])), [tags])
     // Период — отдельный глобальный срез в шапке, а не фильтр из панели.
