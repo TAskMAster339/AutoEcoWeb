@@ -15,6 +15,8 @@ import {
     Line as RechartsLine,
     LineChart as RechartsLineChart,
 } from 'recharts'
+import { formatShortDate } from '../../lib/format'
+import { chartColors } from '../../theme'
 
 /** Параметры рендера контента тултипа Recharts (payload — массив записей). */
 type TipProps = {
@@ -27,8 +29,6 @@ function firstTipPayload(props: TipProps): { [k: string]: unknown } | undefined 
     const p = entry?.payload
     return p && typeof p === 'object' ? (p as { [k: string]: unknown }) : undefined
 }
-import { formatShortDate } from '../../lib/format'
-
 export function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
     return (
         <Card sx={{ p: 2.5, height: '100%' }}>
@@ -440,8 +440,6 @@ interface WeekdayBarsProps {
 const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 
 /** Палитра дней недели — без фиолетового (не сливается с акцентом). */
-const WEEKDAY_COLORS = ['#2563EB', '#0EA5E9', '#14B8A6', '#10B981', '#84CC16', '#F59E0B', '#EF4444']
-
 export function weekdayLabel(weekday: number): string {
     return WEEKDAY_LABELS[weekday - 1] ?? '—'
 }
@@ -455,7 +453,7 @@ export const WeekdayBars = memo(function WeekdayBars({ data, formatValue }: Week
     const bars = useMemo(() => WEEKDAY_LABELS.map((label, i) => {
         const d = data.find((x) => x.weekday === i + 1)
         // Цвет дня — свой, даже при нулевых тратах (но нейтральный, не акцентный)
-        return { label, value: d?.value ?? 0, count: d?.count ?? 0, weekday: i + 1, fill: WEEKDAY_COLORS[i]! }
+        return { label, value: d?.value ?? 0, count: d?.count ?? 0, weekday: i + 1, fill: chartColors.weekday[i]! }
     }), [data])
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -495,7 +493,7 @@ export const WeekdayBars = memo(function WeekdayBars({ data, formatValue }: Week
                     <RechartsTooltip content={barTooltip} cursor={{ fill: 'transparent' }} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={34} isAnimationActive={false}>
                         {bars.map((b) => (
-                            <Cell key={b.label} fill={b.value > 0 ? b.fill : '#EDEDF4'} />
+                            <Cell key={b.label} fill={b.value > 0 ? b.fill : theme.semantic.chart.empty} />
                         ))}
                     </Bar>
                 </BarChart>
@@ -529,17 +527,14 @@ export function EmptyChart({ text, ariaLabel }: { text: string; ariaLabel: strin
 
 /** Детерминированная палитра для магазинов (индекс в массиве stores).
  *  Без фиолетовых — они сливаются с акцентным цветом приложения. */
-export const STORE_COLORS = [
-    '#2563EB', '#0EA5E9', '#10B981', '#84CC16', '#F59E0B',
-    '#F97316', '#EF4444', '#14B8A6', '#EC4899', '#64748B',
-] as const
+export const STORE_COLORS = chartColors.stores
 
 export function storeColor(index: number): string {
     return STORE_COLORS[index % STORE_COLORS.length]!
 }
 
 /** Нейтральный цвет секции «Другое» (слитые доли < 1 %). */
-export const OTHER_SLICE_COLOR = '#64748B'
+export const OTHER_SLICE_COLOR = chartColors.other
 
 /** Объединяет доли меньше minFraction от суммы в одну секцию «Другое».
  *  Сумма не меняется; порядок — по убыванию. Если всё < 1 %, крупнейшая

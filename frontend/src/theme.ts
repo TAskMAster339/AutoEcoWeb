@@ -1,5 +1,36 @@
 import { alpha, createTheme, type Theme } from '@mui/material/styles'
 
+export const chartColors = {
+  weekday: ['#2563EB', '#0EA5E9', '#14B8A6', '#10B981', '#84CC16', '#F59E0B', '#EF4444'],
+  stores: ['#2563EB', '#0EA5E9', '#10B981', '#84CC16', '#F59E0B', '#F97316', '#EF4444', '#14B8A6', '#EC4899', '#64748B'],
+  other: '#64748B',
+} as const
+
+interface SemanticTokens {
+  navigation: { hover: string; profile: string; profileHover: string }
+  feedback: { error: string; errorSelected: string; warning: string; success: string }
+  scanner: { canvas: string; frame: string; scrim: string; caption: string; captionText: string }
+  chart: { empty: string }
+  grid: {
+    border: string
+    rowBorder: string
+    hover: string
+    header: string
+    headerText: string
+    foreground: string
+    secondaryText: string
+    background: string
+    oddRow: string
+    selected: string
+    checkbox: string
+  }
+}
+
+declare module '@mui/material/styles' {
+  interface Theme { semantic: SemanticTokens }
+  interface ThemeOptions { semantic?: SemanticTokens }
+}
+
 /**
  * AutoEco design tokens — Apple/Linear-like:
  * white/dark background, soft shadows, slightly rounded corners (mockup:
@@ -50,6 +81,39 @@ export function borderColor(theme: Theme): string {
 export function buildTheme(mode: 'light' | 'dark'): Theme {
   const isDark = mode === 'dark'
 
+  const semantic: SemanticTokens = {
+    navigation: {
+      hover: isDark ? alpha('#FFFFFF', 0.05) : '#F1F0FB',
+      profile: isDark ? alpha('#FFFFFF', 0.04) : colors.bg,
+      profileHover: isDark ? alpha('#FFFFFF', 0.08) : '#EFEFF5',
+    },
+    feedback: {
+      error: isDark ? alpha(colors.red, 0.12) : colors.redSoft,
+      errorSelected: alpha(colors.red, 0.2),
+      warning: isDark ? alpha(colors.amber, 0.12) : colors.amberSoft,
+      success: isDark ? alpha(colors.green, 0.12) : colors.greenSoft,
+    },
+    scanner: {
+      canvas: '#0B0B0F',
+      frame: alpha('#FFFFFF', 0.9),
+      scrim: alpha('#000000', 0.38),
+      caption: alpha('#0C0C10', 0.72),
+      captionText: '#FFFFFF',
+    },
+    chart: { empty: isDark ? '#30303A' : '#EDEDF4' },
+    grid: isDark
+      ? {
+          border: '#23232B', rowBorder: '#1F1F27', hover: '#1E1E26', header: '#15151B',
+          headerText: dark.textSecondary, foreground: '#ECECF1', secondaryText: '#8F8F9C',
+          background: dark.paper, oddRow: dark.paper, selected: '#2A2347', checkbox: '#8B7FF0',
+        }
+      : {
+          border: '#ECECF3', rowBorder: '#F1F1F6', hover: '#FAF9FF', header: '#FBFBFD',
+          headerText: colors.textSecondary, foreground: colors.textPrimary, secondaryText: colors.textSecondary,
+          background: colors.card, oddRow: '#FBFBFD', selected: '#E9E4FB', checkbox: colors.primary,
+        },
+  }
+
   const palette = isDark
     ? {
         mode: 'dark' as const,
@@ -83,7 +147,9 @@ export function buildTheme(mode: 'light' | 'dark'): Theme {
       }
 
   return createTheme({
+    cssVariables: true,
     palette,
+    semantic,
     // MUI v6 multiplies NUMERIC borderRadius values in sx/styleOverrides by
     // theme.shape.borderRadius (default 4): borderRadius: 10 would render as
     // 40px (and as 80px with the old 8 here). Every radius in this codebase is
@@ -100,6 +166,23 @@ export function buildTheme(mode: 'light' | 'dark'): Theme {
       button: { textTransform: 'none', fontWeight: 600 },
     },
     components: {
+      MuiCssBaseline: {
+        styleOverrides: {
+          ':root': {
+            '--autoeco-grid-border': semantic.grid.border,
+            '--autoeco-grid-row-border': semantic.grid.rowBorder,
+            '--autoeco-grid-hover': semantic.grid.hover,
+            '--autoeco-grid-header': semantic.grid.header,
+            '--autoeco-grid-header-text': semantic.grid.headerText,
+            '--autoeco-grid-foreground': semantic.grid.foreground,
+            '--autoeco-grid-secondary-text': semantic.grid.secondaryText,
+            '--autoeco-grid-background': semantic.grid.background,
+            '--autoeco-grid-odd-row': semantic.grid.oddRow,
+            '--autoeco-grid-selected': semantic.grid.selected,
+            '--autoeco-grid-checkbox': semantic.grid.checkbox,
+          },
+        },
+      },
       MuiButton: {
         defaultProps: { disableElevation: true },
         styleOverrides: {

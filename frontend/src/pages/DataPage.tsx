@@ -572,9 +572,9 @@ function PreviewTableRow({ row, checked, highlighted, onToggle, setRef }: {
             selected={highlighted}
             sx={{
                 bgcolor: hasErrors
-                    ? (theme.palette.mode === 'dark' ? 'rgba(220,38,38,0.12)' : colors.redSoft)
-                    : isDuplicate ? (theme.palette.mode === 'dark' ? 'rgba(245,158,11,0.12)' : colors.amberSoft) : undefined,
-                '&.Mui-selected, &.Mui-selected:hover': { bgcolor: hasErrors ? 'rgba(220, 38, 38, 0.2)' : undefined },
+                    ? theme.semantic.feedback.error
+                    : isDuplicate ? theme.semantic.feedback.warning : undefined,
+                '&.Mui-selected, &.Mui-selected:hover': { bgcolor: hasErrors ? theme.semantic.feedback.errorSelected : undefined },
                 '& td': { borderColor: 'divider', verticalAlign: 'top' },
             }}
         >
@@ -612,8 +612,8 @@ function PreviewMobileRow({ row, checked, highlighted, onToggle, setRef }: {
                 borderColor: highlighted ? 'error.main' : 'divider',
                 borderRadius: '8px',
                 bgcolor: hasErrors
-                    ? (theme.palette.mode === 'dark' ? 'rgba(220,38,38,0.12)' : colors.redSoft)
-                    : isDuplicate ? (theme.palette.mode === 'dark' ? 'rgba(245,158,11,0.12)' : colors.amberSoft) : 'background.paper',
+                    ? theme.semantic.feedback.error
+                    : isDuplicate ? theme.semantic.feedback.warning : 'background.paper',
                 boxShadow: highlighted ? `0 0 0 2px ${theme.palette.error.main}22` : 'none',
             }}
         >
@@ -639,7 +639,7 @@ function PreviewMobileRow({ row, checked, highlighted, onToggle, setRef }: {
 function ImportResultBanner({ result }: { result: ImportResult }) {
     const theme = useTheme()
     return (
-        <Stack spacing={1} sx={{ p: 2, bgcolor: theme.palette.mode === 'dark' ? 'rgba(22,163,74,0.12)' : colors.greenSoft, borderBottom: '1px solid', borderColor: 'divider' }} role="status">
+        <Stack spacing={1} sx={{ p: 2, bgcolor: theme.semantic.feedback.success, borderBottom: '1px solid', borderColor: 'divider' }} role="status">
             <Stack direction="row" spacing={1} alignItems="center">
                 <CheckCircleOutlineIcon sx={{ color: colors.green }} />
                 <Typography sx={{ color: colors.green, fontWeight: 700 }}>Импортировано транзакций: {result.imported}</Typography>

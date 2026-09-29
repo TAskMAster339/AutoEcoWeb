@@ -326,7 +326,7 @@ const columnDefs: ColDef<TransactionView>[] = [
     width: 104,
     minWidth: headerMinWidth('Доход'),
     ...rightAligned,
-    cellStyle: { color: 'var(--ag-income-color, #16A34A)', fontWeight: 600 },
+    cellStyle: { color: 'var(--mui-palette-success-main)', fontWeight: 600 },
     valueFormatter: (p) => formatCurrency(p.value),
   },
   {
@@ -335,7 +335,7 @@ const columnDefs: ColDef<TransactionView>[] = [
     width: 104,
     minWidth: headerMinWidth('Расход'),
     ...rightAligned,
-    cellStyle: { color: 'var(--ag-expense-color, #DC2626)', fontWeight: 600 },
+    cellStyle: { color: 'var(--mui-palette-error-main)', fontWeight: 600 },
     valueFormatter: (p) => formatCurrency(p.value),
   },
   {
@@ -354,7 +354,7 @@ const columnDefs: ColDef<TransactionView>[] = [
     minWidth: Math.max(120, headerMinWidth('Комментарий')),
     valueFormatter: (p) => p.value || '—',
     cellStyle: (p) =>
-      p.value ? undefined : { color: 'var(--ag-secondary-foreground-color, #9ca3af)' },
+      p.value ? undefined : { color: 'var(--ag-secondary-foreground-color)' },
   },
 ]
 

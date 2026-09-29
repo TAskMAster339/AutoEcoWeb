@@ -62,9 +62,8 @@ export function Sidebar() {
   const role = useAuthStore((s) => s.user?.role)
   const user = useAuthStore((s) => s.user)
   const isVerifiedOnly = user?.status === 'verified'
-  const isDark = theme.palette.mode === 'dark'
   const sidebarBg = theme.palette.background.paper
-  const hoverBg = isDark ? 'rgba(255,255,255,0.05)' : '#F1F0FB'
+  const hoverBg = theme.semantic.navigation.hover
 
   return (
     <Box
@@ -188,12 +187,12 @@ export function Sidebar() {
             px: collapsed ? 0 : 1.25,
             height: USER_CARD_HEIGHT,
             borderRadius: '8px',
-            bgcolor: collapsed ? 'transparent' : isDark ? 'rgba(255,255,255,0.04)' : '#F7F7FA',
+            bgcolor: collapsed ? 'transparent' : theme.semantic.navigation.profile,
             minWidth: 0,
             textDecoration: 'none',
             color: 'inherit',
             '&.active': { bgcolor: softBg(theme), color: softFg(theme) },
-            '&:hover': { bgcolor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFF5' },
+            '&:hover': { bgcolor: theme.semantic.navigation.profileHover },
           }}
           aria-label="Профиль"
         >
