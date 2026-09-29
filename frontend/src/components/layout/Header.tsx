@@ -63,7 +63,7 @@ export function Header() {
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, md: 2 }, minWidth: 0 }}>
         {isMobile && <Logo compact onClick={() => navigate('/transactions')} />}
-        <Typography variant="h5" sx={{ fontSize: { xs: 17, md: 22 }, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Typography component="h1" variant="h5" sx={{ fontSize: { xs: 17, md: 22 }, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {title}
         </Typography>
 
