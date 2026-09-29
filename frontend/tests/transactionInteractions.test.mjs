@@ -197,18 +197,13 @@ test('reduced-motion stylesheet keeps feedback without spatial movement', async 
   assert.match(mediaBlock, /transition-duration:\s*100ms\s*!important/)
 })
 
-test('receipt import refreshes paged transactions and their total before reloading the list', async () => {
+test('receipt import delegates cache refresh to the transaction domain invalidator', async () => {
   const source = await readFile(
     new URL('../src/components/transactions/AddReceiptSheet.tsx', import.meta.url),
     'utf8',
   )
-  const removePageCache = source.indexOf("removeQueries({ queryKey: userQueryKey('txPage') })")
-  const notifyViews = source.indexOf("setQueryData<number>(userQueryKey('txRevision')")
-
-  assert.notEqual(removePageCache, -1)
-  assert.notEqual(notifyViews, -1)
-  assert.ok(removePageCache < notifyViews)
-  assert.match(source, /invalidateQueries\(\{ queryKey: userQueryKey\('txTotal'\) \}\)/)
+  assert.match(source, /invalidateTransactionDomain\(queryClient\)/)
+  assert.doesNotMatch(source, /txRevision|removeQueries/)
 })
 
 test('vertical movement does not hijack page scrolling', () => {

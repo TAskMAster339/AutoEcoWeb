@@ -27,7 +27,7 @@ import { isIncomeOperation } from '../api/transactions'
 import { displayAlias } from '../lib/aliases'
 import { formatCurrency, pluralRu } from '../lib/format'
 import { colors } from '../theme'
-import { userQueryKey } from '../lib/querySession'
+import { queryKeys } from '../lib/queryKeys'
 
 const OPERATION_LABEL: Record<number, string> = {
     1: 'Приход (покупка)',
@@ -75,13 +75,13 @@ export function ReceiptDetailPage() {
     const tagsMap = useMemo(() => new Map((tags ?? []).map((t) => [t.id, t])), [tags])
 
     const receiptQuery = useQuery({
-        queryKey: userQueryKey('receipt', id),
+        queryKey: queryKeys.receipts.detail(id ?? ''),
         queryFn: () => getReceipt(id!),
         enabled: Boolean(id),
     })
 
     const rawQuery = useQuery({
-        queryKey: userQueryKey('receipt-raw', id),
+        queryKey: queryKeys.receipts.raw(id ?? ''),
         queryFn: () => fetchReceiptRaw(id!),
         enabled: Boolean(id),
     })

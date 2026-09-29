@@ -22,7 +22,7 @@ import {
     useTheme,
 } from '@mui/material'
 import { useQueryClient } from '@tanstack/react-query'
-import { userQueryKey } from '../lib/querySession'
+import { invalidateTransactionDomain } from '../lib/queryInvalidation'
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew'
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
@@ -128,12 +128,7 @@ export function DataPage() {
             const importResult = await runImport(rows)
             setResult(importResult)
             setStage('done')
-            void queryClient.invalidateQueries({ queryKey: userQueryKey('transactions') })
-            void queryClient.invalidateQueries({ queryKey: userQueryKey('summary') })
-            void queryClient.invalidateQueries({ queryKey: userQueryKey('analytics') })
-            void queryClient.invalidateQueries({ queryKey: userQueryKey('tags') })
-            void queryClient.invalidateQueries({ queryKey: userQueryKey('receipts') })
-            void queryClient.invalidateQueries({ queryKey: userQueryKey('user-limits') })
+            void invalidateTransactionDomain(queryClient)
         } catch (caught) {
             setError(messageFromError(caught))
             setStage('error')

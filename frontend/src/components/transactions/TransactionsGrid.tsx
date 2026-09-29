@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AgGridReact, type CustomCellRendererProps } from 'ag-grid-react'
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-quartz.css'
 import type { CellContextMenuEvent, ColDef, IDatasource, IGetRowsParams, RowClickedEvent } from 'ag-grid-community'
 import { Alert, Box, Button, CircularProgress, MenuItem, Paper, Popper, Select, Stack, Typography, useTheme } from '@mui/material'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { userQueryKey } from '../../lib/querySession'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '../../lib/queryKeys'
+import { registerTransactionDatasource } from '../../lib/transactionDatasource'
 import { TagChip } from '../common/TagChip'
 import { formatCurrency, formatNumber, formatShortDate } from '../../lib/format'
 import { colors } from '../../theme'
@@ -377,7 +378,7 @@ interface TransactionsGridProps {
  * подгружаются по мере прокрутки вниз (и возврата назад), фильтры,
  * сортировка, total и баланс строки считаются на бэкенде.
  *
- * Каждая страница — отдельный ключ TanStack Query (['txPage', …]):
+ * Каждая страница — отдельный ключ из queryKeys.transactions.page:
  * мутации инвалидируют префикс и видимые блоки перезапрашиваются.
  */
 export function TransactionsGrid({
@@ -392,7 +393,6 @@ export function TransactionsGrid({
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const queryClient = useQueryClient()
-  const { data: txRevision } = useQuery({ queryKey: userQueryKey('txRevision'), queryFn: () => 0 })
   const gridRef = useRef<AgGridReact<TransactionView>>(null)
   const gridWrapperRef = useRef<HTMLDivElement>(null)
   const statsAccumulatorRef = useRef<StatsAccumulator>(createStatsAccumulator())
@@ -415,11 +415,7 @@ export function TransactionsGrid({
   const paramsRef = useRef(params)
   paramsRef.current = params
 
-  // Смена фильтров/периода → перезагружаем блоки бесконечной прокрутки.
-  // datasource уже читает свежие params через paramsRef (query-ключ включает
-  // params, кэш не протухнет) — здесь только заставляем AG Grid перезапросить
-  // видимые блоки и сбросить старый кэш.
-  useEffect(() => {
+  const refreshDatasource = useCallback(() => {
     statsGenerationRef.current += 1
     statsAccumulatorRef.current = createStatsAccumulator()
     setStatsRevision((revision) => revision + 1)
@@ -430,7 +426,15 @@ export function TransactionsGrid({
     const api = gridRef.current?.api
     if (!api) return
     api.purgeInfiniteCache()
-  }, [params, txRevision])
+  }, [])
+
+  // Filter changes and domain mutations both go through the datasource adapter;
+  // the grid never depends on a synthetic server-state revision query.
+  useEffect(() => refreshDatasource(), [params, refreshDatasource])
+  useEffect(
+    () => registerTransactionDatasource(refreshDatasource),
+    [refreshDatasource],
+  )
 
   useEffect(() => () => {
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
@@ -455,7 +459,7 @@ export function TransactionsGrid({
       const limit = endRow - startRow
       void queryClient
         .fetchQuery({
-          queryKey: userQueryKey('txPage', paramsRef.current, sortBy, sortDir, limit, startRow),
+          queryKey: queryKeys.transactions.page(paramsRef.current, sortBy, sortDir, limit, startRow),
           queryFn: () =>
             fetchTransactionsPage({
               limit,
@@ -544,7 +548,7 @@ export function TransactionsGrid({
     try {
       for (let offset = 0; offset < total; offset += 100) {
         const page = await queryClient.fetchQuery({
-          queryKey: userQueryKey('txPage', paramsRef.current, 'stats', 100, offset),
+          queryKey: queryKeys.transactions.page(paramsRef.current, 'stats', 100, offset),
           queryFn: () => fetchTransactionsPage({ limit: 100, offset, ...paramsRef.current, sort_by: 'date', sort_dir: 'asc' }),
           staleTime: 30_000,
         })

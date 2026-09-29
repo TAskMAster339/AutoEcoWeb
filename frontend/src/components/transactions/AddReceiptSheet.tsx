@@ -17,7 +17,7 @@ import { useUiStore } from '../../store/uiStore'
 import { createReceiptFromQr } from '../../api/receipts'
 import { messageFromError } from '../../api/client'
 import { useQueryClient } from '@tanstack/react-query'
-import { userQueryKey } from '../../lib/querySession'
+import { invalidateTransactionDomain } from '../../lib/queryInvalidation'
 
 interface Html5QrcodeLike {
     start: (
@@ -49,21 +49,7 @@ export function AddReceiptSheet() {
     const scannerRef = useRef<Html5QrcodeLike | null>(null)
 
     const invalidateDomain = () => {
-        // A receipt creates transactions in bulk. Mobile and desktop keep their
-        // paged rows under txPage, so discard those pages before notifying the
-        // views; otherwise a cached first page (often exactly 50 rows) keeps an
-        // outdated total and prevents the mobile sentinel from loading the rest.
-        queryClient.removeQueries({ queryKey: userQueryKey('txPage') })
-        queryClient.setQueryData<number>(userQueryKey('txRevision'), (revision = 0) => revision + 1)
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('txTotal') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('receipts') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('transactions') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('summary') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('analytics') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('stores') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('tags') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('tags-page') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('user-limits') })
+        void invalidateTransactionDomain(queryClient)
     }
 
     const stopScanner = () => {

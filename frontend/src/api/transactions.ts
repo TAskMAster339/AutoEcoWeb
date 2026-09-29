@@ -77,23 +77,6 @@ export function fetchTransactionsPage(
   )
 }
 
-/**
- * Все транзакции (все страницы) — для счётчиков тегов и экспорта.
- * Цикл по total: offset-пагинация вместо keyset-курсора.
- */
-export async function fetchAllTransactions(): Promise<Transaction[]> {
-  const items: Transaction[] = []
-  let offset = 0
-  // защитный лимит: 500 страниц × 100 = 50 000 транзакций
-  for (let i = 0; i < 500; i++) {
-    const page = await fetchTransactionsPage({ limit: 100, offset })
-    items.push(...page.items)
-    if (page.total === null || page.total === undefined || items.length >= page.total) break
-    offset += page.items.length
-  }
-  return items
-}
-
 /** GET /api/v1/transactions/stores — все магазины пользователя (свои + из чеков). */
 export function fetchTransactionStores(): Promise<Store[]> {
   return api.get<Store[]>('/api/v1/transactions/stores')
