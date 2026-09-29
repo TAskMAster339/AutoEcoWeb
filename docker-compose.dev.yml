@@ -17,7 +17,6 @@ services:
       - 80:80
     volumes:
       - ./backend:/app
-      - /app/.venv
     develop:
       watch:
         - action: sync+restart

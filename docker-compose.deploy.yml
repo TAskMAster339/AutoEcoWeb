@@ -44,6 +44,9 @@ services:
   backend:
     build: ./backend
     restart: always
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     # env_file: the whole root .env (POSTGRES_*, JWT_SECRET) becomes the
     # container environment — no per-variable listing. Copy .env.example.
     env_file:
