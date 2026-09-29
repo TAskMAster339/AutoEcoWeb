@@ -12,6 +12,7 @@ import { buildTheme } from './theme'
 import { useUiStore } from './store/uiStore'
 import { queryClient } from './lib/querySession'
 import App from './App'
+import { AppErrorBoundary } from './components/common/AppErrorBoundary'
 
 /** Подписка на системное предпочтение темы — для режима «системная». */
 function subscribePrefersDark(onChange: () => void) {
@@ -39,7 +40,9 @@ function ThemedApp() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <App />
+      <AppErrorBoundary>
+        <App />
+      </AppErrorBoundary>
     </ThemeProvider>
   )
 }
