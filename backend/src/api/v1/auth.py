@@ -261,7 +261,7 @@ async def login(  # noqa: PLR0913
     code_repo: EmailCodeRepo,
     email_service: EmailSvc,
     response: Response,
-) -> User:
+) -> UserResponse:
     await _limit_auth(
         limiter,
         request,
@@ -362,7 +362,7 @@ async def update_me(
     data: UserUpdate,
     current_user: CurrentUser,
     repo: UserRepo,
-) -> UserResponse:
+) -> User:
     return await UserService(repo).update_profile(current_user, data)
 
 

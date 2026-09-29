@@ -22,17 +22,18 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Frontend - npm ci + build (tsc -b + vite)
+      - name: Frontend - install, test and build
         working-directory: frontend
         run: |
           npm ci
+          npm test
           npm run build
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Backend - pytest
+      - name: Backend - locked install, lint, typing and tests
         working-directory: backend
         env:
           # Значения фиктивные: Settings (pydantic-settings) требует эти поля при
@@ -43,11 +44,13 @@ jobs:
           POSTGRES_PORT: 5432
           POSTGRES_DB_NAME: test
           JWT_SECRET: test-secret
+          APP_ENV: test
         run: |
-          # pytest, pytest-asyncio, aiosqlite отдельно: requirements.txt с хэшами
-          pip install pytest pytest-asyncio aiosqlite
-          pip install -r requirements.txt
-          python -m pytest tests/ -q
+          python -m pip install uv
+          uv sync --locked --group dev
+          uv run ruff check src tests
+          uv run mypy src
+          uv run pytest tests/ -q
 
   deploy:
     name: Деплой на сервер

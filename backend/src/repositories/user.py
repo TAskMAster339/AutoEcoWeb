@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import and_, or_, select
+from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.enums.user_role import UserRole
 from src.core.enums.user_status import UserStatus
@@ -34,7 +35,7 @@ class UserRepository:
         status: UserStatus | None = None,
         q: str | None = None,
     ) -> list[User]:
-        conditions: list[object] = []
+        conditions: list[ColumnElement[bool]] = []
         if role is not None:
             conditions.append(User.role == role)
         if status is not None:

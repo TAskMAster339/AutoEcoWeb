@@ -245,8 +245,10 @@ def _train(rows: list[AutoTagTrainingRow]) -> _TrainingResult:
             accepted = [pair for pair in matching if pair[0].confidence >= threshold]
             if len(accepted) < 2:
                 continue
-            precision = sum(row.tag_id == tag_id for _, row in accepted) / len(accepted)
-            if precision >= TARGET_PRECISION:
+            threshold_precision = sum(
+                row.tag_id == tag_id for _, row in accepted
+            ) / len(accepted)
+            if threshold_precision >= TARGET_PRECISION:
                 thresholds[tag_id] = threshold
                 break
 

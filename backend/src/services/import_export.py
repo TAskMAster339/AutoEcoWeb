@@ -575,7 +575,11 @@ class ImportExportService:
         existing: set[tuple[object, ...]] = set()
         async for chunk in self._tx_repo.iter_all_chunks(user.id):
             existing.update(
-                _stored_signature(tx, seller_name, tags.get(tx.tag_id))
+                _stored_signature(
+                    tx,
+                    seller_name,
+                    tags.get(tx.tag_id) if tx.tag_id is not None else None,
+                )
                 for tx, seller_name in chunk
             )
         first_rows: dict[tuple[object, ...], int] = {}
@@ -615,7 +619,11 @@ class ImportExportService:
         existing_signatures: set[tuple[object, ...]] = set()
         async for chunk in self._tx_repo.iter_all_chunks(user.id):
             existing_signatures.update(
-                _stored_signature(tx, seller_name, tag_names_by_id.get(tx.tag_id))
+                _stored_signature(
+                    tx,
+                    seller_name,
+                    tag_names_by_id.get(tx.tag_id) if tx.tag_id is not None else None,
+                )
                 for tx, seller_name in chunk
             )
         accepted_signatures: set[tuple[object, ...]] = set()

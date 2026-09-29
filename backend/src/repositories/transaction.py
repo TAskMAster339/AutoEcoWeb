@@ -96,25 +96,25 @@ def _filters(  # noqa: PLR0913
     """  # noqa: RUF002
     conditions: list[ColumnElement[bool]] = []
     if date_from is not None:
-        conditions.append(Transaction.check_datetime >= date_from)  # type: ignore[arg-type]
+        conditions.append(Transaction.check_datetime >= date_from)
     if date_to is not None:
-        conditions.append(Transaction.check_datetime <= date_to)  # type: ignore[arg-type]
+        conditions.append(Transaction.check_datetime <= date_to)
     if tag_ids:
-        conditions.append(Transaction.tag_id.in_(tag_ids))  # type: ignore[arg-type]
+        conditions.append(Transaction.tag_id.in_(tag_ids))
     elif untagged:
-        conditions.append(Transaction.tag_id.is_(None))  # type: ignore[arg-type]
+        conditions.append(Transaction.tag_id.is_(None))
     if seller_names:
         conditions.append(
             _store_expr(own_seller, receipt_seller).in_(seller_names),
-        )  # type: ignore[arg-type]
+        )
     if amount_min is not None:
-        conditions.append(Transaction.amount >= amount_min)  # type: ignore[arg-type]
+        conditions.append(Transaction.amount >= amount_min)
     if amount_max is not None:
-        conditions.append(Transaction.amount <= amount_max)  # type: ignore[arg-type]
+        conditions.append(Transaction.amount <= amount_max)
     if operation_kind == "income":
-        conditions.append(Transaction.operation_type.in_(_INCOME_TYPES))  # type: ignore[arg-type]
+        conditions.append(Transaction.operation_type.in_(_INCOME_TYPES))
     elif operation_kind == "expense":
-        conditions.append(Transaction.operation_type.in_(_EXPENSE_TYPES))  # type: ignore[arg-type]
+        conditions.append(Transaction.operation_type.in_(_EXPENSE_TYPES))
     if search:
         q = f"%{search}%"
         conditions.append(
@@ -126,7 +126,7 @@ def _filters(  # noqa: PLR0913
                 Transaction.normalized_name.ilike(q),
                 Transaction.comment.ilike(q),
                 _store_expr(own_seller, receipt_seller).ilike(q),
-            ),  # type: ignore[arg-type]
+            ),
         )
     return conditions
 
@@ -298,7 +298,7 @@ class TransactionRepository:
         бесконечному скроллу AG Grid (startRow/endRow), keyset её не умеет.
         """  # noqa: RUF002
         conditions: list[ColumnElement[bool]] = [
-            Transaction.user_id == user_id,  # type: ignore[arg-type]
+            Transaction.user_id == user_id,
             *_filters(
                 date_from=date_from,
                 date_to=date_to,
@@ -331,7 +331,7 @@ class TransactionRepository:
             .subquery()
         )
 
-        order_col: ColumnElement = _SORTABLE.get(sort_by, Transaction.check_datetime)  # type: ignore[assignment]
+        order_col: ColumnElement = _SORTABLE.get(sort_by, Transaction.check_datetime)
         if sort_by == "balance":
             order_col = balance_subq.c.balance
         order_expr = order_col.asc() if sort_dir == "asc" else order_col.desc()
@@ -768,12 +768,12 @@ class TransactionRepository:
         for day_, value, count_ in rows:
             wd = date.fromisoformat(str(day_)).isoweekday()
             cur = acc.setdefault(wd, [Decimal("0"), 0])
-            cur[0] += Decimal(value or 0)  # type: ignore[operator]
+            cur[0] += Decimal(value or 0)
             cur[1] += int(count_)
         return [
             (
                 wd,
-                Decimal(acc.get(wd, [Decimal("0"), 0])[0]),  # type: ignore[arg-type]
+                Decimal(acc.get(wd, [Decimal("0"), 0])[0]),
                 int(acc.get(wd, [0, 0])[1]),
             )
             for wd in range(1, 8)
@@ -801,7 +801,7 @@ class TransactionRepository:
         Только расходы с ценой (price или amount) > 0.
         """  # noqa: RUF002
         conditions: list[ColumnElement[bool]] = [
-            Transaction.user_id == user_id,  # type: ignore[arg-type]
+            Transaction.user_id == user_id,
             Transaction.operation_type.in_(_EXPENSE_TYPES),
             or_(
                 Transaction.price.is_not(None),
@@ -809,9 +809,9 @@ class TransactionRepository:
             ),
         ]
         if date_from is not None:
-            conditions.append(Transaction.check_datetime >= date_from)  # type: ignore[arg-type]
+            conditions.append(Transaction.check_datetime >= date_from)
         if date_to is not None:
-            conditions.append(Transaction.check_datetime <= date_to)  # type: ignore[arg-type]
+            conditions.append(Transaction.check_datetime <= date_to)
         if not is_regex:
             q = f"%{name}%"
             conditions.append(

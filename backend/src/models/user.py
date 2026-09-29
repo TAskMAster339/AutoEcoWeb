@@ -1,3 +1,4 @@
+from enum import Enum as PythonEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Enum, Index, Integer, String, Text
@@ -10,8 +11,8 @@ if TYPE_CHECKING:
     from src.models.user_limits import UserLimits
 
 
-def _enum_values(enum_cls: type) -> list[str]:
-    return [member.value for member in enum_cls]
+def _enum_values(enum_cls: type[PythonEnum]) -> list[str]:
+    return [str(member.value) for member in enum_cls]
 
 
 class User(BaseModel):

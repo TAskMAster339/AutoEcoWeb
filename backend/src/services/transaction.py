@@ -593,8 +593,8 @@ class TransactionService:
 
         per_day: dict[tuple[str, str | None], list[tuple[Decimal, str]]] = {}
         store_order: list[str | None] = []
-        for day_, store, price, transaction_name in effective:
-            key = (day_, store)
+        for day_label, store, price, transaction_name in effective:
+            key = (day_label, store)
             per_day.setdefault(key, []).append((price, transaction_name))
             if store not in store_order:
                 store_order.append(store)
