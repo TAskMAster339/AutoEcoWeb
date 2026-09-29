@@ -32,6 +32,12 @@ class Transaction(BaseModel):
         Index("ix_transactions_receipt", "receipt_id"),
         Index("ix_transactions_tag", "tag_id"),
         Index("ix_transactions_user_created", "user_id", "created_at", "id"),
+        Index(
+            "ix_transactions_user_check_datetime_id",
+            "user_id",
+            "datetime",
+            "id",
+        ),
         Index("ix_transactions_name_alias_id", "name_alias_id"),
         Index("ix_transactions_seller_id", "seller_id"),
         Index(

@@ -347,7 +347,10 @@ class TransactionService:
         operation_kind: str | None = None,
         sort_by: str = "date",
         sort_dir: str = "desc",
-    ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int]:
+        after_datetime: datetime | None = None,
+        after_id: UUID | None = None,
+        include_total: bool = True,
+    ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int | None]:
         """Страница транзакций (offset) + эффективный продавец + баланс + total.
 
         offset-пагинация нужна бесконечному скроллу AG Grid (startRow/endRow).
@@ -367,6 +370,9 @@ class TransactionService:
             operation_kind=operation_kind,
             sort_by=sort_by,
             sort_dir=sort_dir,
+            after_datetime=after_datetime,
+            after_id=after_id,
+            include_total=include_total,
         )
 
     async def summary(  # noqa: PLR0913

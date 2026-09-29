@@ -290,7 +290,10 @@ class TransactionRepository:
         operation_kind: str | None = None,
         sort_by: str = "date",
         sort_dir: str = "desc",
-    ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int]:
+        after_datetime: datetime | None = None,
+        after_id: UUID | None = None,
+        include_total: bool = True,
+    ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int | None]:
         """Страница транзакций (offset) + эффективный продавец + баланс.
 
         Баланс — оконная функция по ВСЕМ транзакциям пользователя; фильтры,
@@ -349,20 +352,38 @@ class TransactionRepository:
             .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
             .outerjoin(balance_subq, balance_subq.c.tx_id == Transaction.id)
             .where(*conditions)
-            .order_by(order_expr, Transaction.id.desc())
-            .limit(limit)
-            .offset(offset)
         )
+        if after_datetime is not None and after_id is not None:
+            # Cursor mode is intentionally limited to the mobile feed's stable
+            # default order: date ASC, id DESC. AG Grid keeps offset paging for
+            # arbitrary column sorting.
+            stmt = stmt.where(
+                or_(
+                    Transaction.check_datetime > after_datetime,
+                    and_(
+                        Transaction.check_datetime == after_datetime,
+                        Transaction.id < after_id,
+                    ),
+                )
+            )
+        stmt = (
+            stmt.order_by(order_expr, Transaction.id.desc())
+            .limit(limit)
+        )
+        if after_datetime is None:
+            stmt = stmt.offset(offset)
         rows = (await self._session.execute(stmt)).all()
 
-        count_stmt = (
-            select(func.count(Transaction.id))
-            .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
-            .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
-            .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
-            .where(*conditions)
-        )
-        total = int((await self._session.execute(count_stmt)).scalar_one())
+        total: int | None = None
+        if include_total:
+            count_stmt = (
+                select(func.count(Transaction.id))
+                .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+                .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+                .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
+                .where(*conditions)
+            )
+            total = int((await self._session.execute(count_stmt)).scalar_one())
 
         return [
             (tx, seller_name_, balance) for tx, seller_name_, balance in rows

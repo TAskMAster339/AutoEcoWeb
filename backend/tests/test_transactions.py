@@ -682,6 +682,44 @@ async def test_list_page_offset_paginates(session):
     assert len(ids) == 5  # noqa: PLR2004
 
 
+async def test_list_page_keyset_paginates_without_recounting(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    for i in range(5):
+        await service.create_standalone(
+            user,
+            TransactionCreate(
+                name=f"Cursor {i}",
+                amount=Decimal(i),
+                datetime=datetime(2026, 1, 1, tzinfo=timezone.utc)
+                + timedelta(days=i // 2),
+            ),
+        )
+
+    first, total = await service.list_page(
+        user,
+        limit=2,
+        sort_by="date",
+        sort_dir="asc",
+    )
+    last = first[-1][0]
+    second, second_total = await service.list_page(
+        user,
+        limit=2,
+        sort_by="date",
+        sort_dir="asc",
+        after_datetime=last.check_datetime,
+        after_id=last.id,
+        include_total=False,
+    )
+
+    assert total == 5  # noqa: PLR2004
+    assert second_total is None
+    assert len(second) == 2  # noqa: PLR2004
+    assert {row[0].id for row in first}.isdisjoint({row[0].id for row in second})
+    assert second[0][0].check_datetime >= last.check_datetime
+
+
 async def test_list_and_summary_filter_by_amount_range(session):
     user = await _make_user(session)
     service = _tx_service(session)

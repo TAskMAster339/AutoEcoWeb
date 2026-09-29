@@ -4,7 +4,6 @@ import type { TransactionsPageParams } from '../api/transactions'
 import { fetchTransactionsPage, toTransactionView } from '../api/transactions'
 import type { Transaction, TransactionUpdatePatch, TransactionView } from '../api/types'
 import { useInfiniteScroll } from './useInfiniteScroll'
-import { nextPageOffset } from '../lib/mobilePagination'
 import { queryKeys } from '../lib/queryKeys'
 import { replaceTransactionInPlace } from '../lib/transactionInteractions'
 
@@ -13,6 +12,7 @@ const MOBILE_PAGE_SIZE = 50
 interface MobileTransactionPage {
   items: TransactionView[]
   total: number | null
+  next_cursor: string | null
 }
 
 function replaceTransactionInPages(
@@ -59,20 +59,30 @@ export function useMobileTransactionFeed({
     queryFn: async ({ pageParam, signal }) => {
       const page = await fetchTransactionsPage({
         limit: MOBILE_PAGE_SIZE,
-        offset: pageParam,
+        cursor: pageParam ?? undefined,
+        include_total: pageParam === null,
         ...params,
         sort_by: 'date',
         sort_dir: 'asc',
       }, signal)
-      return { items: page.items.map(toTransactionView), total: page.total ?? 0 }
+      return {
+        items: page.items.map(toTransactionView),
+        total: page.total,
+        next_cursor: page.next_cursor,
+      }
     },
-    initialPageParam: 0,
-    getNextPageParam: (_lastPage, pages) => nextPageOffset(pages),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage, pages) => {
+      const loaded = pages.reduce((count, page) => count + page.items.length, 0)
+      const knownTotal = pages.find((page) => page.total !== null)?.total ?? null
+      if (knownTotal !== null && loaded >= knownTotal) return undefined
+      return lastPage.next_cursor ?? undefined
+    },
     enabled: enabled && online,
     staleTime: 30_000,
   })
   const rows = useMemo(() => query.data?.pages.flatMap((page) => page.items) ?? [], [query.data])
-  const total = query.data?.pages.at(-1)?.total ?? null
+  const total = query.data?.pages.find((page) => page.total !== null)?.total ?? null
   const loadMore = useCallback(async () => {
     await query.fetchNextPage().catch(() => undefined)
   }, [query.fetchNextPage])

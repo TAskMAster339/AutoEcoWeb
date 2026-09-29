@@ -36,6 +36,10 @@ export type TransactionSortBy =
 export interface TransactionsPageParams {
   limit?: number
   offset?: number
+  /** Opaque keyset cursor for the date-ascending mobile feed. */
+  cursor?: string
+  /** Counts matching rows only when the caller needs a fresh total. */
+  include_total?: boolean
   date_from?: string
   date_to?: string
   /** Мультивыбор тегов (IN); пустой/отсутствующий = без фильтра. */
@@ -60,6 +64,8 @@ export function fetchTransactionsPage(
   const search = new URLSearchParams()
   if (params.limit !== undefined) search.set('limit', String(params.limit))
   if (params.offset !== undefined) search.set('offset', String(params.offset))
+  if (params.cursor) search.set('cursor', params.cursor)
+  if (params.include_total !== undefined) search.set('include_total', String(params.include_total))
   if (params.date_from) search.set('date_from', params.date_from)
   if (params.date_to) search.set('date_to', params.date_to)
   if (params.tag_ids?.length) params.tag_ids.forEach((id) => search.append('tag_ids', id))

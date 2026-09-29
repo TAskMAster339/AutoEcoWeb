@@ -1,9 +1,11 @@
+import base64
+import binascii
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from src.core.dependencies import CurrentUser, TransactionSvc
 from src.schemas.pagination import CursorPage
 from src.schemas.transaction import (
@@ -19,6 +21,20 @@ from src.schemas.transaction import (
 router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"])
 
 
+def _encode_cursor(value: datetime, transaction_id: UUID) -> str:
+    raw = f"{value.isoformat()}|{transaction_id}".encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def _decode_cursor(cursor: str) -> tuple[datetime, UUID]:
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        timestamp, transaction_id = base64.urlsafe_b64decode(padded).decode().split("|", 1)
+        return datetime.fromisoformat(timestamp), UUID(transaction_id)
+    except (ValueError, UnicodeDecodeError, binascii.Error) as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid cursor") from error
+
+
 def _day_bounds(day: date, end_of_day: bool) -> datetime:  # noqa: FBT001
     if end_of_day:
         return datetime.combine(day, time.max, tzinfo=timezone.utc)
@@ -31,6 +47,8 @@ async def list_transactions(  # noqa: PLR0913
     transaction_service: TransactionSvc,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    cursor: str | None = Query(None, max_length=256),
+    include_total: bool = Query(True),
     date_from: date | None = Query(None),  # noqa: B008
     date_to: date | None = Query(None),  # noqa: B008
     tag_ids: list[UUID] | None = Query(None),  # noqa: B008
@@ -55,6 +73,12 @@ async def list_transactions(  # noqa: PLR0913
 ) -> CursorPage[TransactionOut]:
     """Страница транзакций: offset-пагинация (для бесконечного скролла),
     все фильтры считаются в БД, баланс строки — оконная функция."""
+    if cursor is not None and (offset != 0 or sort_by != "date" or sort_dir != "asc"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Cursor requires offset=0 and date ascending sort",
+        )
+    after_datetime, after_id = _decode_cursor(cursor) if cursor is not None else (None, None)
     rows, total = await transaction_service.list_page(
         _current_user,
         limit=limit,
@@ -70,12 +94,20 @@ async def list_transactions(  # noqa: PLR0913
         operation_kind=operation_kind,
         sort_by=sort_by,
         sort_dir=sort_dir,
+        after_datetime=after_datetime,
+        after_id=after_id,
+        include_total=include_total,
     )
+    next_cursor = None
+    if sort_by == "date" and sort_dir == "asc" and len(rows) == limit:
+        last_transaction = rows[-1][0]
+        next_cursor = _encode_cursor(last_transaction.check_datetime, last_transaction.id)
     return CursorPage[TransactionOut](
         items=[
             TransactionOut.from_model(tx, seller_name=seller_name_, balance=balance)
             for tx, seller_name_, balance in rows
         ],
+        next_cursor=next_cursor,
         total=total,
     )
 
