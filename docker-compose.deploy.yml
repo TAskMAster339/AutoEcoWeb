@@ -32,11 +32,9 @@ services:
     build:
       context: ./frontend
       args:
-        # One domain: frontend calls the API same-origin (/api), the gateway
-        # proxies it to the backend. Mock data is dev-only — override with
-        # VITE_USE_MOCK_API=true at deploy time while backend endpoints land.
+        # One domain: frontend calls the API same-origin (/api), and the
+        # gateway proxies it to the backend.
         VITE_API_URL: ${VITE_API_URL:-}
-        VITE_USE_MOCK_API: ${VITE_USE_MOCK_API:-false}
     restart: always
     expose:
       - 80

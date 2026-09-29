@@ -3,12 +3,9 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Vite bakes env vars at build time. Defaults: same-origin API + real backend
-# data (mock is a dev-only tool). Override via compose build args.
+# Vite bakes the API URL at build time. The empty default uses the same origin.
 ARG VITE_API_URL=""
-ARG VITE_USE_MOCK_API="false"
 ENV VITE_API_URL=$VITE_API_URL
-ENV VITE_USE_MOCK_API=$VITE_USE_MOCK_API
 
 COPY package.json package-lock.json* ./
 RUN npm ci --no-audit --no-fund

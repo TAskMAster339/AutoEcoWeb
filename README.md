@@ -55,7 +55,6 @@ cp .env.example .env
 
 - `POSTGRES_PASSWORD` — пароль PostgreSQL;
 - `JWT_SECRET` — длинный случайный секрет для подписи токенов;
-- `VITE_USE_MOCK_API=false` — использовать настоящий API в production;
 - `COOKIE_SECURE=true` — включить для HTTPS;
 - `APP_URL` — публичный адрес приложения.
 

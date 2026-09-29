@@ -1,7 +1,7 @@
 /**
  * Shared API types.
  * All shapes mirror backend OpenAPI (backend/src/schemas/*).
- * Summary/analytics are derived client-side from transactions (frontend/TODO.md).
+ * Summary/analytics are derived client-side from the production transaction API.
  */
 
 /* ---------- Backend (real, mirrors OpenAPI) ---------- */
