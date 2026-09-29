@@ -103,7 +103,12 @@ export function buildTheme(mode: 'light' | 'dark'): Theme {
       MuiButton: {
         defaultProps: { disableElevation: true },
         styleOverrides: {
-          root: { borderRadius: 8, paddingInline: 16, paddingBlock: 8 },
+          root: {
+            borderRadius: 8,
+            paddingInline: 16,
+            paddingBlock: 8,
+            '@media (max-width: 899.95px)': { minHeight: 44 },
+          },
           containedPrimary: {
             boxShadow: isDark
               ? '0 1px 2px rgba(0,0,0,0.4)'
@@ -151,7 +156,15 @@ export function buildTheme(mode: 'light' | 'dark'): Theme {
       /* «Квадратный» дизайн: никаких кругов — иконки-кнопки, аватары и FAB
          прямоугольные с малым скруглением. */
       MuiIconButton: {
-        styleOverrides: { root: { borderRadius: 8 } },
+        styleOverrides: {
+          root: {
+            borderRadius: 8,
+            '@media (max-width: 899.95px)': {
+              minWidth: 44,
+              minHeight: 44,
+            },
+          },
+        },
       },
       MuiAvatar: {
         styleOverrides: { root: { borderRadius: 8 } },
