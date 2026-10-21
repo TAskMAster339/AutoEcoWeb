@@ -1,5 +1,5 @@
 # ---------- Stage 1: build the frontend ----------
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
@@ -7,7 +7,7 @@ WORKDIR /app
 ARG VITE_API_URL=""
 ENV VITE_API_URL=$VITE_API_URL
 
-    COPY package.json package-lock.json* .npmrc ./
+COPY package.json package-lock.json* .npmrc ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .
