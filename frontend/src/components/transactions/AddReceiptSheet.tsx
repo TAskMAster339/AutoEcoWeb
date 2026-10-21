@@ -136,7 +136,7 @@ export function AddReceiptSheet() {
         <BottomSheet open={open} onClose={close} title="Сканирование чека" maxWidth={520}>
             {!manualMode ? (
                 <Stack spacing={1.5}>
-                    <Card sx={{ position: 'relative', width: '100%', aspectRatio: { xs: '4 / 5', sm: '4 / 3' }, minHeight: 300, overflow: 'hidden', bgcolor: 'semantic.scanner.canvas', borderColor: 'transparent' }}>
+                    <Card sx={(theme) => ({ position: 'relative', width: '100%', aspectRatio: { xs: '4 / 5', sm: '4 / 3' }, minHeight: 300, overflow: 'hidden', bgcolor: theme.semantic.scanner.canvas, borderColor: 'transparent' })}>
                         <Box
                             id="qr-reader-receipt"
                             sx={{
