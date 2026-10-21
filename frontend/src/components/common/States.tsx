@@ -26,7 +26,7 @@ export function EmptyState({ title, subtitle, actionLabel, onAction }: EmptyStat
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, py: 8, textAlign: 'center' }}>
       <InboxOutlinedIcon sx={{ fontSize: 44, color: colors.textSecondary, opacity: 0.5 }} />
-      <Typography variant="h6" sx={{ fontWeight: 700 }}>
+      <Typography component="h2" variant="h6" sx={{ fontWeight: 700 }}>
         {title}
       </Typography>
       {subtitle && (
@@ -71,7 +71,7 @@ export function OfflineState({ onRetry }: { onRetry?: () => void }) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, py: 8, textAlign: 'center' }}>
       <WifiOffIcon sx={{ fontSize: 44, color: colors.textSecondary, opacity: 0.5 }} />
-      <Typography variant="h6" sx={{ fontWeight: 700 }}>
+      <Typography component="h2" variant="h6" sx={{ fontWeight: 700 }}>
         Вы офлайн
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>

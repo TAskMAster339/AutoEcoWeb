@@ -32,7 +32,7 @@ function firstTipPayload(props: TipProps): { [k: string]: unknown } | undefined 
 export function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
     return (
         <Card sx={{ p: 2.5, height: '100%' }}>
-            <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 700 }}>
+            <Typography component="h2" variant="subtitle1" sx={{ mb: 1.5, fontWeight: 700 }}>
                 {title}
             </Typography>
             {children}
