@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"]
 
     debug: bool = False
+    # Docker gateway DNS name; empty disables trust in forwarded IP headers.
+    trusted_proxy_hosts: str = "nginx"
 
     postgres_user: str
     postgres_password: str

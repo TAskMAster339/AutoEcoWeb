@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -59,6 +59,18 @@ class RateLimitRepository:
             return 0
         elapsed = (now - _as_utc(bucket.window_started_at)).total_seconds()
         return max(1, int(window_seconds - elapsed))
+
+    async def delete_expired(self, before: datetime, *, limit: int) -> None:
+        keys = (
+            select(RateLimitBucket.key_hash)
+            .where(RateLimitBucket.window_started_at < before)
+            .order_by(RateLimitBucket.window_started_at)
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        await self._session.execute(
+            delete(RateLimitBucket).where(RateLimitBucket.key_hash.in_(keys))
+        )
 
     async def _get_for_update(self, key_hash: str) -> RateLimitBucket | None:
         return await self._session.scalar(

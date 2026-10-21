@@ -30,4 +30,4 @@ USER 10001:10001
 
 EXPOSE 80
 
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "80"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "80", "--no-proxy-headers"]

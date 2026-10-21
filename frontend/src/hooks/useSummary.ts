@@ -47,6 +47,5 @@ export function usePriceChart(name: string, isRegex: boolean) {
     queryFn: ({ signal }) => fetchPriceChart(query, isRegex, period, signal),
     enabled,
     staleTime: 60_000,
-    retry: 1,
   })
 }

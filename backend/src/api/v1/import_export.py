@@ -6,7 +6,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
-from src.core.dependencies import CurrentUser, ImportExportSvc
+from src.core.dependencies import CurrentUser, ImportExportSvc, user_rate_limit
 from src.schemas.import_export import (
     ImportPreview,
     ImportRequest,
@@ -19,7 +19,14 @@ from src.services.import_export import (
     parse_import_file,
 )
 
-router = APIRouter(prefix="/api/v1/import-export", tags=["import-export"])
+from src.services.rate_limit import RATE_LIMIT_RESPONSES
+
+router = APIRouter(
+    prefix="/api/v1/import-export",
+    tags=["import-export"],
+    dependencies=[user_rate_limit("import_export", 5, 60)],
+    responses=RATE_LIMIT_RESPONSES,
+)
 
 _XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 

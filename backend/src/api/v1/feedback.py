@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Query, status
-from src.core.dependencies import CurrentAdmin, CurrentUser, EmailSvc, FeedbackRepo
+from src.core.dependencies import CurrentAdmin, CurrentUser, EmailSvc, FeedbackRepo, user_rate_limit
 from src.models.feedback import Feedback
 from src.schemas.feedback import (
     FeedbackAnswer,
@@ -10,6 +10,7 @@ from src.schemas.feedback import (
     FeedbackResponse,
 )
 from src.services.feedback import FeedbackService
+from src.services.rate_limit import RATE_LIMIT_RESPONSES
 
 router = APIRouter(prefix="/api/v1", tags=["feedback"])
 
@@ -22,6 +23,8 @@ def _service(repo: FeedbackRepo, email: EmailSvc) -> FeedbackService:
     "/feedback",
     response_model=FeedbackResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[user_rate_limit("feedback_create", 3, 600)],
+    responses=RATE_LIMIT_RESPONSES,
 )
 async def create_feedback(
     data: FeedbackCreate,

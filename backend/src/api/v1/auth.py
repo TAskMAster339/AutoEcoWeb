@@ -34,10 +34,10 @@ from src.schemas.user import (
     UserUpdate,
 )
 from src.services.auth import AuthService
-from src.services.rate_limit import client_ip
+from src.services.rate_limit import RATE_LIMIT_RESPONSES, client_ip
 from src.services.user import UserService
 
-router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+router = APIRouter(prefix="/api/v1/auth", tags=["auth"], responses=RATE_LIMIT_RESPONSES)
 logger = logging.getLogger(__name__)
 
 _REGISTER_LIMIT = (10, 5, 3600)

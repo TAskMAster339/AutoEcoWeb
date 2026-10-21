@@ -13,18 +13,22 @@ import { API_URL } from '../lib/config'
 export class ApiError extends Error {
   readonly status: number
   readonly detail?: string
+  readonly retryAfter?: number
 
-  constructor(status: number, message: string, detail?: string) {
+  constructor(status: number, message: string, detail?: string, retryAfter?: number) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.detail = detail
+    this.retryAfter = retryAfter
   }
 }
 
 export function messageFromError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 0) return 'Нет соединения с сервером'
+    if (err.status === 429) return err.message
+    if (err.status === 503) return err.detail ?? 'Сервис временно недоступен. Повторите позже.'
     if (err.status === 401) return 'Неверный email или пароль'
     if (err.status === 403) return 'Недостаточно прав'
     // деталь от бэкенда приоритетнее общих текстов (напр. 409 «Этот чек уже добавлен»)
@@ -33,6 +37,30 @@ export function messageFromError(err: unknown): string {
     return err.message
   }
   return 'Что-то пошло не так'
+}
+
+/** Handles both gateway JSON errors and FastAPI responses, including refresh. */
+async function errorFromResponse(res: Response): Promise<ApiError> {
+  const value = res.headers.get('Retry-After')
+  const numeric = value === null || value.trim() === '' ? NaN : Number(value)
+  const seconds = Number.isFinite(numeric)
+    ? numeric
+    : value ? (Date.parse(value) - Date.now()) / 1000 : NaN
+  const retryAfter = Number.isFinite(seconds) ? Math.max(0, Math.ceil(seconds)) : undefined
+  let detail: string | undefined
+  try {
+    const json: unknown = await res.json()
+    if (typeof json === 'object' && json !== null && 'detail' in json) {
+      const d = (json as { detail?: unknown }).detail
+      detail = typeof d === 'string' ? d : JSON.stringify(d)
+    }
+  } catch {
+    // Gateways can also return empty or HTML error bodies.
+  }
+  const message = res.status === 429
+    ? `Слишком много запросов. ${retryAfter !== undefined ? `Повторите через ${retryAfter} сек.` : 'Повторите позже.'}`
+    : `Ошибка сервера (${res.status})`
+  return new ApiError(res.status, message, detail, retryAfter)
 }
 
 type UnauthorizedHandler = () => void
@@ -64,7 +92,7 @@ async function tryRefresh(): Promise<RefreshResult> {
     if (res.status === 401 || res.status === 403) return { kind: 'unauthorized' }
     return {
       kind: 'error',
-      error: new ApiError(res.status, `Ошибка сервера (${res.status})`),
+      error: await errorFromResponse(res),
     }
   } catch {
     return {
@@ -135,17 +163,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!res.ok) {
-    let detail: string | undefined
-    try {
-      const json: unknown = await res.json()
-      if (typeof json === 'object' && json !== null && 'detail' in json) {
-        const d = (json as { detail?: unknown }).detail
-        detail = typeof d === 'string' ? d : JSON.stringify(d)
-      }
-    } catch {
-      // non-JSON error body — ignore
-    }
-    throw new ApiError(res.status, `Ошибка сервера (${res.status})`, detail)
+    throw await errorFromResponse(res)
   }
 
   if (res.status === 204) return undefined as T

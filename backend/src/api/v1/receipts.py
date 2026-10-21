@@ -10,6 +10,7 @@ from src.core.dependencies import (
     SellerSvc,
     TransactionRepo,
     TransactionSvc,
+    user_rate_limit,
 )
 from src.schemas.pagination import CursorPage
 from src.schemas.receipt import (
@@ -21,6 +22,7 @@ from src.schemas.receipt import (
     ReceiptUpdate,
 )
 from src.schemas.transaction import TransactionInReceipt, TransactionOut
+from src.services.rate_limit import RATE_LIMIT_RESPONSES
 from src.services.receipts import ReceiptService
 
 router = APIRouter(prefix="/api/v1/receipts", tags=["receipts"])
@@ -32,7 +34,12 @@ def _day_bounds(day: date, end_of_day: bool) -> datetime:  # noqa: FBT001
     return datetime.combine(day, time.min, tzinfo=timezone.utc)
 
 
-@router.post("/parse", response_model=ReceiptPreviewOut)
+@router.post(
+    "/parse",
+    response_model=ReceiptPreviewOut,
+    dependencies=[user_rate_limit("receipt_fetch", 10, 60)],
+    responses=RATE_LIMIT_RESPONSES,
+)
 async def parse_receipt(  # noqa: PLR0913
     data: ReceiptParseRequest,
     current_user: CurrentUser,
@@ -76,7 +83,13 @@ async def create_manual_receipt(  # noqa: PLR0913
     return ReceiptResponse.from_model(receipt, transactions=transactions)
 
 
-@router.post("", response_model=ReceiptResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ReceiptResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[user_rate_limit("receipt_fetch", 10, 60)],
+    responses=RATE_LIMIT_RESPONSES,
+)
 async def create_receipt(  # noqa: PLR0913
     data: ReceiptCreate,
     current_user: CurrentUser,

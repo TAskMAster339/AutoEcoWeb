@@ -21,6 +21,19 @@ afterEach(() => {
 })
 
 describe('auth HTTP flows', () => {
+  it('keeps login form values and displays the wait after 429', async () => {
+    server.use(http.post('*/api/v1/auth/login', () => HttpResponse.json(
+      { detail: 'Слишком много запросов' }, { status: 429, headers: { 'Retry-After': '30' } })))
+    render(<ThemeProvider theme={theme}><MemoryRouter><LoginPage /></MemoryRouter></ThemeProvider>)
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: user.email } })
+    fireEvent.change(screen.getByLabelText(/^Пароль/), { target: { value: 'password123' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Войти' }))
+    await screen.findByText(/Повторите через 30 сек/)
+    expect((screen.getByLabelText(/email/i) as HTMLInputElement).value).toBe(user.email)
+    expect((screen.getByLabelText(/^Пароль/) as HTMLInputElement).value).toBe('password123')
+    expect(screen.getByRole('button', { name: 'Войти' })).toBeDefined()
+  })
+
   it('reports incorrect credentials without attempting session refresh', async () => {
     server.use(http.post('*/api/v1/auth/login', () => new HttpResponse(null, { status: 401 })))
     expect(await useAuthStore.getState().login(user.email, 'wrong-password')).toBe(false)

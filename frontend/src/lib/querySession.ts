@@ -1,11 +1,13 @@
 import { QueryClient } from '@tanstack/react-query'
+import { ApiError } from '../api/client'
 
 const ANONYMOUS_SCOPE = 'anonymous'
 
 export const queryClient = new QueryClient({
   defaultOptions: {
+    mutations: { retry: false },
     queries: {
-      retry: 1,
+      retry: (failureCount, error) => !(error instanceof ApiError && error.status === 429) && failureCount < 1,
       refetchOnWindowFocus: false,
       staleTime: 15_000,
     },

@@ -43,6 +43,50 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -85,6 +129,50 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -117,6 +205,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
                 }
               }
             }
@@ -155,6 +287,50 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -190,6 +366,50 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -222,6 +442,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
                 }
               }
             }
@@ -263,6 +527,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
                 }
               }
             }
@@ -314,6 +622,50 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -355,6 +707,50 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -373,6 +769,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
                 }
               }
             }
@@ -420,6 +860,50 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
           }
         },
         "security": [
@@ -443,6 +927,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProverkachekaTokenStatus"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
                 }
               }
             }
@@ -487,6 +1015,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
                 }
               }
             }
@@ -537,6 +1109,50 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
           }
         },
         "security": [
@@ -580,6 +1196,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
                 }
               }
             }
@@ -1062,6 +1722,50 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
           }
         },
         "security": [
@@ -1156,6 +1860,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ],
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Время ожидания в секундах"
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ],
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -3181,6 +3929,50 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
           }
         },
         "security": [
@@ -3225,6 +4017,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "headers": {
+              "Retry-After": {
+                "description": "Время ожидания в секундах",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ]
                 }
               }
             }
@@ -3281,6 +4117,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ],
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Время ожидания в секундах"
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ],
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -3353,6 +4233,50 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ],
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Время ожидания в секундах"
+              }
+            }
+          },
+          "503": {
+            "description": "Защита временно недоступна",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ],
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }

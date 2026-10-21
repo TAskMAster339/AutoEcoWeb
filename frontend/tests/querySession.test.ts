@@ -14,7 +14,8 @@ const clientState = vi.hoisted(() => ({
 }))
 
 vi.mock('../src/api/auth', () => authApi)
-vi.mock('../src/api/client', () => ({
+vi.mock('../src/api/client', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../src/api/client')>(),
   messageFromError: () => 'Ошибка',
   setUnauthorizedHandler: (handler: () => void) => {
     clientState.unauthorizedHandler = handler

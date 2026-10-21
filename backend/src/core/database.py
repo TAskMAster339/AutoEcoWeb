@@ -32,6 +32,22 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
+# Authenticated requests can retain a main-pool connection while checking a
+# budget. A separate small pool prevents them from starving their own limiter.
+rate_limit_engine = create_async_engine(
+    DATABASE_URL,
+    pool_size=2,
+    max_overflow=3,
+    pool_timeout=3,
+    pool_pre_ping=True,
+)
+RateLimitSessionLocal = async_sessionmaker(
+    bind=rate_limit_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+
 class Base(DeclarativeBase):
     pass
 

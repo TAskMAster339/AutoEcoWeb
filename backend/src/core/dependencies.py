@@ -259,3 +259,13 @@ def get_auth_rate_limiter() -> AuthRateLimiter:
 
 
 AuthLimiter = Annotated[AuthRateLimiter, Depends(get_auth_rate_limiter)]
+
+
+def user_rate_limit(action: str, limit: int, window_seconds: int):
+    async def enforce(current_user: CurrentUser, limiter: AuthLimiter) -> None:
+        await limiter.check_user(
+            action=action, user_id=current_user.id,
+            limit=limit, window_seconds=window_seconds,
+        )
+
+    return Depends(enforce)
