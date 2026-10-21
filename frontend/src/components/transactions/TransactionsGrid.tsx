@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AgGridReact, type CustomCellRendererProps } from 'ag-grid-react'
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-quartz.css'
-import type { CellContextMenuEvent, ColDef, IDatasource, IGetRowsParams, RowClickedEvent } from 'ag-grid-community'
+import type { CellContextMenuEvent, ColDef, RowClickedEvent } from 'ag-grid-community'
 import { Alert, Box, Button, CircularProgress, MenuItem, Paper, Popper, Select, Stack, Typography, useTheme } from '@mui/material'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../lib/queryKeys'
 import { registerTransactionDatasource } from '../../lib/transactionDatasource'
+import { createGridTransactionDatasource } from '../../lib/gridTransactionDatasource'
 import { TagChip } from '../common/TagChip'
 import { formatCurrency, formatNumber, formatShortDate } from '../../lib/format'
 import { colors } from '../../theme'
@@ -448,40 +449,17 @@ export function TransactionsGrid({
 
   // Infinite-источник: блоки запрашиваются по мере прокрутки; sortModel
   // приходит от AG Grid при клике по заголовку — пробрасывается на бэкенд.
-  const datasource = useMemo<IDatasource>(() => {
-    const getRows = (p: IGetRowsParams): void => {
-      const statsGeneration = statsGenerationRef.current
-      const { startRow, endRow, sortModel, successCallback, failCallback } = p
-      const sort = sortModel?.[0]
-      const sortBy = (sort?.colId && sort?.sort ? sort.colId : 'date') as TransactionsPageParams['sort_by']
-      // Без sortModel (или сброшенной сортировки) — по умолчанию по возрастанию даты.
-      const sortDir: 'asc' | 'desc' = sort?.sort ?? 'asc'
-      const limit = endRow - startRow
-      void queryClient
-        .fetchQuery({
-          queryKey: queryKeys.transactions.page(paramsRef.current, sortBy, sortDir, limit, startRow),
-          queryFn: ({ signal }) =>
-            fetchTransactionsPage({
-              limit,
-              offset: startRow,
-              ...paramsRef.current,
-              sort_by: sortBy,
-              sort_dir: sortDir,
-            }, signal),
-          staleTime: 30_000,
-        })
-        .then((page) => {
-          onTotalChangeRef.current(page.total ?? 0)
-          const rows = page.items.map(toTransactionView)
-          if (statsGeneration === statsGenerationRef.current && addRowsToStats(statsAccumulatorRef.current, rows)) {
-            setStatsRevision((revision) => revision + 1)
-          }
-          successCallback(rows, page.total ?? 0)
-        })
-        .catch(() => failCallback())
-    }
-    return { getRows }
-  }, [queryClient])
+  const datasource = useMemo(() => createGridTransactionDatasource({
+    queryClient,
+    getParams: () => paramsRef.current,
+    getGeneration: () => statsGenerationRef.current,
+    onPage(rows, total) {
+      onTotalChangeRef.current(total)
+      if (addRowsToStats(statsAccumulatorRef.current, rows)) {
+        setStatsRevision((revision) => revision + 1)
+      }
+    },
+  }), [queryClient])
 
   // ESC — снять выделение строк (если оно есть)
   useEffect(() => {
