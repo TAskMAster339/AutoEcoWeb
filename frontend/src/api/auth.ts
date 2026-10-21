@@ -7,9 +7,10 @@
  */
 import { api } from './client'
 import type { User } from './types'
+import { userSchema } from './validation'
 
 export function login(email: string, password: string): Promise<User> {
-  return api.post<User>('/api/v1/auth/login', { email, password })
+  return api.post<unknown>('/api/v1/auth/login', { email, password }, { auth: false }).then((data) => userSchema.parse(data))
 }
 
 export function register(email: string, password: string): Promise<User> {
@@ -46,7 +47,7 @@ export function resetPassword(email: string, code: string, newPassword: string):
 }
 
 export function fetchMe(signal?: AbortSignal): Promise<User> {
-  return api.get<User>('/api/v1/auth/me', { signal })
+  return api.get<unknown>('/api/v1/auth/me', { signal }).then((data) => userSchema.parse(data))
 }
 
 /** The refresh token travels in the HttpOnly cookie; backend clears both cookies. */

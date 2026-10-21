@@ -51,6 +51,13 @@ jobs:
           uv run ruff check src tests
           uv run mypy src
           uv run pytest tests/ -q
+      - name: Check generated OpenAPI contract
+        working-directory: frontend
+        env:
+          API_PYTHON: ../backend/.venv/bin/python
+        run: |
+          npm run api:generate
+          git diff --exit-code -- openapi.json src/api/generated.ts
 
   postgres-integration:
     name: PostgreSQL migrations and locking

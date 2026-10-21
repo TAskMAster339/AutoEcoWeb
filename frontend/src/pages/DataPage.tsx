@@ -50,7 +50,8 @@ function formatDate(iso: string | null): string {
     return `${day}.${month}.${year}`
 }
 
-function formatMoney(value: string): string {
+function formatMoney(value: string | null): string {
+    if (value === null) return '—'
     const number = Number(value)
     if (!Number.isFinite(number)) return '—'
     return `${number.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`
@@ -113,12 +114,13 @@ export function DataPage() {
                 category: row.category,
                 store: row.store,
                 description: row.description,
-                quantity: row.quantity,
-                unit: row.unit,
-                price: row.price,
-                comment: row.comment,
-                income: row.income,
-                expense: row.expense,
+                quantity: row.quantity ?? undefined,
+                unit: row.unit ?? undefined,
+                price: row.price ?? undefined,
+                comment: row.comment ?? undefined,
+                tags: row.tags,
+                income: row.income ?? undefined,
+                expense: row.expense ?? undefined,
                 operation_kind: row.operation_kind,
                 allow_duplicate: row.duplicate !== null,
             }))

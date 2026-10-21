@@ -1,3 +1,8 @@
+import type { components } from './generated'
+type Schemas = components['schemas']
+/** Decimal strings are decoded at the HTTP boundary. */
+type NumericFields<T, K extends keyof T> = Omit<T, K> & { [P in K]: number | Extract<T[P], null | undefined> }
+
 /**
  * Shared API types.
  * All shapes mirror backend OpenAPI (backend/src/schemas/*).
@@ -6,61 +11,24 @@
 
 /* ---------- Backend (real, mirrors OpenAPI) ---------- */
 
-export type UserRole = 'user' | 'admin'
-export type UserStatus = 'pending' | 'verified' | 'active' | 'blocked'
+export type UserRole = Schemas['UserRole']
+export type UserStatus = Schemas['UserStatus']
 
 export type FeedbackStatus = 'open' | 'answered' | 'closed'
-export interface Feedback {
-  id: string
-  user_id: string
-  email: string
-  subject: string
-  message: string
-  status: FeedbackStatus
-  admin_reply: string | null
-  replied_at: string | null
-  created_at: string
-  updated_at: string
-}
-export interface FeedbackCreate { subject: string; message: string }
-export interface FeedbackAnswer { reply: string }
+export type Feedback = Pick<Required<Schemas['FeedbackResponse']>, 'id' | 'user_id' | 'email' | 'subject' | 'message' | 'status' | 'admin_reply' | 'replied_at' | 'created_at' | 'updated_at'>
+export type FeedbackCreate = Pick<Required<Schemas['FeedbackCreate']>, 'subject' | 'message'>
+export type FeedbackAnswer = Pick<Required<Schemas['FeedbackAnswer']>, 'reply'>
 
-export interface User {
-  id: string
-  email: string
-  role: UserRole
-  status: UserStatus
-}
+export type User = Pick<Required<Schemas['UserResponse']>, 'id' | 'email' | 'role' | 'status'>
 
 /** Admin view of a user (GET /api/v1/admin/users) — mirrors UserAdminResponse. */
-export interface AdminUser extends User {
-  created_at: string
-  updated_at: string
-  limits: UserLimits
-}
+export type AdminUser = Pick<Required<Schemas['UserAdminResponse']>, 'created_at' | 'updated_at' | 'limits' | 'id' | 'email' | 'role' | 'status'>
 
-export interface UserLimits {
-  max_tags: number
-  max_seller_aliases: number
-  max_product_aliases: number
-  max_receipts: number
-  max_transactions: number
-  max_receipt_items: number
-  max_import_rows: number
-}
+export type UserLimits = Pick<Required<Schemas['UserLimitsResponse']>, 'max_tags' | 'max_seller_aliases' | 'max_product_aliases' | 'max_receipts' | 'max_transactions' | 'max_receipt_items' | 'max_import_rows'>
 
-export interface UserUsage {
-  tags: number
-  seller_aliases: number
-  product_aliases: number
-  receipts: number
-  transactions: number
-}
+export type UserUsage = Pick<Required<Schemas['UserUsageResponse']>, 'tags' | 'seller_aliases' | 'product_aliases' | 'receipts' | 'transactions'>
 
-export interface UserLimitsOverview {
-  limits: UserLimits
-  usage: UserUsage
-}
+export type UserLimitsOverview = Pick<Required<Schemas['UserLimitsOverview']>, 'limits' | 'usage'>
 
 export type AutoTaggingModelStatus =
   | 'disabled'
@@ -71,39 +39,9 @@ export type AutoTaggingModelStatus =
   | 'degraded'
   | 'error'
 
-export interface AutoTaggingTagMetric {
-  tag_id: string
-  tag_name: string
-  tag_color: string
-  tag_icon: string | null
-  training_examples: number
-  validation_examples: number
-  precision: number | null
-  recall: number | null
-  supported: boolean
-}
+export type AutoTaggingTagMetric = Pick<Required<Schemas['AutoTaggingTagMetric']>, 'tag_id' | 'tag_name' | 'tag_color' | 'tag_icon' | 'training_examples' | 'validation_examples' | 'precision' | 'recall' | 'supported'>
 
-export interface AutoTaggingStatus {
-  enabled: boolean
-  status: AutoTaggingModelStatus
-  current_revision: number
-  trained_revision: number | null
-  algorithm_version: string
-  trained_at: string | null
-  training_examples: number
-  validation_examples: number
-  distinct_tags: number
-  supported_tags: number
-  minimum_training_examples: number
-  minimum_examples_per_tag: number
-  target_precision: number
-  precision: number | null
-  coverage: number | null
-  macro_f1: number | null
-  store_baseline_precision: number | null
-  threshold: number | null
-  per_tag_metrics: AutoTaggingTagMetric[]
-}
+export type AutoTaggingStatus = Omit<Required<Schemas['AutoTaggingStatusResponse']>, 'per_tag_metrics'> & { per_tag_metrics: AutoTaggingTagMetric[] }
 
 /** Offset-based page envelope — mirrors backend src/schemas/pagination.py.
  *  total заполняет transactions (бесконечный скролл); receipts (keyset) — null. */
@@ -122,190 +60,49 @@ export interface AdminUserFilters {
 /* ---------- Transactions (real, mirrors backend src/schemas/transaction.py) ---------- */
 
 /** Транзакция — минимальная единица учёта. Может быть без чека (receipt_id = null). */
-export interface Transaction {
-  id: string | null
-  receipt_id: string | null
-  name: string
-  normalized_name: string
-  name_alias_id: string | null
-  name_alias_name: string | null
-  position: number | null
-  quantity: number | null
-  unit: string | null
-  price: number | null
-  /** Денежная сумма транзакции (бывш. total_price позиции) */
-  amount: number
-  /** ФНС: 1=приход(расход), 2=расход(доход), 3/4=возвраты */
-  operation_type: number
-  /** ISO datetime (UTC) */
-  datetime: string
-  tag_id: string | null
-  tag_source: 'manual' | 'auto' | null
-  tag_confidence: number | null
-  seller_id: string | null
-  /** Effective seller value; standalone uses its own seller, receipt rows inherit the receipt seller. */
-  seller_name: string | null
-  normalized_seller_name: string | null
-  seller_name_alias_id: string | null
-  seller_name_alias_name: string | null
-  /** Необязательный комментарий пользователя; по умолчанию пустой */
-  comment: string | null
-  /** Нарастающий итог после операции (оконная функция по всем транзакциям
-   *  пользователя на бэке); заполняется списком транзакций, в чеках — null */
-  balance: number | null
-  created_at: string | null
-}
+export type Transaction = NumericFields<Pick<Required<Schemas['TransactionOut']>, 'id' | 'receipt_id' | 'name' | 'normalized_name' | 'name_alias_id' | 'name_alias_name' | 'position' | 'quantity' | 'unit' | 'price' | 'amount' | 'operation_type' | 'datetime' | 'tag_id' | 'tag_source' | 'tag_confidence' | 'seller_id' | 'seller_name' | 'normalized_seller_name' | 'seller_name_alias_id' | 'seller_name_alias_name' | 'comment' | 'balance' | 'created_at'>, 'amount' | 'quantity' | 'price' | 'balance'>
 
 /** POST /api/v1/transactions — ручная транзакция без чека (mirrors TransactionCreate). */
-export interface Store {
-  seller_id: string
-  seller_name: string
-  normalized_seller_name: string | null
-  alias_id: string | null
-  alias_name: string | null
-  filter_value: string
-}
+export type Store = Required<Schemas['StoreResponse']>
 
-export interface ManagedStore extends Store {
-  transaction_count: number
-  receipt_count: number
-}
+export type ManagedStore = Pick<Required<Schemas['SellerResponse']>, 'transaction_count' | 'receipt_count' | 'seller_id' | 'seller_name' | 'normalized_seller_name' | 'alias_id' | 'alias_name' | 'filter_value'>
 
-export interface TransactionDraft {
-  name: string
-  /** Магазин ручной транзакции (у транзакций из чеков берётся из чека) */
-  seller_name?: string | null
-  amount: number
-  quantity?: number | null
-  unit?: string | null
-  price?: number | null
-  operation_type?: number
-  datetime?: string
-  tag_id?: string | null
-  /** Необязательный комментарий; пустой = нет комментария */
-  comment?: string | null
-}
+export type TransactionDraft = Schemas["TransactionCreate"]
 
 /** PATCH /api/v1/transactions/{id} — mirrors TransactionUpdate (receipt_id не редактируется). */
-export type TransactionUpdatePatch = Partial<{
-  name: string
-  /** явный null снимает магазин */
-  seller_name: string | null
-  quantity: number | null
-  unit: string | null
-  price: number | null
-  amount: number
-  operation_type: number
-  datetime: string
-  /** явный null снимает тег */
-  tag_id: string | null
-  /** явный null очищает комментарий */
-  comment: string | null
-}>
+export type TransactionUpdatePatch = Schemas["TransactionUpdate"]
 
 /* ---------- Receipts (real, mirrors backend src/schemas/receipt.py) ---------- */
 
 /** Чек — «коробка» транзакций (mirrors ReceiptResponse, datetime = check_datetime). */
-export interface Receipt {
-  id: string
-  qr: string | null
-  receipt_number: string | null
-  /** ФНС: 1=приход, 2=расход, 3=возврат прихода, 4=возврат расхода */
-  operation_type: number
-  seller_name: string
-  normalized_seller_name: string
-  seller_name_alias_id: string | null
-  seller_name_alias_name: string | null
-  seller_inn: string | null
-  /** ISO datetime (UTC) */
-  datetime: string
-  total_sum: number
-  cashback: number | null
-  balance_after: number | null
-  created_at: string
-  transactions: Transaction[]
-}
+export type Receipt = Omit<NumericFields<Required<Schemas['ReceiptResponse']>, 'total_sum' | 'cashback' | 'balance_after'>, 'transactions'> & { transactions: Transaction[] }
 
 /** POST /api/v1/receipts — создать чек по QR (mirrors ReceiptCreate). */
-export interface ReceiptQrDraft {
-  qr: string
-  cashback?: number | null
-  balance_after?: number | null
-}
+export type ReceiptQrDraft = Schemas["ReceiptCreate"]
 
 /** PATCH /api/v1/receipts/{id} — mirrors ReceiptUpdate (qr/raw_json не редактируются). */
-export type ReceiptUpdatePatch = Partial<{
-  receipt_number: string | null
-  operation_type: number
-  seller_name: string
-  seller_inn: string | null
-  check_datetime: string
-  total_sum: number
-  cashback: number | null
-  balance_after: number | null
-}>
+export type ReceiptUpdatePatch = Schemas["ReceiptUpdate"]
 
 /** POST /api/v1/receipts/{receipt_id}/transactions — mirrors TransactionInReceipt. */
-export interface ReceiptTransactionDraft {
-  name: string
-  amount: number
-  quantity?: number | null
-  unit?: string | null
-  price?: number | null
-  tag_id?: string | null
-}
+export type ReceiptTransactionDraft = Schemas["TransactionInReceipt"]
 
 /* ---------- Tags (real, mirrors backend src/schemas/tag.py) ---------- */
 
-export interface Tag {
-  id: string
-  name: string
-  /** hex color for the chip */
-  color: string
-  /** Optional user-selected icon stored by the backend. */
-  icon: string | null
-  /** Number of transactions with this tag, computed by the backend. */
-  count: number
-}
+export type Tag = Pick<Required<Schemas['TagResponse']>, 'id' | 'name' | 'color' | 'icon' | 'count'>
 
 /* ---------- Aliases (real, mirrors backend src/schemas/alias.py) ---------- */
 
 /** Область применения алиаса: магазины или товары. */
 export type AliasScope = 'seller' | 'product'
 
-export interface Alias {
-  id: string
-  scope: AliasScope
-  /** шаблон: подстрока или regex (при is_regex) */
-  original_name: string
-  /** нормализованное название (магазина или товара) */
-  alias_name: string
-  is_regex: boolean
-  priority: number
-}
+export type Alias = Pick<Required<Schemas['AliasResponse']>, 'id' | 'scope' | 'original_name' | 'alias_name' | 'is_regex' | 'priority'>
 
-export interface AliasDraft {
-  original_name: string
-  alias_name: string
-  scope?: AliasScope
-  is_regex?: boolean
-  priority?: number
-}
+export type AliasDraft = Pick<Schemas['AliasCreate'], 'original_name' | 'alias_name' | 'scope' | 'is_regex' | 'priority'>
 
-export interface AliasUpdatePatch {
-  original_name?: string
-  alias_name?: string
-  scope?: AliasScope
-  is_regex?: boolean
-  priority?: number
-}
+export type AliasUpdatePatch = Pick<Schemas['AliasUpdate'], 'original_name' | 'alias_name' | 'scope' | 'is_regex' | 'priority'>
 
 /** Ответ POST /api/v1/aliases/apply — сколько записей обновлено. */
-export interface AliasApplyResult {
-  seller_updated_receipts: number
-  seller_updated_transactions: number
-  product_updated: number
-}
+export type AliasApplyResult = Pick<Required<Schemas['AliasApplyResult']>, 'seller_updated_receipts' | 'seller_updated_transactions' | 'product_updated'>
 
 /* ---------- Domain (derived client-side from transactions) ---------- */
 

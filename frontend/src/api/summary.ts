@@ -1,3 +1,5 @@
+import type { components } from "./generated"
+type DeepRequired<T> = T extends readonly (infer U)[] ? DeepRequired<U>[] : T extends object ? { [K in keyof T]-?: DeepRequired<T[K]> } : T
 /**
  * Summary + analytics — реальные эндпоинты бэкенда, считают SQL:
  *   GET /api/v1/transactions/summary — показатели за период (с дельтами
@@ -25,20 +27,11 @@ function buildQuery(params: TransactionsPageParams): string {
   return qs ? `?${qs}` : ''
 }
 
-function num(v: number | null | undefined): number {
+function num(v: number | string | null | undefined): number {
   return typeof v === 'number' ? v : Number(v ?? 0)
 }
 
-interface RawSummary {
-  balance: number
-  opening_balance: number
-  income: number
-  expenses: number
-  transactions: number
-  income_delta: number | null
-  expenses_delta: number | null
-  balance_trend: number[]
-}
+type RawSummary = DeepRequired<components["schemas"]["TransactionSummary"]>
 
 /** GET /api/v1/transactions/summary — показатели за выбранный период. */
 export async function fetchSummary(params: TransactionsPageParams = {}, signal?: AbortSignal): Promise<Summary> {
@@ -55,31 +48,7 @@ export async function fetchSummary(params: TransactionsPageParams = {}, signal?:
   }
 }
 
-interface RawAnalytics {
-  daily: Array<{
-    day: string
-    expenses: number
-    income: number
-    count: number
-    trend: number | null
-  }>
-  by_store: Array<{ store: string; value: number }>
-  by_store_income: Array<{ store: string; value: number }>
-  by_category: Array<{
-    tag_id: string
-    tag_name: string
-    tag_color: string
-    value: number
-    count: number
-  }>
-  by_weekday: Array<{ weekday: number; value: number; count: number }>
-  indicators: {
-    top_store: RawAnalytics['by_store'][number] | null
-    top_category: RawAnalytics['by_category'][number] | null
-    top_weekday: RawAnalytics['by_weekday'][number] | null
-    top_income_source: RawAnalytics['by_store'][number] | null
-  }
-}
+type RawAnalytics = DeepRequired<components["schemas"]["AnalyticsResponse"]>
 
 function mapCategory(c: RawAnalytics['by_category'][number]): AnalyticsByCategory {
   return {
@@ -123,14 +92,7 @@ export async function fetchAnalytics(params: TransactionsPageParams = {}, signal
   }
 }
 
-interface RawPriceChart {
-  points: Array<{ day: string; price: number; count: number; store: string | null; names?: string[] }>
-  stores: Array<string | null>
-  avg_price: number
-  median_price: number
-  stddev: number
-  count: number
-}
+type RawPriceChart = DeepRequired<components["schemas"]["PriceChartResponse"]>
 
 /** GET /api/v1/analytics/price-chart — точки, магазины, статистика (считает бэкенд). */
 export async function fetchPriceChart(

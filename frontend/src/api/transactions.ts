@@ -7,6 +7,7 @@
  * с total (бесконечный скролл AG Grid), фильтры и баланс строки считает бэкенд.
  */
 import { api } from './client'
+import { transactionPageSchema, transactionSchema } from './validation'
 import type {
   CursorPage,
   Transaction,
@@ -79,10 +80,10 @@ export function fetchTransactionsPage(
   if (params.sort_by) search.set('sort_by', params.sort_by)
   if (params.sort_dir) search.set('sort_dir', params.sort_dir)
   const qs = search.toString()
-  return api.get<CursorPage<Transaction>>(
+  return api.get<unknown>(
     `/api/v1/transactions${qs ? `?${qs}` : ''}`,
     { signal },
-  )
+  ).then((data) => transactionPageSchema.parse(data))
 }
 
 /** GET /api/v1/transactions/stores — все магазины пользователя (свои + из чеков). */
@@ -92,14 +93,14 @@ export function fetchTransactionStores(signal?: AbortSignal): Promise<Store[]> {
 
 /** POST /api/v1/transactions — ручная транзакция без чека. */
 export function createTransaction(draft: TransactionDraft): Promise<Transaction> {
-  return api.post<Transaction>('/api/v1/transactions', draft)
+  return api.post<unknown>('/api/v1/transactions', draft).then((data) => transactionSchema.parse(data))
 }
 
 export function updateTransaction(
   id: string,
   patch: TransactionUpdatePatch,
 ): Promise<Transaction> {
-  return api.patch<Transaction>(`/api/v1/transactions/${id}`, patch)
+  return api.patch<unknown>(`/api/v1/transactions/${id}`, patch).then((data) => transactionSchema.parse(data))
 }
 
 export async function bulkUpdateTransactions(

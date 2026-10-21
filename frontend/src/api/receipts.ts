@@ -6,6 +6,7 @@
  * Транзакции приходят внутри ReceiptResponse.transactions.
  */
 import { api } from './client'
+import { receiptSchema, receiptPageSchema, transactionSchema } from './validation'
 import type {
     CursorPage,
     Receipt,
@@ -34,7 +35,7 @@ export function fetchReceiptsPage(params: ReceiptsPageParams = {}, signal?: Abor
     if (params.seller) search.set('seller', params.seller)
     if (params.search) search.set('search', params.search)
     const qs = search.toString()
-    return api.get<CursorPage<Receipt>>(`/api/v1/receipts${qs ? `?${qs}` : ''}`, { signal })
+    return api.get<unknown>(`/api/v1/receipts${qs ? `?${qs}` : ''}`, { signal }).then((data) => receiptPageSchema.parse(data))
 }
 
 /** Все чеки (все страницы) — для дашборда. */
@@ -52,7 +53,7 @@ export async function fetchAllReceipts(): Promise<Receipt[]> {
 }
 
 export function getReceipt(id: string, signal?: AbortSignal): Promise<Receipt> {
-    return api.get<Receipt>(`/api/v1/receipts/${id}`, { signal })
+    return api.get<unknown>(`/api/v1/receipts/${id}`, { signal }).then((data) => receiptSchema.parse(data))
 }
 
 /** GET /api/v1/receipts/{id}/raw — сырые данные чека (raw_json). */
@@ -62,7 +63,7 @@ export async function fetchReceiptRaw(id: string, signal?: AbortSignal): Promise
 
 /** POST /api/v1/receipts — авто-загрузка по QR из proverkacheka (нужен токен). */
 export function createReceiptFromQr(draft: ReceiptQrDraft): Promise<Receipt> {
-    return api.post<Receipt>('/api/v1/receipts', draft)
+    return api.post<unknown>('/api/v1/receipts', draft).then((data) => receiptSchema.parse(data))
 }
 
 /** POST /api/v1/receipts/{receipt_id}/transactions — транзакция в существующий чек. */
@@ -70,11 +71,11 @@ export function addReceiptTransaction(
     receiptId: string,
     draft: ReceiptTransactionDraft,
 ): Promise<Transaction> {
-    return api.post<Transaction>(`/api/v1/receipts/${receiptId}/transactions`, draft)
+    return api.post<unknown>(`/api/v1/receipts/${receiptId}/transactions`, draft).then((data) => transactionSchema.parse(data))
 }
 
 export function updateReceipt(id: string, patch: ReceiptUpdatePatch): Promise<Receipt> {
-    return api.patch<Receipt>(`/api/v1/receipts/${id}`, patch)
+    return api.patch<unknown>(`/api/v1/receipts/${id}`, patch).then((data) => receiptSchema.parse(data))
 }
 
 export function deleteReceipt(id: string): Promise<void> {

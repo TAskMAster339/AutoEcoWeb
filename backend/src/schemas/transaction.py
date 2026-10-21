@@ -119,6 +119,7 @@ class TransactionOut(BaseModel):
 class StoreResponse(BaseModel):
     """Магазин для фильтра: исходное, normalized и применённый алиас."""
 
+    seller_id: UUID
     seller_name: str
     normalized_seller_name: str | None = None
     alias_id: UUID | None = None
