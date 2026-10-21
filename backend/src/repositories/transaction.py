@@ -269,7 +269,7 @@ class TransactionRepository:
         stmt = (
             select(Transaction)
             .where(Transaction.user_id == user_id, Transaction.id.in_(tx_ids))
-            .with_for_update()
+            .with_for_update(of=Transaction)
         )
         return list((await self._session.scalars(stmt)).all())
 
