@@ -28,7 +28,7 @@ class SellerRepository:
             seller_alias_id=seller_alias_id,
         )
         self._session.add(seller)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(seller)
         return seller
 
@@ -44,14 +44,14 @@ class SellerRepository:
         if existing is not None:
             return existing
         try:
-            return await self.create(
-                user_id=user_id,
-                name=name,
-                normalized_name=normalized_name,
-                seller_alias_id=seller_alias_id,
-            )
+            async with self._session.begin_nested():
+                return await self.create(
+                    user_id=user_id,
+                    name=name,
+                    normalized_name=normalized_name,
+                    seller_alias_id=seller_alias_id,
+                )
         except IntegrityError:
-            await self._session.rollback()
             seller = await self.get_by_name(user_id, name)
             if seller is None:
                 raise
@@ -67,7 +67,7 @@ class SellerRepository:
         )
 
     async def save(self, seller: Seller) -> Seller:
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(seller)
         return seller
 
@@ -110,7 +110,7 @@ class SellerRepository:
                 for sid, normalized, alias_id in changes
             ],
         )
-        await self._session.commit()
+        await self._session.flush()
 
     async def list_stores(
         self,
@@ -184,7 +184,7 @@ class SellerRepository:
         seller.name = name
         seller.normalized_name = name
         seller.seller_alias_id = None
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(seller)
         return seller
 
@@ -201,5 +201,5 @@ class SellerRepository:
         if transaction_exists is not None or receipt_exists is not None:
             return False
         await self._session.execute(delete(Seller).where(Seller.id == seller.id))
-        await self._session.commit()
+        await self._session.flush()
         return True

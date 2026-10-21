@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AgGridReact, type CustomCellRendererProps } from 'ag-grid-react'
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-quartz.css'
-import type { CellContextMenuEvent, ColDef, IDatasource, IGetRowsParams, RowClickedEvent } from 'ag-grid-community'
+import type { CellContextMenuEvent, ColDef, RowClickedEvent } from 'ag-grid-community'
 import { Alert, Box, Button, CircularProgress, MenuItem, Paper, Popper, Select, Stack, Typography, useTheme } from '@mui/material'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { userQueryKey } from '../../lib/querySession'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '../../lib/queryKeys'
+import { registerTransactionDatasource } from '../../lib/transactionDatasource'
+import { createGridTransactionDatasource } from '../../lib/gridTransactionDatasource'
 import { TagChip } from '../common/TagChip'
 import { formatCurrency, formatNumber, formatShortDate } from '../../lib/format'
 import { colors } from '../../theme'
@@ -15,7 +17,7 @@ import {
   type TransactionsPageParams,
 } from '../../api/transactions'
 import type { Tag, TransactionView } from '../../api/types'
-import { medianOf, replaceQuickEditTarget, selectionRange } from '../../lib/transactionInteractions.mjs'
+import { medianOf, replaceQuickEditTarget, selectionRange } from '../../lib/transactionInteractions'
 import {
   QuickEditPopover,
   type QuickEditField,
@@ -325,7 +327,7 @@ const columnDefs: ColDef<TransactionView>[] = [
     width: 104,
     minWidth: headerMinWidth('Доход'),
     ...rightAligned,
-    cellStyle: { color: 'var(--ag-income-color, #16A34A)', fontWeight: 600 },
+    cellStyle: { color: 'var(--mui-palette-success-main)', fontWeight: 600 },
     valueFormatter: (p) => formatCurrency(p.value),
   },
   {
@@ -334,7 +336,7 @@ const columnDefs: ColDef<TransactionView>[] = [
     width: 104,
     minWidth: headerMinWidth('Расход'),
     ...rightAligned,
-    cellStyle: { color: 'var(--ag-expense-color, #DC2626)', fontWeight: 600 },
+    cellStyle: { color: 'var(--mui-palette-error-main)', fontWeight: 600 },
     valueFormatter: (p) => formatCurrency(p.value),
   },
   {
@@ -353,7 +355,7 @@ const columnDefs: ColDef<TransactionView>[] = [
     minWidth: Math.max(120, headerMinWidth('Комментарий')),
     valueFormatter: (p) => p.value || '—',
     cellStyle: (p) =>
-      p.value ? undefined : { color: 'var(--ag-secondary-foreground-color, #9ca3af)' },
+      p.value ? undefined : { color: 'var(--ag-secondary-foreground-color)' },
   },
 ]
 
@@ -377,7 +379,7 @@ interface TransactionsGridProps {
  * подгружаются по мере прокрутки вниз (и возврата назад), фильтры,
  * сортировка, total и баланс строки считаются на бэкенде.
  *
- * Каждая страница — отдельный ключ TanStack Query (['txPage', …]):
+ * Каждая страница — отдельный ключ из queryKeys.transactions.page:
  * мутации инвалидируют префикс и видимые блоки перезапрашиваются.
  */
 export function TransactionsGrid({
@@ -392,7 +394,6 @@ export function TransactionsGrid({
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const queryClient = useQueryClient()
-  const { data: txRevision } = useQuery({ queryKey: userQueryKey('txRevision'), queryFn: () => 0 })
   const gridRef = useRef<AgGridReact<TransactionView>>(null)
   const gridWrapperRef = useRef<HTMLDivElement>(null)
   const statsAccumulatorRef = useRef<StatsAccumulator>(createStatsAccumulator())
@@ -415,11 +416,7 @@ export function TransactionsGrid({
   const paramsRef = useRef(params)
   paramsRef.current = params
 
-  // Смена фильтров/периода → перезагружаем блоки бесконечной прокрутки.
-  // datasource уже читает свежие params через paramsRef (query-ключ включает
-  // params, кэш не протухнет) — здесь только заставляем AG Grid перезапросить
-  // видимые блоки и сбросить старый кэш.
-  useEffect(() => {
+  const refreshDatasource = useCallback(() => {
     statsGenerationRef.current += 1
     statsAccumulatorRef.current = createStatsAccumulator()
     setStatsRevision((revision) => revision + 1)
@@ -430,7 +427,15 @@ export function TransactionsGrid({
     const api = gridRef.current?.api
     if (!api) return
     api.purgeInfiniteCache()
-  }, [params, txRevision])
+  }, [])
+
+  // Filter changes and domain mutations both go through the datasource adapter;
+  // the grid never depends on a synthetic server-state revision query.
+  useEffect(() => refreshDatasource(), [params, refreshDatasource])
+  useEffect(
+    () => registerTransactionDatasource(refreshDatasource),
+    [refreshDatasource],
+  )
 
   useEffect(() => () => {
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
@@ -444,40 +449,17 @@ export function TransactionsGrid({
 
   // Infinite-источник: блоки запрашиваются по мере прокрутки; sortModel
   // приходит от AG Grid при клике по заголовку — пробрасывается на бэкенд.
-  const datasource = useMemo<IDatasource>(() => {
-    const getRows = (p: IGetRowsParams): void => {
-      const statsGeneration = statsGenerationRef.current
-      const { startRow, endRow, sortModel, successCallback, failCallback } = p
-      const sort = sortModel?.[0]
-      const sortBy = (sort?.colId && sort?.sort ? sort.colId : 'date') as TransactionsPageParams['sort_by']
-      // Без sortModel (или сброшенной сортировки) — по умолчанию по возрастанию даты.
-      const sortDir: 'asc' | 'desc' = sort?.sort ?? 'asc'
-      const limit = endRow - startRow
-      void queryClient
-        .fetchQuery({
-          queryKey: userQueryKey('txPage', paramsRef.current, sortBy, sortDir, limit, startRow),
-          queryFn: () =>
-            fetchTransactionsPage({
-              limit,
-              offset: startRow,
-              ...paramsRef.current,
-              sort_by: sortBy,
-              sort_dir: sortDir,
-            }),
-          staleTime: 30_000,
-        })
-        .then((page) => {
-          onTotalChangeRef.current(page.total ?? 0)
-          const rows = page.items.map(toTransactionView)
-          if (statsGeneration === statsGenerationRef.current && addRowsToStats(statsAccumulatorRef.current, rows)) {
-            setStatsRevision((revision) => revision + 1)
-          }
-          successCallback(rows, page.total ?? 0)
-        })
-        .catch(() => failCallback())
-    }
-    return { getRows }
-  }, [queryClient])
+  const datasource = useMemo(() => createGridTransactionDatasource({
+    queryClient,
+    getParams: () => paramsRef.current,
+    getGeneration: () => statsGenerationRef.current,
+    onPage(rows, total) {
+      onTotalChangeRef.current(total)
+      if (addRowsToStats(statsAccumulatorRef.current, rows)) {
+        setStatsRevision((revision) => revision + 1)
+      }
+    },
+  }), [queryClient])
 
   // ESC — снять выделение строк (если оно есть)
   useEffect(() => {
@@ -544,8 +526,11 @@ export function TransactionsGrid({
     try {
       for (let offset = 0; offset < total; offset += 100) {
         const page = await queryClient.fetchQuery({
-          queryKey: userQueryKey('txPage', paramsRef.current, 'stats', 100, offset),
-          queryFn: () => fetchTransactionsPage({ limit: 100, offset, ...paramsRef.current, sort_by: 'date', sort_dir: 'asc' }),
+          queryKey: queryKeys.transactions.page(paramsRef.current, 'stats', 100, offset),
+          queryFn: ({ signal }) => fetchTransactionsPage(
+            { limit: 100, offset, ...paramsRef.current, sort_by: 'date', sort_dir: 'asc' },
+            signal,
+          ),
           staleTime: 30_000,
         })
         if (generation !== statsGenerationRef.current) return

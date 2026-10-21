@@ -14,14 +14,14 @@ export function fetchAliasesPage(params: {
   limit?: number
   offset?: number
   search?: string
-} = {}): Promise<CursorPage<Alias>> {
+} = {}, signal?: AbortSignal): Promise<CursorPage<Alias>> {
   const qs = new URLSearchParams()
   if (params.scope) qs.set('scope', params.scope)
   if (params.limit != null) qs.set('limit', String(params.limit))
   if (params.offset != null) qs.set('offset', String(params.offset))
   if (params.search) qs.set('search', params.search)
   const query = qs.toString()
-  return api.get<CursorPage<Alias>>(`/api/v1/aliases${query ? `?${query}` : ''}`)
+  return api.get<CursorPage<Alias>>(`/api/v1/aliases${query ? `?${query}` : ''}`, { signal })
 }
 
 export function createAlias(draft: AliasDraft): Promise<Alias> {

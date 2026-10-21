@@ -1,6 +1,7 @@
+from enum import Enum as PythonEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Enum, Index, Integer, String
+from sqlalchemy import Boolean, Enum, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.core.enums.user_role import UserRole
 from src.core.enums.user_status import UserStatus
@@ -10,8 +11,8 @@ if TYPE_CHECKING:
     from src.models.user_limits import UserLimits
 
 
-def _enum_values(enum_cls: type) -> list[str]:
-    return [member.value for member in enum_cls]
+def _enum_values(enum_cls: type[PythonEnum]) -> list[str]:
+    return [str(member.value) for member in enum_cls]
 
 
 class User(BaseModel):
@@ -44,7 +45,7 @@ class User(BaseModel):
 
     # Персональный токен proverkacheka.com; используется при автозагрузке
     proverkacheka_token: Mapped[str | None] = mapped_column(
-        String(256),
+        Text,
         nullable=True,
     )
 

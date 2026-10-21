@@ -1,9 +1,13 @@
 from decimal import Decimal
 from typing import cast
+from unittest.mock import Mock
+import uuid
 
+import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
-from src.core.regex import wildcard_to_regex
+from src.core.regex import compile_wildcard_regex, wildcard_to_regex
+from src.models.alias import Alias
 from src.repositories.alias import AliasRepository
 from src.repositories.receipt import ReceiptRepository
 from src.repositories.seller import SellerRepository
@@ -13,6 +17,7 @@ from src.repositories.user import UserRepository
 from src.schemas.alias import AliasApplyRequest, AliasCreate, AliasUpdate
 from src.schemas.receipt import ReceiptCreate, ReceiptParseRequest, ReceiptResponse
 from src.schemas.transaction import TransactionCreate, TransactionOut
+from src.services import aliases as aliases_module
 from src.services.aliases import AliasService
 from src.services.receipts import ReceiptService
 from src.services.sellers import SellerService
@@ -52,6 +57,44 @@ def test_wildcard_to_regex_translates_user_friendly_tokens():
     assert wildcard_to_regex(r"перекр\.?есток") == r"перекр\.?есток"
     assert wildcard_to_regex(r"цена \? и \*") == r"цена \? и \*"
     assert wildcard_to_regex("[?*]") == "[?*]"
+
+
+def test_regex_rejects_nested_quantifiers_at_validation_time():
+    with pytest.raises(ValueError, match="Nested regex quantifiers"):
+        compile_wildcard_regex("(a+)+$")
+
+
+def test_safe_regex_preserves_wildcard_matching():
+    pattern = compile_wildcard_regex("молоко *%")
+
+    assert pattern.search("Молоко 3.2%") is not None
+
+
+def test_safe_regex_allows_non_capturing_groups():
+    pattern = compile_wildcard_regex("(?:milk|cream)+")
+
+    assert pattern.search("milkcream") is not None
+
+
+def test_alias_rules_compile_once_per_content_revision(monkeypatch):
+    alias = Alias(
+        user_id=uuid.uuid4(),
+        scope="product",
+        original_name="milk.*",
+        alias_name="Milk",
+        is_regex=True,
+        priority=1,
+    )
+    alias.id = uuid.uuid4()
+    aliases_module._compile_revision.cache_clear()
+    compile_spy = Mock(wraps=compile_wildcard_regex)
+    monkeypatch.setattr(aliases_module, "compile_wildcard_regex", compile_spy)
+
+    first = AliasService.compile_rules([alias])
+    second = AliasService.compile_rules([alias])
+    assert first.resolve("milk 1L").value == "Milk"
+    assert second.resolve("milk 2L").value == "Milk"
+    assert compile_spy.call_count == 1
 
 
 def test_regex_alias_uses_star_and_question_as_wildcards():

@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from enum import Enum as PythonEnum
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
@@ -7,8 +8,8 @@ from src.core.enums.email_code_purpose import EmailCodePurpose
 from src.models.base import BaseModel
 
 
-def _enum_values(enum_cls: type) -> list[str]:
-    return [member.value for member in enum_cls]
+def _enum_values(enum_cls: type[PythonEnum]) -> list[str]:
+    return [str(member.value) for member in enum_cls]
 
 
 class EmailCode(BaseModel):

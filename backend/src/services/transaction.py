@@ -29,6 +29,7 @@ from src.schemas.transaction import (
     TransactionOut,
     TransactionSummary,
     TransactionUpdate,
+    TransactionBulkUpdate,
 )
 from src.services.aliases import AliasService
 from src.services.auto_tagging import AutoTagInput, AutoTaggingService
@@ -346,7 +347,10 @@ class TransactionService:
         operation_kind: str | None = None,
         sort_by: str = "date",
         sort_dir: str = "desc",
-    ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int]:
+        after_datetime: datetime | None = None,
+        after_id: UUID | None = None,
+        include_total: bool = True,
+    ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int | None]:
         """Страница транзакций (offset) + эффективный продавец + баланс + total.
 
         offset-пагинация нужна бесконечному скроллу AG Grid (startRow/endRow).
@@ -366,6 +370,9 @@ class TransactionService:
             operation_kind=operation_kind,
             sort_by=sort_by,
             sort_dir=sort_dir,
+            after_datetime=after_datetime,
+            after_id=after_id,
+            include_total=include_total,
         )
 
     async def summary(  # noqa: PLR0913
@@ -592,8 +599,8 @@ class TransactionService:
 
         per_day: dict[tuple[str, str | None], list[tuple[Decimal, str]]] = {}
         store_order: list[str | None] = []
-        for day_, store, price, transaction_name in effective:
-            key = (day_, store)
+        for day_label, store, price, transaction_name in effective:
+            key = (day_label, store)
             per_day.setdefault(key, []).append((price, transaction_name))
             if store not in store_order:
                 store_order.append(store)
@@ -740,6 +747,22 @@ class TransactionService:
         if training_changed and self._auto_tagging is not None:
             await self._auto_tagging.bump_revision(user.id)
         return updated
+
+    async def bulk_update(
+        self,
+        user: User,
+        data: TransactionBulkUpdate,
+    ) -> int:
+        """Validate ownership of the complete set before changing any row."""
+        owned = await self._tx_repo.list_owned_for_update(user.id, data.ids)
+        if len(owned) != len(data.ids):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Одна или несколько транзакций не найдены",
+            )
+        for tx_id in data.ids:
+            await self.update(user, tx_id, data.patch)
+        return len(owned)
 
     async def delete(self, user: User, tx_id: UUID) -> None:
         tx = await self.get(user, tx_id)

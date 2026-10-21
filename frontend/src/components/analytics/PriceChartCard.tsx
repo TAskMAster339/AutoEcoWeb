@@ -105,7 +105,7 @@ export function PriceChartCard() {
     <Card sx={{ p: { xs: 1.5, sm: 2.5 } }}>
       <Stack spacing={1.5}>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          <Typography component="h2" variant="subtitle1" sx={{ fontWeight: 700 }}>
             График цен товара
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>

@@ -12,7 +12,7 @@ export interface FetchUsersParams {
   q?: string
 }
 
-export function fetchUsers(params: FetchUsersParams = {}): Promise<CursorPage<AdminUser>> {
+export function fetchUsers(params: FetchUsersParams = {}, signal?: AbortSignal): Promise<CursorPage<AdminUser>> {
   const search = new URLSearchParams()
   if (params.limit !== undefined) search.set('limit', String(params.limit))
   if (params.cursor) search.set('cursor', params.cursor)
@@ -20,7 +20,7 @@ export function fetchUsers(params: FetchUsersParams = {}): Promise<CursorPage<Ad
   if (params.status) search.set('status', params.status)
   if (params.q) search.set('q', params.q)
   const qs = search.toString()
-  return api.get<CursorPage<AdminUser>>(`/api/v1/admin/users${qs ? `?${qs}` : ''}`)
+  return api.get<CursorPage<AdminUser>>(`/api/v1/admin/users${qs ? `?${qs}` : ''}`, { signal })
 }
 
 /** Обновление роли и/или статуса пользователя (PATCH /api/v1/admin/users/{id}). */

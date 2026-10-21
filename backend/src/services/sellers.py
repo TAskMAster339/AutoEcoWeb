@@ -93,12 +93,13 @@ class SellerService:
 
     async def reapply(self, user_id: UUID) -> list[UUID]:
         aliases = await self._alias_repo.list_all(user_id, scope=_SCOPE_SELLER)
+        compiled_rules = AliasService.compile_rules(aliases)
         rows = await self._repo.list_name_columns(user_id)
         if not rows:
             return []
         changes: list[tuple[UUID, str, UUID | None]] = []
         for seller_id, name, current_value, current_alias_id in rows:
-            resolved = AliasService.resolve_with_alias(aliases, name)
+            resolved = compiled_rules.resolve(name)
             value = resolved.value
             alias_id = resolved.alias.id if resolved.alias is not None else None
             if value != current_value or alias_id != current_alias_id:

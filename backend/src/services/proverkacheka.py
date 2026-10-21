@@ -9,6 +9,7 @@ from http import HTTPStatus
 
 import httpx
 from src.core.config import settings
+from src.core.observability import observe_external_call
 
 __all__ = ["ProverkachekaClient", "ProverkachekaError"]
 
@@ -40,17 +41,21 @@ class ProverkachekaClient:
         if not token:
             raise ProverkachekaError("Токен proverkacheka не задан")
 
-        async with httpx.AsyncClient(
-            transport=self._transport,
-            timeout=self._timeout,
-        ) as client:
-            try:
+        with observe_external_call("proverkacheka", "fetch_receipt"):
+            return await self._fetch(qrraw, token)
+
+    async def _fetch(self, qrraw: str, token: str) -> dict:
+        try:
+            async with httpx.AsyncClient(
+                transport=self._transport,
+                timeout=self._timeout,
+            ) as client:
                 response = await client.post(
                     self._url,
                     json={"qrraw": qrraw, "token": token},
                 )
-            except httpx.HTTPError as exc:
-                raise ProverkachekaError(f"Сервис чеков недоступен: {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise ProverkachekaError(f"Сервис чеков недоступен: {exc}") from exc
 
         if response.status_code != HTTPStatus.OK:
             raise ProverkachekaError(

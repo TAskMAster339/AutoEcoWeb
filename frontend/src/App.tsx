@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
 import { ProtectedRoute, PublicOnlyRoute, FullPageSplash, VerifiedAccessRoute } from './components/common/RouteGuards'
 import { useAuthStore } from './store/authStore'
@@ -8,6 +8,9 @@ import { RecoveryPage } from './pages/RecoveryPage'
 import { EmailVerificationPage } from './pages/EmailVerificationPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { SeoMeta } from './components/common/SeoMeta'
+import { ErrorState, OfflineState } from './components/common/States'
+import { Box } from '@mui/material'
+import { RouteErrorPage } from './components/common/RouteErrorPage'
 
 // Route-level code splitting (AGENTS.md: lazy loading, route splitting).
 const CHUNK_RELOAD_KEY = 'autoeco:chunk-reload'
@@ -59,7 +62,10 @@ function withSeo(element: React.ReactNode) {
     return <><SeoMeta />{element}</>
 }
 
-const router = createBrowserRouter([
+const router = createBrowserRouter([{
+    element: <Outlet />,
+    errorElement: <RouteErrorPage />,
+    children: [
     {
         path: '/login',
         element: withSeo(
@@ -117,8 +123,9 @@ const router = createBrowserRouter([
             },
         ],
     },
-    { path: '*', element: withSeo(<NotFoundPage />) },
-])
+        { path: '*', element: withSeo(<NotFoundPage />) },
+    ],
+}])
 
 /** Restores the session from the READONLY cookie once, then renders the router. */
 function Bootstrap() {
@@ -129,7 +136,32 @@ function Bootstrap() {
         void bootstrap()
     }, [bootstrap])
 
-    if (status === 'idle') return <FullPageSplash />
+    if (status === 'idle' || status === 'loading') return <FullPageSplash />
+    if (status === 'offline' || status === 'error') {
+        const retry = () => void bootstrap()
+        return (
+            <Box
+                role="alert"
+                aria-live="polite"
+                sx={{
+                    minHeight: '100dvh',
+                    display: 'grid',
+                    placeItems: 'center',
+                    bgcolor: 'background.default',
+                    px: 2,
+                }}
+            >
+                {status === 'offline' ? (
+                    <OfflineState onRetry={retry} />
+                ) : (
+                    <ErrorState
+                        message="Сервис временно недоступен. Ваша сессия сохранена."
+                        onRetry={retry}
+                    />
+                )}
+            </Box>
+        )
+    }
     return <RouterProvider router={router} />
 }
 

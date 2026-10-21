@@ -12,7 +12,7 @@ export function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2 }}>
       <Box>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
+        <Typography component="h1" variant="h5" sx={{ fontWeight: 700 }}>
           {title}
         </Typography>
         {subtitle && (

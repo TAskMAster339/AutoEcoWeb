@@ -1,3 +1,5 @@
+import type { components } from "./generated"
+type DeepRequired<T> = T extends readonly (infer U)[] ? DeepRequired<U>[] : T extends object ? { [K in keyof T]-?: DeepRequired<T[K]> } : T
 /**
  * Summary + analytics — реальные эндпоинты бэкенда, считают SQL:
  *   GET /api/v1/transactions/summary — показатели за период (с дельтами
@@ -25,24 +27,15 @@ function buildQuery(params: TransactionsPageParams): string {
   return qs ? `?${qs}` : ''
 }
 
-function num(v: number | null | undefined): number {
+function num(v: number | string | null | undefined): number {
   return typeof v === 'number' ? v : Number(v ?? 0)
 }
 
-interface RawSummary {
-  balance: number
-  opening_balance: number
-  income: number
-  expenses: number
-  transactions: number
-  income_delta: number | null
-  expenses_delta: number | null
-  balance_trend: number[]
-}
+type RawSummary = DeepRequired<components["schemas"]["TransactionSummary"]>
 
 /** GET /api/v1/transactions/summary — показатели за выбранный период. */
-export async function fetchSummary(params: TransactionsPageParams = {}): Promise<Summary> {
-  const raw = await api.get<RawSummary>(`/api/v1/transactions/summary${buildQuery(params)}`)
+export async function fetchSummary(params: TransactionsPageParams = {}, signal?: AbortSignal): Promise<Summary> {
+  const raw = await api.get<RawSummary>(`/api/v1/transactions/summary${buildQuery(params)}`, { signal })
   return {
     balance: num(raw.balance),
     openingBalance: num(raw.opening_balance),
@@ -55,31 +48,7 @@ export async function fetchSummary(params: TransactionsPageParams = {}): Promise
   }
 }
 
-interface RawAnalytics {
-  daily: Array<{
-    day: string
-    expenses: number
-    income: number
-    count: number
-    trend: number | null
-  }>
-  by_store: Array<{ store: string; value: number }>
-  by_store_income: Array<{ store: string; value: number }>
-  by_category: Array<{
-    tag_id: string
-    tag_name: string
-    tag_color: string
-    value: number
-    count: number
-  }>
-  by_weekday: Array<{ weekday: number; value: number; count: number }>
-  indicators: {
-    top_store: RawAnalytics['by_store'][number] | null
-    top_category: RawAnalytics['by_category'][number] | null
-    top_weekday: RawAnalytics['by_weekday'][number] | null
-    top_income_source: RawAnalytics['by_store'][number] | null
-  }
-}
+type RawAnalytics = DeepRequired<components["schemas"]["AnalyticsResponse"]>
 
 function mapCategory(c: RawAnalytics['by_category'][number]): AnalyticsByCategory {
   return {
@@ -90,8 +59,8 @@ function mapCategory(c: RawAnalytics['by_category'][number]): AnalyticsByCategor
 }
 
 /** GET /api/v1/analytics — группировки за период (считает бэкенд). */
-export async function fetchAnalytics(params: TransactionsPageParams = {}): Promise<AnalyticsData> {
-  const raw = await api.get<RawAnalytics>(`/api/v1/analytics${buildQuery(params)}`)
+export async function fetchAnalytics(params: TransactionsPageParams = {}, signal?: AbortSignal): Promise<AnalyticsData> {
+  const raw = await api.get<RawAnalytics>(`/api/v1/analytics${buildQuery(params)}`, { signal })
   return {
     daily: raw.daily.map((d) => ({
       day: d.day,
@@ -123,27 +92,21 @@ export async function fetchAnalytics(params: TransactionsPageParams = {}): Promi
   }
 }
 
-interface RawPriceChart {
-  points: Array<{ day: string; price: number; count: number; store: string | null; names?: string[] }>
-  stores: Array<string | null>
-  avg_price: number
-  median_price: number
-  stddev: number
-  count: number
-}
+type RawPriceChart = DeepRequired<components["schemas"]["PriceChartResponse"]>
 
 /** GET /api/v1/analytics/price-chart — точки, магазины, статистика (считает бэкенд). */
 export async function fetchPriceChart(
   name: string,
   isRegex: boolean,
   params: TransactionsPageParams = {},
+  signal?: AbortSignal,
 ): Promise<PriceChartData> {
   const search = new URLSearchParams()
   search.set('name', name)
   if (isRegex) search.set('is_regex', 'true')
   if (params.date_from) search.set('date_from', params.date_from)
   if (params.date_to) search.set('date_to', params.date_to)
-  const raw = await api.get<RawPriceChart>(`/api/v1/analytics/price-chart?${search.toString()}`)
+  const raw = await api.get<RawPriceChart>(`/api/v1/analytics/price-chart?${search.toString()}`, { signal })
   return {
     points: raw.points.map((p) => ({
       day: p.day,

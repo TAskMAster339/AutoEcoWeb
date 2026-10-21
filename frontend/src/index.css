@@ -198,15 +198,17 @@ a {
 .ag-theme-autoeco.ag-theme-quartz {
   --ag-font-family: 'Inter', system-ui, sans-serif;
   --ag-font-size: 13px;
-  --ag-border-color: #ececf3;
-  --ag-row-border-color: #f1f1f6;
-  --ag-row-hover-color: #faf9ff;
-  --ag-header-background-color: #fbfbfd;
-  --ag-header-foreground-color: #6b7280;
-  --ag-foreground-color: #111827;
-  --ag-background-color: #ffffff;
-  --ag-odd-row-background-color: #fbfbfd;
-  --ag-selected-row-background-color: #e9e4fb;
+  --ag-border-color: var(--autoeco-grid-border);
+  --ag-row-border-color: var(--autoeco-grid-row-border);
+  --ag-row-hover-color: var(--autoeco-grid-hover);
+  --ag-header-background-color: var(--autoeco-grid-header);
+  --ag-header-foreground-color: var(--autoeco-grid-header-text);
+  --ag-foreground-color: var(--autoeco-grid-foreground);
+  --ag-secondary-foreground-color: var(--autoeco-grid-secondary-text);
+  --ag-background-color: var(--autoeco-grid-background);
+  --ag-row-background-color: var(--autoeco-grid-background);
+  --ag-odd-row-background-color: var(--autoeco-grid-odd-row);
+  --ag-selected-row-background-color: var(--autoeco-grid-selected);
   /* Match the wrapper Box frame (borderRadius 6px + own border) so AG Grid's
      inner .ag-root-wrapper has the same radius and no border of its own. */
   --ag-border-radius: 6px;
@@ -215,9 +217,9 @@ a {
   --ag-cell-horizontal-padding: 12px;
   --ag-header-column-separator-display: none;
   /* Native selection checkboxes follow the app's purple accent (MUI primary). */
-  --ag-checkbox-checked-color: #6c5ce7;
-  --ag-checkbox-indeterminate-color: #6c5ce7;
-  --ag-checkbox-unchecked-color: #c9c9d4;
+  --ag-checkbox-checked-color: var(--autoeco-grid-checkbox);
+  --ag-checkbox-indeterminate-color: var(--autoeco-grid-checkbox);
+  --ag-checkbox-unchecked-color: var(--autoeco-grid-secondary-text);
   /* No blue focus ring on checkbox click (quartz default is a #2196f3 ring). */
   --ag-input-focus-box-shadow: none;
 }
@@ -232,22 +234,7 @@ a {
   --ag-border-radius: 6px;
   --ag-wrapper-border-radius: 6px;
   --ag-borders: none;
-  --ag-border-color: #23232b;
-  --ag-row-border-color: #1f1f27;
   --ag-cell-horizontal-padding: 12px;
-  --ag-row-background-color: #17171c;
-  --ag-odd-row-background-color: #17171c;
-  --ag-row-hover-color: #1e1e26;
-  --ag-header-background-color: #15151b;
-  --ag-header-foreground-color: #9c9ca8;
-  --ag-foreground-color: #ececf1;
-  --ag-secondary-foreground-color: #8f8f9c;
-  --ag-background-color: #17171c;
-  --ag-selected-row-background-color: #2a2347;
-  /* Native selection checkboxes: lighter purple reads better on dark. */
-  --ag-checkbox-checked-color: #8b7ff0;
-  --ag-checkbox-indeterminate-color: #8b7ff0;
-  --ag-checkbox-unchecked-color: #3a3a44;
   /* No blue focus ring on checkbox click (quartz default is a #2196f3 ring). */
   --ag-input-focus-box-shadow: none;
 }

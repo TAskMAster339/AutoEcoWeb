@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Box, IconButton, SwipeableDrawer, Typography, useMediaQuery, useTheme } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
-import { getKeyboardViewport } from '../../lib/visualViewport.mjs'
+import { getKeyboardViewport } from '../../lib/visualViewport'
 
 interface BottomSheetProps {
   open: boolean
@@ -115,9 +115,6 @@ export function BottomSheet({ open, onClose, title, children, maxWidth = 640, ma
       // the DOM and avoid mounting every form on mobile. Swipe-to-close still
       // works while the panel is open.
       ModalProps={{ keepMounted: false }}
-      // Не возвращаем фокус на кнопку-триггер после закрытия: иначе MUI
-      // оставляет на ней focus-visible подсветку после Enter/клика.
-      disableRestoreFocus
       slotProps={{
         transition: {
           appear: true,

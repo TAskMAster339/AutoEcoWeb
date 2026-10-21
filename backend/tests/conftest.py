@@ -1,9 +1,16 @@
+import base64
+
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 from src.core.database import Base
 from src.models import User  # noqa: F401 — регистрирует модели в metadata
 from src.repositories.user import UserRepository
+from src.core.config import settings
+
+settings.proverkacheka_encryption_key = base64.urlsafe_b64encode(b"t" * 32).decode(
+    "ascii"
+)
 
 
 @pytest_asyncio.fixture

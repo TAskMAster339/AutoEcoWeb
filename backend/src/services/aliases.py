@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from functools import lru_cache
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -7,7 +9,7 @@ if TYPE_CHECKING:
     from src.services.sellers import SellerService
 
 from fastapi import HTTPException, status
-from src.core.regex import compile_wildcard_regex
+from src.core.regex import SafeRegex, compile_wildcard_regex
 from src.models.alias import Alias
 from src.models.user import User
 from src.repositories.alias import AliasRepository
@@ -29,6 +31,56 @@ class AliasResolution:
     def __init__(self, value: str, alias: Alias | None = None) -> None:
         self.value = value
         self.alias = alias
+
+
+@dataclass(frozen=True, slots=True)
+class _CompiledRule:
+    original_lower: str
+    regex: SafeRegex | None
+
+
+@lru_cache(maxsize=256)
+def _compile_revision(
+    revision: tuple[tuple[str, bool, int, str], ...],
+) -> tuple[_CompiledRule, ...]:
+    """Compile one immutable ruleset per content revision."""
+    return tuple(
+        _CompiledRule(
+            original_lower=original_name.lower(),
+            regex=compile_wildcard_regex(original_name) if is_regex else None,
+        )
+        for original_name, is_regex, _priority, _alias_name in revision
+    )
+
+
+class CompiledAliasRules:
+    """Immutable alias snapshot reused for every record in a batch."""
+
+    def __init__(self, aliases: list[Alias]) -> None:
+        self._aliases = tuple(aliases)
+        revision = tuple(
+            (alias.original_name, alias.is_regex, alias.priority, alias.alias_name)
+            for alias in aliases
+        )
+        self._compiled = _compile_revision(revision)
+
+    def resolve(self, raw_name: str) -> AliasResolution:
+        best: Alias | None = None
+        raw_lower = raw_name.lower()
+        for alias, compiled in zip(self._aliases, self._compiled, strict=True):
+            matched = (
+                compiled.regex.search(raw_name) is not None
+                if compiled.regex is not None
+                else compiled.original_lower in raw_lower
+            )
+            if not matched:
+                continue
+            if best is None or (
+                alias.priority,
+                len(alias.original_name),
+            ) > (best.priority, len(best.original_name)):
+                best = alias
+        return AliasResolution(best.alias_name if best is not None else raw_name, best)
 
 
 class AliasService:
@@ -176,31 +228,16 @@ class AliasService:
         иначе — подстрока (регистронезависимо). При нескольких совпадениях
         побеждает больший priority, при равенстве — более длинный original_name.
         """
-        return AliasService.resolve_with_alias(aliases, raw_name).value
+        return AliasService.compile_rules(aliases).resolve(raw_name).value
+
+    @staticmethod
+    def compile_rules(aliases: list[Alias]) -> CompiledAliasRules:
+        return CompiledAliasRules(aliases)
 
     @staticmethod
     def resolve_with_alias(aliases: list[Alias], raw_name: str) -> AliasResolution:
         """Resolve from the immutable source and retain the winning alias."""
-        best: Alias | None = None
-        for alias in aliases:
-            if alias.is_regex:
-                try:
-                    matched = (
-                        compile_wildcard_regex(alias.original_name).search(raw_name)
-                        is not None
-                    )
-                except ValueError:
-                    matched = False
-            else:
-                matched = alias.original_name.lower() in raw_name.lower()
-            if not matched:
-                continue
-            if best is None or (
-                alias.priority,
-                len(alias.original_name),
-            ) > (best.priority, len(best.original_name)):
-                best = alias
-        return AliasResolution(best.alias_name if best is not None else raw_name, best)
+        return AliasService.compile_rules(aliases).resolve(raw_name)
 
     async def apply_scope(
         self,
@@ -218,9 +255,10 @@ class AliasService:
 
         if scope == _SCOPE_PRODUCT:
             rows = await self._tx_repo.list_name_columns(user_id)
+            compiled_rules = self.compile_rules(aliases)
             changes: list[tuple[UUID, str, str, UUID | None]] = []
             for tx_id, name, current_value, current_alias_id in rows:
-                resolved = AliasService.resolve_with_alias(aliases, name)
+                resolved = compiled_rules.resolve(name)
                 normalized = normalize_product_name(resolved.value)
                 alias_id = resolved.alias.id if resolved.alias else None
                 if normalized != current_value or alias_id != current_alias_id:

@@ -27,6 +27,7 @@ from src.services.receipts import ReceiptService
 from src.services.sellers import SellerService
 from src.services.tags import TagService
 from src.services.transaction import TransactionService
+from src.services.user import UserService
 from test_receipt_parser import QR, sample_payload
 
 
@@ -36,7 +37,7 @@ async def _make_user(repo: UserRepository, email: str = "owner@test.ru"):
 
 async def _make_user_with_token(repo: UserRepository, token: str = "user-token"):
     user = await _make_user(repo)
-    return await repo.update(user, proverkacheka_token=token)
+    return await UserService(repo).update_proverkacheka_token(user, token)
 
 
 def _service(session, *, proverkacheka=None):

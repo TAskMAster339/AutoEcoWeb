@@ -1,6 +1,7 @@
-import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import test from 'node:test'
+import { resolve } from 'node:path'
+import { assert, test } from 'vitest'
+import type { TransactionView } from '../src/api/types'
 import {
   canStartMobileSelection,
   clampSwipeOffset,
@@ -15,16 +16,16 @@ import {
   settleSwipe,
   swipeEditAction,
   toggleSelectedId,
-} from '../src/lib/transactionInteractions.mjs'
+} from '../src/lib/transactionInteractions'
 import {
   createFrameScheduler,
   createRequestGate,
   isNearScrollEnd,
   nextPageOffset,
-} from '../src/lib/mobilePagination.mjs'
-import { getKeyboardViewport } from '../src/lib/visualViewport.mjs'
+} from '../src/lib/mobilePagination'
+import { getKeyboardViewport } from '../src/lib/visualViewport'
 
-const transactionView = (id, balance, expense) => ({
+const transactionView = (id: string, balance: number, expense: number): TransactionView => ({
   id,
   date: '2025-01-01',
   store: 'Магазин',
@@ -88,7 +89,7 @@ test('mobile pagination advances by received rows and stops at the total', () =>
 test('scroll checks are coalesced into one animation frame', () => {
   let callbackCount = 0
   let requestCount = 0
-  let queuedFrame = null
+  let queuedFrame: FrameRequestCallback | null = null
   const scheduler = createFrameScheduler(
     () => { callbackCount += 1 },
     (callback) => {
@@ -103,13 +104,13 @@ test('scroll checks are coalesced into one animation frame', () => {
   scheduler.schedule()
   scheduler.schedule()
   assert.equal(requestCount, 1)
-  queuedFrame(0)
+  queuedFrame?.(0)
   assert.equal(callbackCount, 1)
 })
 
 test('an active page request is shared instead of started twice', async () => {
   let requestCount = 0
-  let resolveRequest
+  let resolveRequest: (value: string) => void = () => undefined
   const request = createRequestGate(() => {
     requestCount += 1
     return new Promise((resolve) => { resolveRequest = resolve })
@@ -190,25 +191,20 @@ test('period alone does not enable the filter dot', () => {
 })
 
 test('reduced-motion stylesheet keeps feedback without spatial movement', async () => {
-  const css = await readFile(new URL('../src/index.css', import.meta.url), 'utf8')
+  const css = await readFile(resolve(process.cwd(), 'src/index.css'), 'utf8')
   const mediaBlock = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'))
   assert.match(mediaBlock, /mobile-transaction-card--enter/)
   assert.match(mediaBlock, /mobile-card-fade/)
   assert.match(mediaBlock, /transition-duration:\s*100ms\s*!important/)
 })
 
-test('receipt import refreshes paged transactions and their total before reloading the list', async () => {
+test('receipt import delegates cache refresh to the transaction domain invalidator', async () => {
   const source = await readFile(
-    new URL('../src/components/transactions/AddReceiptSheet.tsx', import.meta.url),
+    resolve(process.cwd(), 'src/components/transactions/AddReceiptSheet.tsx'),
     'utf8',
   )
-  const removePageCache = source.indexOf("removeQueries({ queryKey: userQueryKey('txPage') })")
-  const notifyViews = source.indexOf("setQueryData<number>(userQueryKey('txRevision')")
-
-  assert.notEqual(removePageCache, -1)
-  assert.notEqual(notifyViews, -1)
-  assert.ok(removePageCache < notifyViews)
-  assert.match(source, /invalidateQueries\(\{ queryKey: userQueryKey\('txTotal'\) \}\)/)
+  assert.match(source, /invalidateTransactionDomain\(queryClient\)/)
+  assert.notMatch(source, /txRevision|removeQueries/)
 })
 
 test('vertical movement does not hijack page scrolling', () => {

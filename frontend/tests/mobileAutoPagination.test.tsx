@@ -7,7 +7,7 @@ import { VerifiedAccessRoute } from '../src/components/common/RouteGuards'
 import { VirtualizedTransactionList } from '../src/components/transactions/VirtualizedTransactionList'
 import { useInfiniteScroll } from '../src/hooks/useInfiniteScroll'
 import { useAuthStore } from '../src/store/authStore'
-import { nextPageOffset } from '../src/lib/mobilePagination.mjs'
+import { nextPageOffset } from '../src/lib/mobilePagination'
 
 afterEach(() => useAuthStore.setState({ user: null, status: 'idle' }))
 

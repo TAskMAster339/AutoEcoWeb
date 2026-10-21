@@ -28,7 +28,7 @@ class AliasRepository:
             priority=priority,
         )
         self._session.add(alias)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(alias)
         return alias
 
@@ -111,10 +111,10 @@ class AliasRepository:
     async def update(self, alias: Alias, **fields: object) -> Alias:
         for field, value in fields.items():
             setattr(alias, field, value)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(alias)
         return alias
 
     async def delete(self, alias: Alias) -> None:
         await self._session.delete(alias)
-        await self._session.commit()
+        await self._session.flush()

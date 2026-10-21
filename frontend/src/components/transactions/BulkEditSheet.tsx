@@ -22,7 +22,7 @@ import { TagAutocomplete } from '../common/TagAutocomplete'
 import { messageFromError } from '../../api/client'
 import { useBulkUpdateTransactions } from '../../hooks/useTransactions'
 import type { Store, Tag, TransactionUpdatePatch } from '../../api/types'
-import { matchesOptionSearch } from '../../lib/transactionInteractions.mjs'
+import { matchesOptionSearch } from '../../lib/transactionInteractions'
 
 type FieldAction = 'unchanged' | 'set' | 'clear'
 type OperationAction = 'unchanged' | 'expense' | 'income'

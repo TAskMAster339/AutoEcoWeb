@@ -24,6 +24,7 @@ from src.services.aliases import AliasService
 from src.services.auto_tagging import AutoTaggingService
 from src.services.email import EmailService
 from src.services.import_export import ImportExportService
+from src.services.rate_limit import AuthRateLimiter
 from src.services.proverkacheka import ProverkachekaClient
 from src.services.sellers import SellerService
 from src.services.transaction import TransactionService
@@ -251,3 +252,10 @@ async def get_current_admin(current_user: CurrentUser) -> User:
 
 
 CurrentAdmin = Annotated[User, Depends(get_current_admin)]
+
+
+def get_auth_rate_limiter() -> AuthRateLimiter:
+    return AuthRateLimiter()
+
+
+AuthLimiter = Annotated[AuthRateLimiter, Depends(get_auth_rate_limiter)]

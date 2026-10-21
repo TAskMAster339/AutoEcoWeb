@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchMyLimits } from '../api/limits'
-import { userQueryKey } from '../lib/querySession'
+import { queryKeys } from '../lib/queryKeys'
 
 export function useUserLimits() {
   return useQuery({
-    queryKey: userQueryKey('user-limits'),
-    queryFn: fetchMyLimits,
+    queryKey: queryKeys.userLimits.all(),
+    queryFn: ({ signal }) => fetchMyLimits(signal),
     staleTime: 30_000,
   })
 }

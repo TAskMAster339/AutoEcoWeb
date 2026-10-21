@@ -3,6 +3,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.receipt import Receipt
 from src.models.seller import Seller
@@ -41,7 +42,7 @@ class ReceiptRepository:
             raw_json=raw_json,
         )
         self._session.add(receipt)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(receipt)
         return receipt
 
@@ -66,7 +67,7 @@ class ReceiptRepository:
         seller: str | None = None,
         search: str | None = None,
     ) -> list[Receipt]:
-        conditions: list[object] = [Receipt.user_id == user_id]
+        conditions: list[ColumnElement[bool]] = [Receipt.user_id == user_id]
         if date_from is not None:
             conditions.append(Receipt.check_datetime >= date_from)
         if date_to is not None:
@@ -109,10 +110,10 @@ class ReceiptRepository:
     async def update(self, receipt: Receipt, **fields: object) -> Receipt:
         for field, value in fields.items():
             setattr(receipt, field, value)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(receipt)
         return receipt
 
     async def delete(self, receipt: Receipt) -> None:
         await self._session.delete(receipt)
-        await self._session.commit()
+        await self._session.flush()

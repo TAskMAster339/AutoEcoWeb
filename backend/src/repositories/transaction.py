@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from datetime import date, datetime
 from decimal import Decimal
 from typing import cast
@@ -95,25 +96,25 @@ def _filters(  # noqa: PLR0913
     """  # noqa: RUF002
     conditions: list[ColumnElement[bool]] = []
     if date_from is not None:
-        conditions.append(Transaction.check_datetime >= date_from)  # type: ignore[arg-type]
+        conditions.append(Transaction.check_datetime >= date_from)
     if date_to is not None:
-        conditions.append(Transaction.check_datetime <= date_to)  # type: ignore[arg-type]
+        conditions.append(Transaction.check_datetime <= date_to)
     if tag_ids:
-        conditions.append(Transaction.tag_id.in_(tag_ids))  # type: ignore[arg-type]
+        conditions.append(Transaction.tag_id.in_(tag_ids))
     elif untagged:
-        conditions.append(Transaction.tag_id.is_(None))  # type: ignore[arg-type]
+        conditions.append(Transaction.tag_id.is_(None))
     if seller_names:
         conditions.append(
             _store_expr(own_seller, receipt_seller).in_(seller_names),
-        )  # type: ignore[arg-type]
+        )
     if amount_min is not None:
-        conditions.append(Transaction.amount >= amount_min)  # type: ignore[arg-type]
+        conditions.append(Transaction.amount >= amount_min)
     if amount_max is not None:
-        conditions.append(Transaction.amount <= amount_max)  # type: ignore[arg-type]
+        conditions.append(Transaction.amount <= amount_max)
     if operation_kind == "income":
-        conditions.append(Transaction.operation_type.in_(_INCOME_TYPES))  # type: ignore[arg-type]
+        conditions.append(Transaction.operation_type.in_(_INCOME_TYPES))
     elif operation_kind == "expense":
-        conditions.append(Transaction.operation_type.in_(_EXPENSE_TYPES))  # type: ignore[arg-type]
+        conditions.append(Transaction.operation_type.in_(_EXPENSE_TYPES))
     if search:
         q = f"%{search}%"
         conditions.append(
@@ -125,7 +126,7 @@ def _filters(  # noqa: PLR0913
                 Transaction.normalized_name.ilike(q),
                 Transaction.comment.ilike(q),
                 _store_expr(own_seller, receipt_seller).ilike(q),
-            ),  # type: ignore[arg-type]
+            ),
         )
     return conditions
 
@@ -136,7 +137,7 @@ class TransactionRepository:
 
     async def create(self, tx: Transaction) -> Transaction:
         self._session.add(tx)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(tx)
         return tx
 
@@ -150,7 +151,7 @@ class TransactionRepository:
         for tx in transactions:
             tx.receipt_id = receipt_id
         self._session.add_all(transactions)
-        await self._session.commit()
+        await self._session.flush()
         return transactions
 
     async def create_many_standalone(
@@ -161,7 +162,7 @@ class TransactionRepository:
         if not transactions:
             return []
         self._session.add_all(transactions)
-        await self._session.commit()
+        await self._session.flush()
         return transactions
 
     async def list_by_receipt(self, receipt_id: UUID) -> list[Transaction]:
@@ -191,6 +192,53 @@ class TransactionRepository:
         rows = (await self._session.execute(stmt)).all()
         return [(tx, seller_name) for tx, seller_name in rows]
 
+    async def iter_all_chunks(
+        self,
+        user_id: UUID,
+        *,
+        chunk_size: int = 1000,
+    ) -> AsyncIterator[list[tuple[Transaction, str | None]]]:
+        """Keyset-page transactions so large exports do not retain ORM rows."""
+        last_datetime: datetime | None = None
+        last_id: UUID | None = None
+        while True:
+            stmt = (
+                select(
+                    Transaction,
+                    func.coalesce(
+                        OwnSeller.normalized_name,
+                        ReceiptSeller.normalized_name,
+                    ),
+                )
+                .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+                .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+                .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
+                .where(Transaction.user_id == user_id)
+            )
+            if last_datetime is not None and last_id is not None:
+                stmt = stmt.where(
+                    or_(
+                        Transaction.check_datetime > last_datetime,
+                        and_(
+                            Transaction.check_datetime == last_datetime,
+                            Transaction.id > last_id,
+                        ),
+                    )
+                )
+            stmt = stmt.order_by(
+                Transaction.check_datetime.asc(),
+                Transaction.id.asc(),
+            ).limit(chunk_size)
+            result = (await self._session.execute(stmt)).all()
+            if not result:
+                break
+            chunk = [(tx, seller_name) for tx, seller_name in result]
+            yield chunk
+            last_datetime = chunk[-1][0].check_datetime
+            last_id = chunk[-1][0].id
+            if len(chunk) < chunk_size:
+                break
+
     async def list_by_receipts(self, receipt_ids: list[UUID]) -> list[Transaction]:
         if not receipt_ids:
             return []
@@ -211,6 +259,20 @@ class TransactionRepository:
         )
         return await self._session.scalar(stmt)
 
+    async def list_owned_for_update(
+        self,
+        user_id: UUID,
+        tx_ids: list[UUID],
+    ) -> list[Transaction]:
+        if not tx_ids:
+            return []
+        stmt = (
+            select(Transaction)
+            .where(Transaction.user_id == user_id, Transaction.id.in_(tx_ids))
+            .with_for_update(of=Transaction)
+        )
+        return list((await self._session.scalars(stmt)).all())
+
     async def list_page(  # noqa: PLR0913
         self,
         *,
@@ -228,7 +290,10 @@ class TransactionRepository:
         operation_kind: str | None = None,
         sort_by: str = "date",
         sort_dir: str = "desc",
-    ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int]:
+        after_datetime: datetime | None = None,
+        after_id: UUID | None = None,
+        include_total: bool = True,
+    ) -> tuple[list[tuple[Transaction, str | None, Decimal]], int | None]:
         """Страница транзакций (offset) + эффективный продавец + баланс.
 
         Баланс — оконная функция по ВСЕМ транзакциям пользователя; фильтры,
@@ -236,7 +301,7 @@ class TransactionRepository:
         бесконечному скроллу AG Grid (startRow/endRow), keyset её не умеет.
         """  # noqa: RUF002
         conditions: list[ColumnElement[bool]] = [
-            Transaction.user_id == user_id,  # type: ignore[arg-type]
+            Transaction.user_id == user_id,
             *_filters(
                 date_from=date_from,
                 date_to=date_to,
@@ -269,7 +334,7 @@ class TransactionRepository:
             .subquery()
         )
 
-        order_col: ColumnElement = _SORTABLE.get(sort_by, Transaction.check_datetime)  # type: ignore[assignment]
+        order_col: ColumnElement = _SORTABLE.get(sort_by, Transaction.check_datetime)
         if sort_by == "balance":
             order_col = balance_subq.c.balance
         order_expr = order_col.asc() if sort_dir == "asc" else order_col.desc()
@@ -287,20 +352,38 @@ class TransactionRepository:
             .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
             .outerjoin(balance_subq, balance_subq.c.tx_id == Transaction.id)
             .where(*conditions)
-            .order_by(order_expr, Transaction.id.desc())
-            .limit(limit)
-            .offset(offset)
         )
+        if after_datetime is not None and after_id is not None:
+            # Cursor mode is intentionally limited to the mobile feed's stable
+            # default order: date ASC, id DESC. AG Grid keeps offset paging for
+            # arbitrary column sorting.
+            stmt = stmt.where(
+                or_(
+                    Transaction.check_datetime > after_datetime,
+                    and_(
+                        Transaction.check_datetime == after_datetime,
+                        Transaction.id < after_id,
+                    ),
+                )
+            )
+        stmt = (
+            stmt.order_by(order_expr, Transaction.id.desc())
+            .limit(limit)
+        )
+        if after_datetime is None:
+            stmt = stmt.offset(offset)
         rows = (await self._session.execute(stmt)).all()
 
-        count_stmt = (
-            select(func.count(Transaction.id))
-            .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
-            .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
-            .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
-            .where(*conditions)
-        )
-        total = int((await self._session.execute(count_stmt)).scalar_one())
+        total: int | None = None
+        if include_total:
+            count_stmt = (
+                select(func.count(Transaction.id))
+                .outerjoin(Receipt, Receipt.id == Transaction.receipt_id)
+                .outerjoin(OwnSeller, OwnSeller.id == Transaction.seller_id)
+                .outerjoin(ReceiptSeller, ReceiptSeller.id == Receipt.seller_id)
+                .where(*conditions)
+            )
+            total = int((await self._session.execute(count_stmt)).scalar_one())
 
         return [
             (tx, seller_name_, balance) for tx, seller_name_, balance in rows
@@ -706,12 +789,12 @@ class TransactionRepository:
         for day_, value, count_ in rows:
             wd = date.fromisoformat(str(day_)).isoweekday()
             cur = acc.setdefault(wd, [Decimal("0"), 0])
-            cur[0] += Decimal(value or 0)  # type: ignore[operator]
+            cur[0] += Decimal(value or 0)
             cur[1] += int(count_)
         return [
             (
                 wd,
-                Decimal(acc.get(wd, [Decimal("0"), 0])[0]),  # type: ignore[arg-type]
+                Decimal(acc.get(wd, [Decimal("0"), 0])[0]),
                 int(acc.get(wd, [0, 0])[1]),
             )
             for wd in range(1, 8)
@@ -739,7 +822,7 @@ class TransactionRepository:
         Только расходы с ценой (price или amount) > 0.
         """  # noqa: RUF002
         conditions: list[ColumnElement[bool]] = [
-            Transaction.user_id == user_id,  # type: ignore[arg-type]
+            Transaction.user_id == user_id,
             Transaction.operation_type.in_(_EXPENSE_TYPES),
             or_(
                 Transaction.price.is_not(None),
@@ -747,9 +830,9 @@ class TransactionRepository:
             ),
         ]
         if date_from is not None:
-            conditions.append(Transaction.check_datetime >= date_from)  # type: ignore[arg-type]
+            conditions.append(Transaction.check_datetime >= date_from)
         if date_to is not None:
-            conditions.append(Transaction.check_datetime <= date_to)  # type: ignore[arg-type]
+            conditions.append(Transaction.check_datetime <= date_to)
         if not is_regex:
             q = f"%{name}%"
             conditions.append(
@@ -817,13 +900,13 @@ class TransactionRepository:
     async def update(self, tx: Transaction, **fields: object) -> Transaction:
         for field, value in fields.items():
             setattr(tx, field, value)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(tx)
         return tx
 
     async def delete(self, tx: Transaction) -> None:
         await self._session.delete(tx)
-        await self._session.commit()
+        await self._session.flush()
 
     # ---------- применение алиасов ----------
 
@@ -871,4 +954,4 @@ class TransactionRepository:
                 for tx_id, _name, normalized, alias_id in changes
             ],
         )
-        await self._session.commit()
+        await self._session.flush()

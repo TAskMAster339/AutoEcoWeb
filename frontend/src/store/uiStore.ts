@@ -4,6 +4,7 @@
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { TransactionUrlFilters } from '../lib/transactionFilterUrl'
 
 export type PeriodKey = 'thisMonth' | 'lastMonth' | '3m' | 'all' | 'custom' | 'month' | 'day'
 export type ThemeMode = 'light' | 'dark' | 'system'
@@ -67,6 +68,7 @@ interface UiState {
     operationFilter: OperationFilter
     periodKey: PeriodKey
   }) => void
+  applyUrlFilters: (filters: TransactionUrlFilters) => void
   openAddMenu: () => void
   closeAddMenu: () => void
   openReceiptSheet: () => void
@@ -125,6 +127,7 @@ export const useUiStore = create<UiState>()(
       setStoreFilters: (storeFilters) => set({ storeFilters }),
       applyFilters: ({ search, tagFilterIds, untaggedOnly, storeFilters, amountMin, amountMax, operationFilter, periodKey }) =>
         set({ search, tagFilterIds, untaggedOnly, storeFilters, amountMin, amountMax, operationFilter, periodKey }),
+      applyUrlFilters: (filters) => set(filters),
       openAddMenu: () => set({ addMenuOpen: true }),
       closeAddMenu: () => set({ addMenuOpen: false }),
       openReceiptSheet: () => set({ receiptSheetOpen: true }),

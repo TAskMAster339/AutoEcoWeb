@@ -11,7 +11,18 @@ import { messageFromError } from '../api/client'
 import type { User } from '../api/types'
 import { clearQuerySession, setQuerySessionUser } from '../lib/querySession'
 
-export type AuthStatus = 'idle' | 'loading' | 'authenticated' | 'unauthenticated'
+export type AuthStatus =
+  | 'idle'
+  | 'loading'
+  | 'authenticated'
+  | 'unauthenticated'
+  | 'offline'
+  | 'error'
+
+function errorStatus(error: unknown): number | null {
+  if (typeof error !== 'object' || error === null || !('status' in error)) return null
+  return typeof error.status === 'number' ? error.status : null
+}
 
 interface AuthState {
   user: User | null
@@ -42,10 +53,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const user = await authApi.fetchMe()
       set({ user, status: 'authenticated' })
-    } catch {
-      // client already attempted a refresh; if it failed, the backend cleared
-      // the cookies. Nothing to wipe locally — tokens never live in JS.
-      set({ user: null, status: 'unauthenticated' })
+    } catch (err) {
+      const status = errorStatus(err)
+      if (status === 401) {
+        // Only an explicit authentication failure means that the session ended.
+        set({ user: null, status: 'unauthenticated', error: null })
+        return
+      }
+      set({
+        status: status === 0 ? 'offline' : 'error',
+        error: messageFromError(err),
+      })
     }
   },
 

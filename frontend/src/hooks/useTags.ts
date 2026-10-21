@@ -1,20 +1,20 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/tags'
 import type { TagDraft, TagUpdatePatch } from '../api/tags'
-import { userQueryKey } from '../lib/querySession'
+import { queryKeys } from '../lib/queryKeys'
 
 export function useTags() {
   return useQuery({
-    queryKey: userQueryKey('tags'),
-    queryFn: api.fetchTags,
+    queryKey: queryKeys.tags.all(),
+    queryFn: ({ signal }) => api.fetchTags(signal),
     staleTime: 30_000,
   })
 }
 
 export function useInfiniteTags() {
   return useInfiniteQuery({
-    queryKey: userQueryKey('tags-page'),
-    queryFn: ({ pageParam }) => api.fetchTagsPage(30, pageParam),
+    queryKey: queryKeys.tags.pages(),
+    queryFn: ({ pageParam, signal }) => api.fetchTagsPage(30, pageParam, signal),
     initialPageParam: 0,
     getNextPageParam: (last) => (last.next_cursor == null ? undefined : Number(last.next_cursor)),
     staleTime: 30_000,
@@ -22,9 +22,9 @@ export function useInfiniteTags() {
 }
 
 function invalidateTags(queryClient: ReturnType<typeof useQueryClient>) {
-  void queryClient.invalidateQueries({ queryKey: userQueryKey('tags') })
-  void queryClient.invalidateQueries({ queryKey: userQueryKey('tags-page') })
-  void queryClient.invalidateQueries({ queryKey: userQueryKey('user-limits') })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.tags.all() })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.tags.pages() })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.userLimits.all() })
 }
 
 export function useCreateTag() {

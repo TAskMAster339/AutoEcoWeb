@@ -5,6 +5,7 @@ SMTP в тестах не настроен (SMTP_HOST пуст), поэтому 
 """
 
 from datetime import datetime, timedelta, timezone
+import hashlib
 
 import pytest
 from fastapi import HTTPException
@@ -290,6 +291,30 @@ async def test_login_blocked_for_pending_and_verified(auth, email_service, sessi
 
     login = await auth.login(UserLogin(email=user.email, password="password123"))
     assert login.user.status == UserStatus.VERIFIED
+
+
+async def test_refresh_rotation_allows_short_cross_tab_grace(
+    auth, email_service, session
+):
+    from src.schemas.user import UserLogin
+
+    user = await auth.register(
+        UserCreate(email="tabs@example.com", password="password123")
+    )
+    await auth.verify_email(user.email, _last_code(email_service))
+    login = await auth.login(UserLogin(email=user.email, password="password123"))
+
+    first_tab = await auth.refresh(login.refresh_token)
+    second_tab = await auth.refresh(login.refresh_token)
+
+    assert first_tab.refresh_token != second_tab.refresh_token
+    repo = RefreshTokenRepository(session)
+    first_hash = hashlib.sha256(first_tab.refresh_token.encode()).hexdigest()
+    second_hash = hashlib.sha256(second_tab.refresh_token.encode()).hexdigest()
+    first_token = await repo.get_active(first_hash)
+    second_token = await repo.get_active(second_hash)
+    assert first_token is not None and second_token is not None
+    assert first_token.family_id == second_token.family_id
 
 
 async def test_admin_can_activate_verified_user(auth, email_service, session):

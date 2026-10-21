@@ -17,7 +17,7 @@ import { useUiStore } from '../../store/uiStore'
 import { createReceiptFromQr } from '../../api/receipts'
 import { messageFromError } from '../../api/client'
 import { useQueryClient } from '@tanstack/react-query'
-import { userQueryKey } from '../../lib/querySession'
+import { invalidateTransactionDomain } from '../../lib/queryInvalidation'
 
 interface Html5QrcodeLike {
     start: (
@@ -49,21 +49,7 @@ export function AddReceiptSheet() {
     const scannerRef = useRef<Html5QrcodeLike | null>(null)
 
     const invalidateDomain = () => {
-        // A receipt creates transactions in bulk. Mobile and desktop keep their
-        // paged rows under txPage, so discard those pages before notifying the
-        // views; otherwise a cached first page (often exactly 50 rows) keeps an
-        // outdated total and prevents the mobile sentinel from loading the rest.
-        queryClient.removeQueries({ queryKey: userQueryKey('txPage') })
-        queryClient.setQueryData<number>(userQueryKey('txRevision'), (revision = 0) => revision + 1)
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('txTotal') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('receipts') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('transactions') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('summary') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('analytics') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('stores') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('tags') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('tags-page') })
-        void queryClient.invalidateQueries({ queryKey: userQueryKey('user-limits') })
+        void invalidateTransactionDomain(queryClient)
     }
 
     const stopScanner = () => {
@@ -150,7 +136,7 @@ export function AddReceiptSheet() {
         <BottomSheet open={open} onClose={close} title="Сканирование чека" maxWidth={520}>
             {!manualMode ? (
                 <Stack spacing={1.5}>
-                    <Card sx={{ position: 'relative', width: '100%', aspectRatio: { xs: '4 / 5', sm: '4 / 3' }, minHeight: 300, overflow: 'hidden', bgcolor: '#0b0b0f', borderColor: 'transparent' }}>
+                    <Card sx={(theme) => ({ position: 'relative', width: '100%', aspectRatio: { xs: '4 / 5', sm: '4 / 3' }, minHeight: 300, overflow: 'hidden', bgcolor: theme.semantic.scanner.canvas, borderColor: 'transparent' })}>
                         <Box
                             id="qr-reader-receipt"
                             sx={{
@@ -163,8 +149,8 @@ export function AddReceiptSheet() {
                                 '& img': { display: 'none' },
                             }}
                         />
-                        <Box aria-hidden sx={{ position: 'absolute', inset: '50% auto auto 50%', width: { xs: 210, sm: 230 }, height: { xs: 210, sm: 230 }, transform: 'translate(-50%, -50%)', border: '2px solid rgba(255,255,255,0.9)', borderRadius: '8px', boxShadow: '0 0 0 999px rgba(0,0,0,0.38)', pointerEvents: 'none' }} />
-                        <Box sx={{ position: 'absolute', left: 12, right: 12, bottom: 12, p: 1.25, borderRadius: '8px', bgcolor: 'rgba(12,12,16,0.72)', color: '#fff', backdropFilter: 'blur(8px)', textAlign: 'center', pointerEvents: 'none' }}>
+                        <Box aria-hidden sx={(theme) => ({ position: 'absolute', inset: '50% auto auto 50%', width: { xs: 210, sm: 230 }, height: { xs: 210, sm: 230 }, transform: 'translate(-50%, -50%)', border: `2px solid ${theme.semantic.scanner.frame}`, borderRadius: '8px', boxShadow: `0 0 0 999px ${theme.semantic.scanner.scrim}`, pointerEvents: 'none' })} />
+                        <Box sx={(theme) => ({ position: 'absolute', left: 12, right: 12, bottom: 12, p: 1.25, borderRadius: '8px', bgcolor: theme.semantic.scanner.caption, color: theme.semantic.scanner.captionText, backdropFilter: 'blur(8px)', textAlign: 'center', pointerEvents: 'none' })}>
                             <Typography sx={{ fontSize: 13, fontWeight: 700 }}>Поместите QR-код в рамку</Typography>
                             <Typography sx={{ fontSize: 11.5, opacity: 0.75 }}>Чек загрузится автоматически</Typography>
                         </Box>

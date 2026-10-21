@@ -22,7 +22,7 @@ import {
     useTheme,
 } from '@mui/material'
 import { useQueryClient } from '@tanstack/react-query'
-import { userQueryKey } from '../lib/querySession'
+import { invalidateTransactionDomain } from '../lib/queryInvalidation'
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew'
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
@@ -50,7 +50,8 @@ function formatDate(iso: string | null): string {
     return `${day}.${month}.${year}`
 }
 
-function formatMoney(value: string): string {
+function formatMoney(value: string | null): string {
+    if (value === null) return '—'
     const number = Number(value)
     if (!Number.isFinite(number)) return '—'
     return `${number.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`
@@ -113,12 +114,13 @@ export function DataPage() {
                 category: row.category,
                 store: row.store,
                 description: row.description,
-                quantity: row.quantity,
-                unit: row.unit,
-                price: row.price,
-                comment: row.comment,
-                income: row.income,
-                expense: row.expense,
+                quantity: row.quantity ?? undefined,
+                unit: row.unit ?? undefined,
+                price: row.price ?? undefined,
+                comment: row.comment ?? undefined,
+                tags: row.tags,
+                income: row.income ?? undefined,
+                expense: row.expense ?? undefined,
                 operation_kind: row.operation_kind,
                 allow_duplicate: row.duplicate !== null,
             }))
@@ -128,12 +130,7 @@ export function DataPage() {
             const importResult = await runImport(rows)
             setResult(importResult)
             setStage('done')
-            void queryClient.invalidateQueries({ queryKey: userQueryKey('transactions') })
-            void queryClient.invalidateQueries({ queryKey: userQueryKey('summary') })
-            void queryClient.invalidateQueries({ queryKey: userQueryKey('analytics') })
-            void queryClient.invalidateQueries({ queryKey: userQueryKey('tags') })
-            void queryClient.invalidateQueries({ queryKey: userQueryKey('receipts') })
-            void queryClient.invalidateQueries({ queryKey: userQueryKey('user-limits') })
+            void invalidateTransactionDomain(queryClient)
         } catch (caught) {
             setError(messageFromError(caught))
             setStage('error')
@@ -577,9 +574,9 @@ function PreviewTableRow({ row, checked, highlighted, onToggle, setRef }: {
             selected={highlighted}
             sx={{
                 bgcolor: hasErrors
-                    ? (theme.palette.mode === 'dark' ? 'rgba(220,38,38,0.12)' : colors.redSoft)
-                    : isDuplicate ? (theme.palette.mode === 'dark' ? 'rgba(245,158,11,0.12)' : colors.amberSoft) : undefined,
-                '&.Mui-selected, &.Mui-selected:hover': { bgcolor: hasErrors ? 'rgba(220, 38, 38, 0.2)' : undefined },
+                    ? theme.semantic.feedback.error
+                    : isDuplicate ? theme.semantic.feedback.warning : undefined,
+                '&.Mui-selected, &.Mui-selected:hover': { bgcolor: hasErrors ? theme.semantic.feedback.errorSelected : undefined },
                 '& td': { borderColor: 'divider', verticalAlign: 'top' },
             }}
         >
@@ -617,8 +614,8 @@ function PreviewMobileRow({ row, checked, highlighted, onToggle, setRef }: {
                 borderColor: highlighted ? 'error.main' : 'divider',
                 borderRadius: '8px',
                 bgcolor: hasErrors
-                    ? (theme.palette.mode === 'dark' ? 'rgba(220,38,38,0.12)' : colors.redSoft)
-                    : isDuplicate ? (theme.palette.mode === 'dark' ? 'rgba(245,158,11,0.12)' : colors.amberSoft) : 'background.paper',
+                    ? theme.semantic.feedback.error
+                    : isDuplicate ? theme.semantic.feedback.warning : 'background.paper',
                 boxShadow: highlighted ? `0 0 0 2px ${theme.palette.error.main}22` : 'none',
             }}
         >
@@ -644,7 +641,7 @@ function PreviewMobileRow({ row, checked, highlighted, onToggle, setRef }: {
 function ImportResultBanner({ result }: { result: ImportResult }) {
     const theme = useTheme()
     return (
-        <Stack spacing={1} sx={{ p: 2, bgcolor: theme.palette.mode === 'dark' ? 'rgba(22,163,74,0.12)' : colors.greenSoft, borderBottom: '1px solid', borderColor: 'divider' }} role="status">
+        <Stack spacing={1} sx={{ p: 2, bgcolor: theme.semantic.feedback.success, borderBottom: '1px solid', borderColor: 'divider' }} role="status">
             <Stack direction="row" spacing={1} alignItems="center">
                 <CheckCircleOutlineIcon sx={{ color: colors.green }} />
                 <Typography sx={{ color: colors.green, fontWeight: 700 }}>Импортировано транзакций: {result.imported}</Typography>

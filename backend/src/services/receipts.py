@@ -3,6 +3,12 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from src.core.cursor import decode_cursor, encode_cursor
+from src.core.config import settings
+from src.core.encryption import (
+    EncryptedValueError,
+    EncryptionConfigurationError,
+    EnvelopeEncryption,
+)
 from src.models.receipt import Receipt
 from src.models.user import User
 from src.repositories.alias import AliasRepository
@@ -84,12 +90,6 @@ class ReceiptService:
             user.id,
             normalized.seller_name,
         )
-        # Seller creation can commit and release the first quota lock.
-        await self._transaction_service.ensure_new_receipt(
-            user.id,
-            len(normalized.items),
-        )
-
         receipt = await self._repo.create(
             user_id=user.id,
             qr=normalized.qr,
@@ -103,17 +103,12 @@ class ReceiptService:
             balance_after=data.balance_after,
             raw_json=normalized.raw_json,
         )
-        # транзакции — ответственность TransactionService
-        try:
-            await self._transaction_service.create_for_receipt(
-                receipt,
-                normalized.items,
-                user,
-            )
-        except Exception:
-            await self._repo.delete(receipt)
-            await self._seller_service.delete_if_unused(user.id, seller.id)
-            raise
+        # Транзакции и чек пишутся в одной use-case транзакции.
+        await self._transaction_service.create_for_receipt(
+            receipt,
+            normalized.items,
+            user,
+        )
         return receipt
 
     async def create_manual(
@@ -134,11 +129,6 @@ class ReceiptService:
             user.id,
             data.seller_name,
         )
-        await self._transaction_service.ensure_new_receipt(
-            user.id,
-            len(data.transactions or []),
-        )
-
         receipt = await self._repo.create(
             user_id=user.id,
             qr=None,
@@ -152,17 +142,12 @@ class ReceiptService:
             balance_after=data.balance_after,
             raw_json={},
         )
-        # транзакции ручного чека — ответственность TransactionService
-        try:
-            await self._transaction_service.create_manual_for_receipt(
-                receipt,
-                data.transactions or [],
-                user,
-            )
-        except Exception:
-            await self._repo.delete(receipt)
-            await self._seller_service.delete_if_unused(user.id, seller.id)
-            raise
+        # Ручной чек и его строки атомарны.
+        await self._transaction_service.create_manual_for_receipt(
+            receipt,
+            data.transactions or [],
+            user,
+        )
         return receipt
 
     async def update(
@@ -262,8 +247,8 @@ class ReceiptService:
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Сервис загрузки чеков proverkacheka не настроен",
                 )
-            token = user.proverkacheka_token
-            if not token:
+            encrypted_token = user.proverkacheka_token
+            if not encrypted_token:
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
                     detail=(
@@ -271,6 +256,15 @@ class ReceiptService:
                         "(PUT /auth/me/proverkacheka-token)"
                     ),
                 )
+            try:
+                token = EnvelopeEncryption(
+                    settings.proverkacheka_encryption_key
+                ).decrypt(encrypted_token)
+            except (EncryptionConfigurationError, EncryptedValueError) as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Не удалось расшифровать токен proverkacheka",
+                ) from exc
             try:
                 payload = await self._proverkacheka.fetch(data.qr, token=token)
             except ProverkachekaError as exc:

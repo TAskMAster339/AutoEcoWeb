@@ -2,6 +2,8 @@
 
 import datetime
 import io
+import os
+import zipfile
 from collections.abc import Sequence
 from decimal import Decimal
 
@@ -20,7 +22,9 @@ from src.services.import_export import (
     ImportFormatError,
     build_export_workbook,
     parse_import_file,
+    ImportLimitError,
 )
+from src.services import import_export as import_export_module
 from src.services.sellers import SellerService
 
 HEADER = ["Дата", "Категория", "Магазин", "Описание", "Доход", "Расход"]
@@ -173,6 +177,29 @@ def test_parse_xlsx_blank_rows_skipped():
     )
     preview = parse_import_file("x.xlsx", content)
     assert preview.total == 1
+
+
+def test_parse_import_enforces_row_limit_during_iteration(monkeypatch):
+    monkeypatch.setattr(import_export_module, "MAX_IMPORT_ROWS", 2)
+    content = (
+        "Дата,Описание,Доход,Расход\n"
+        "2026-01-01,One,,1\n"
+        "2026-01-02,Two,,2\n"
+        "2026-01-03,Three,,3\n"
+    ).encode()
+
+    with pytest.raises(ImportLimitError, match="больше 2 строк"):
+        parse_import_file("limited.csv", content)
+
+
+def test_parse_xlsx_rejects_excessive_uncompressed_archive(monkeypatch):
+    monkeypatch.setattr(import_export_module, "MAX_XLSX_UNCOMPRESSED_SIZE", 16)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("xl/sharedStrings.xml", "x" * 17)
+
+    with pytest.raises(ImportLimitError, match="Распакованный XLSX"):
+        parse_import_file("bomb.xlsx", buffer.getvalue())
 
 
 def test_parse_csv_semicolon_and_cp1251():
@@ -479,3 +506,29 @@ async def test_export_rows_includes_quantity_price_and_comment(session):
     assert rows[0].unit == "кг"
     assert rows[0].price == Decimal("42.30")
     assert rows[0].comment == "Для дома"
+
+
+async def test_export_file_streams_chunked_rows_to_disk(session):
+    user = await _make_user(session)
+    service = _service(session)
+    await service.import_rows(
+        user,
+        [
+            _row(date=datetime.date(2026, 1, 1), description="First"),
+            _row(date=datetime.date(2026, 2, 1), description="Second"),
+        ],
+    )
+
+    path = await service.export_file(user, layout="monthly")
+    try:
+        workbook = openpyxl.load_workbook(path, read_only=True)
+        try:
+            assert workbook.sheetnames == ["Январь 2026", "Февраль 2026"]
+            assert (
+                sum(sum(1 for _row in sheet.iter_rows()) - 1 for sheet in workbook.worksheets)
+                == 2
+            )
+        finally:
+            workbook.close()
+    finally:
+        os.unlink(path)

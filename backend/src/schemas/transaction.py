@@ -119,6 +119,7 @@ class TransactionOut(BaseModel):
 class StoreResponse(BaseModel):
     """Магазин для фильтра: исходное, normalized и применённый алиас."""
 
+    seller_id: UUID
     seller_name: str
     normalized_seller_name: str | None = None
     alias_id: UUID | None = None
@@ -212,6 +213,23 @@ class TransactionUpdate(BaseModel):
     datetime: dt | None = None
     tag_id: UUID | None = None
     comment: str | None = Field(default=None, max_length=1000)
+
+
+class TransactionBulkUpdate(BaseModel):
+    """Atomic patch applied to an owned set of transactions."""
+
+    ids: list[UUID] = Field(min_length=1, max_length=1000)
+    patch: TransactionUpdate
+
+    @model_validator(mode="after")
+    def _unique_ids(self) -> "TransactionBulkUpdate":
+        if len(set(self.ids)) != len(self.ids):
+            raise ValueError("Transaction IDs must be unique")
+        return self
+
+
+class TransactionBulkUpdateResult(BaseModel):
+    updated: int
 
 
 class TransactionInReceipt(BaseModel):

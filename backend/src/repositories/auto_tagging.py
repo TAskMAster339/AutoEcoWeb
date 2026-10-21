@@ -45,11 +45,11 @@ class AutoTaggingRepository:
                 ),
             ),
         )
-        await self._session.commit()
+        await self._session.flush()
 
     async def set_enabled(self, user: User, enabled: bool) -> User:
         user.auto_tagging_enabled = enabled
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(user)
         return user
 
@@ -68,7 +68,7 @@ class AutoTaggingRepository:
         else:
             for field, value in fields.items():
                 setattr(state, field, value)
-        await self._session.commit()
+        await self._session.flush()
         await self._session.refresh(state)
         return state
 
@@ -154,7 +154,7 @@ class AutoTaggingRepository:
             .where(Transaction.user_id == user_id, Transaction.tag_id == tag_id)
             .values(tag_source=None, tag_confidence=None),
         )
-        await self._session.commit()
+        await self._session.flush()
         return has_manual
 
     @staticmethod

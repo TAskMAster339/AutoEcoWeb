@@ -3,15 +3,15 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchAnalytics, fetchPriceChart, fetchSummary } from '../api/summary'
 import { useFilterParams, usePeriodParams } from '../lib/filters'
 import type { TransactionsPageParams } from '../api/transactions'
-import { userQueryKey } from '../lib/querySession'
+import { queryKeys } from '../lib/queryKeys'
 
 /** Сводка: по умолчанию учитывает фильтры таблицы; другая страница передаёт свои. */
 export function useSummary(params?: TransactionsPageParams) {
   const tableParams = useFilterParams()
   const queryParams = params ?? tableParams
   return useQuery({
-    queryKey: userQueryKey('summary', queryParams),
-    queryFn: () => fetchSummary(queryParams),
+    queryKey: queryKeys.summary.filtered(queryParams),
+    queryFn: ({ signal }) => fetchSummary(queryParams, signal),
     staleTime: 30_000,
   })
 }
@@ -20,8 +20,8 @@ export function useSummary(params?: TransactionsPageParams) {
 export function usePeriodSummary() {
   const params = usePeriodParams()
   return useQuery({
-    queryKey: userQueryKey('summary', params),
-    queryFn: () => fetchSummary(params),
+    queryKey: queryKeys.summary.filtered(params),
+    queryFn: ({ signal }) => fetchSummary(params, signal),
     staleTime: 30_000,
   })
 }
@@ -30,8 +30,8 @@ export function usePeriodSummary() {
 export function useAnalytics() {
   const params = usePeriodParams()
   return useQuery({
-    queryKey: userQueryKey('analytics', params),
-    queryFn: () => fetchAnalytics(params),
+    queryKey: queryKeys.analytics.filtered(params),
+    queryFn: ({ signal }) => fetchAnalytics(params, signal),
     staleTime: 60_000,
   })
 }
@@ -43,8 +43,8 @@ export function usePriceChart(name: string, isRegex: boolean) {
   const query = name.trim()
   const enabled = query.length > 0
   return useQuery({
-    queryKey: userQueryKey('price-chart', query, isRegex, period),
-    queryFn: () => fetchPriceChart(query, isRegex, period),
+    queryKey: queryKeys.priceChart.filtered(query, isRegex, period),
+    queryFn: ({ signal }) => fetchPriceChart(query, isRegex, period, signal),
     enabled,
     staleTime: 60_000,
     retry: 1,

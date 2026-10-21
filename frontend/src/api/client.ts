@@ -45,9 +45,14 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
 
 export const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
-let refreshPromise: Promise<boolean> | null = null
+type RefreshResult =
+  | { kind: 'refreshed' }
+  | { kind: 'unauthorized' }
+  | { kind: 'error'; error: ApiError }
 
-async function tryRefresh(): Promise<boolean> {
+let refreshPromise: Promise<RefreshResult> | null = null
+
+async function tryRefresh(): Promise<RefreshResult> {
   // The refresh token lives in an HttpOnly cookie — the browser sends it with
   // the request automatically; the backend rotates both cookies on success.
   try {
@@ -55,9 +60,17 @@ async function tryRefresh(): Promise<boolean> {
       method: 'POST',
       credentials: 'include',
     })
-    return res.ok
+    if (res.ok) return { kind: 'refreshed' }
+    if (res.status === 401 || res.status === 403) return { kind: 'unauthorized' }
+    return {
+      kind: 'error',
+      error: new ApiError(res.status, `Ошибка сервера (${res.status})`),
+    }
   } catch {
-    return false
+    return {
+      kind: 'error',
+      error: new ApiError(0, 'Нет соединения с сервером'),
+    }
   }
 }
 
@@ -68,6 +81,10 @@ interface RequestOptions {
   auth?: boolean
   /** return the raw body as a Blob (file downloads) instead of parsed JSON */
   asBlob?: boolean
+  /** internal guard: an original request may refresh the session only once */
+  retryAfterRefresh?: boolean
+  /** Cancels obsolete TanStack Query requests when their observer/key changes. */
+  signal?: AbortSignal
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -86,21 +103,33 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
           ? JSON.stringify(options.body)
           : undefined,
       credentials: 'include',
+      signal: options.signal,
     })
-  } catch {
+  } catch (error) {
+    if (options.signal?.aborted) throw error
     throw new ApiError(0, 'Нет соединения с сервером')
   }
 
   // One transparent refresh attempt on 401 (except auth-less calls like login).
-  if (res.status === 401 && options.auth !== false) {
+  if (
+    res.status === 401
+    && options.auth !== false
+    && options.retryAfterRefresh !== false
+  ) {
     refreshPromise ??= tryRefresh().finally(() => {
       refreshPromise = null
     })
-    const refreshed = await refreshPromise
-    if (refreshed) {
-      return request<T>(path, options)
+    const refreshResult = await refreshPromise
+    if (refreshResult.kind === 'refreshed') {
+      return request<T>(path, { ...options, retryAfterRefresh: false })
     }
+    if (refreshResult.kind === 'error') throw refreshResult.error
     // Refresh failed: the backend has already cleared the cookies — sign out.
+    unauthorizedHandler?.()
+    throw new ApiError(401, 'Сессия истекла. Войдите снова.')
+  }
+
+  if (res.status === 401 && options.auth !== false) {
     unauthorizedHandler?.()
     throw new ApiError(401, 'Сессия истекла. Войдите снова.')
   }
@@ -125,8 +154,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 export const api = {
-  get: <T>(path: string): Promise<T> => request<T>(path),
-  post: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'POST', body }),
+  get: <T>(path: string, options: { signal?: AbortSignal } = {}): Promise<T> =>
+    request<T>(path, options),
+  post: <T>(path: string, body?: unknown, options: { auth?: boolean } = {}): Promise<T> =>
+    request<T>(path, { ...options, method: 'POST', body }),
   put: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown): Promise<T> => request<T>(path, { method: 'PATCH', body }),
   del: <T = void>(path: string, body?: unknown): Promise<T> =>

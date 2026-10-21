@@ -7,9 +7,10 @@
  */
 import { api } from './client'
 import type { User } from './types'
+import { userSchema } from './validation'
 
 export function login(email: string, password: string): Promise<User> {
-  return api.post<User>('/api/v1/auth/login', { email, password })
+  return api.post<unknown>('/api/v1/auth/login', { email, password }, { auth: false }).then((data) => userSchema.parse(data))
 }
 
 export function register(email: string, password: string): Promise<User> {
@@ -45,8 +46,8 @@ export function resetPassword(email: string, code: string, newPassword: string):
   })
 }
 
-export function fetchMe(): Promise<User> {
-  return api.get<User>('/api/v1/auth/me')
+export function fetchMe(signal?: AbortSignal): Promise<User> {
+  return api.get<unknown>('/api/v1/auth/me', { signal }).then((data) => userSchema.parse(data))
 }
 
 /** The refresh token travels in the HttpOnly cookie; backend clears both cookies. */
@@ -55,8 +56,8 @@ export function logout(): Promise<void> {
 }
 
 /** Статус токена proverkacheka (GET /api/v1/auth/me/proverkacheka-token). */
-export function fetchProverkachekaTokenStatus(): Promise<{ has_token: boolean }> {
-  return api.get<{ has_token: boolean }>('/api/v1/auth/me/proverkacheka-token')
+export function fetchProverkachekaTokenStatus(signal?: AbortSignal): Promise<{ has_token: boolean }> {
+  return api.get<{ has_token: boolean }>('/api/v1/auth/me/proverkacheka-token', { signal })
 }
 
 /** Сохранение токена proverkacheka (PUT /api/v1/auth/me/proverkacheka-token). */

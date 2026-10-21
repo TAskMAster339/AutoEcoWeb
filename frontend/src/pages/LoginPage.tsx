@@ -206,7 +206,7 @@ export function LoginPage() {
             </Stack>
           </Box>
 
-          <Typography variant="body2" sx={{ textAlign: 'center' }}>
+          <Typography component="div" variant="body2" sx={{ textAlign: 'center' }}>
             {mode === 'login' ? (
               <>
                 Нет аккаунта?{' '}

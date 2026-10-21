@@ -21,7 +21,7 @@ import { useStores, useUpdateTransaction } from '../../hooks/useTransactions'
 import { messageFromError } from '../../api/client'
 import { parseNum } from '../../lib/numbers'
 import type { Store, Tag, TransactionUpdatePatch, TransactionView } from '../../api/types'
-import { matchesOptionSearch } from '../../lib/transactionInteractions.mjs'
+import { matchesOptionSearch } from '../../lib/transactionInteractions'
 
 export type QuickEditField =
   | 'date'

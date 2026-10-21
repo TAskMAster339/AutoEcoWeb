@@ -51,8 +51,6 @@ The AI MUST NEVER
 - invent fields that are absent from both the backend model and intended contract
 - change authentication flow unless the task explicitly requires it
 - fake backend implementation
-- log into the app or do manual browser testing (login, navigation, clicks,
-  form filling) — browser smoke checks only with explicit owner permission
 
 If an endpoint is missing, implement it on the backend following the existing
 router → service → repository layering and then wire the frontend to the real
@@ -63,9 +61,8 @@ OpenAPI contract. Never fake production API.
 Backend is the source of truth. The frontend MUST strictly follow OpenAPI.
 
 - Auth always uses the real API.
-- Transactions / summary / tags / rules / analytics may serve mock data while
-  backend endpoints are missing, gated by `VITE_USE_MOCK_API` (see
-  `frontend/TODO.md` for what is still mock).
+- Transactions / summary / tags / rules / analytics use the real API. If an
+  endpoint is missing, implement it on the backend before wiring the UI.
 - If something is unavailable: display loading / empty / error / offline states.
 - Never invent production API.
 

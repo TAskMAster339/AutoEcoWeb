@@ -22,17 +22,18 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Frontend - npm ci + build (tsc -b + vite)
+      - name: Frontend - install, test and build
         working-directory: frontend
         run: |
           npm ci
+          npm test
           npm run build
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Backend - pytest
+      - name: Backend - locked install, lint, typing and tests
         working-directory: backend
         env:
           # Значения фиктивные: Settings (pydantic-settings) требует эти поля при
@@ -43,16 +44,69 @@ jobs:
           POSTGRES_PORT: 5432
           POSTGRES_DB_NAME: test
           JWT_SECRET: test-secret
+          APP_ENV: test
         run: |
-          # pytest, pytest-asyncio, aiosqlite отдельно: requirements.txt с хэшами
-          pip install pytest pytest-asyncio aiosqlite
-          pip install -r requirements.txt
-          python -m pytest tests/ -q
+          python -m pip install uv
+          uv sync --locked --group dev
+          uv run ruff check src tests
+          uv run mypy src
+          uv run pytest tests/ -q
+      - name: Check generated OpenAPI contract
+        working-directory: frontend
+        env:
+          API_PYTHON: ../backend/.venv/bin/python
+        run: |
+          npm run api:generate
+          git diff --exit-code -- openapi.json src/api/generated.ts
+
+  postgres-integration:
+    name: PostgreSQL migrations and locking
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: autoeco_test
+          POSTGRES_PASSWORD: autoeco_test
+          POSTGRES_DB: autoeco_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U autoeco_test -d autoeco_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_USER: autoeco_test
+      POSTGRES_PASSWORD: autoeco_test
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DB_NAME: autoeco_test
+      JWT_SECRET: postgres-integration-secret
+      APP_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install locked backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install uv
+          uv sync --locked --group dev
+
+      - name: Apply migrations and exercise PostgreSQL locks
+        working-directory: backend
+        run: |
+          uv run alembic upgrade head
+          uv run pytest postgres_tests/ -q
 
   deploy:
     name: Деплой на сервер
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, postgres-integration]
     steps:
       - name: Обновление и пересборка на autoeco.mooo.com
         uses: appleboy/ssh-action@v1.2.0

@@ -1,6 +1,7 @@
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from src.core.config import settings
@@ -25,6 +26,10 @@ from src.services.email import EmailService
 
 def _hash_refresh_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 
 class AuthService:
@@ -143,11 +148,25 @@ class AuthService:
         return await self._issue_tokens(user)
 
     async def refresh(self, raw_token: str) -> TokenPair:
-        token = await self._tokens.get_active(_hash_refresh_token(raw_token))
+        now = datetime.now(timezone.utc)
+        token = await self._tokens.get_for_rotation(_hash_refresh_token(raw_token))
         if token is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Refresh-токен недействителен или отозван",
+            )
+        if _as_utc(token.expires_at) <= now:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh-токен истёк",
+            )
+        if token.revoked_at is not None and (
+            token.grace_expires_at is None
+            or _as_utc(token.grace_expires_at) <= now
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh-токен уже использован",
             )
         user = await self._users.get(token.user_id)
         if user is None:
@@ -157,8 +176,20 @@ class AuthService:
             )
         self._ensure_can_auth(user)
 
-        await self._tokens.revoke(token)
-        return await self._issue_tokens(user)
+        raw_refresh = secrets.token_urlsafe(32)
+        replacement_hash = _hash_refresh_token(raw_refresh)
+        if token.revoked_at is None:
+            await self._tokens.mark_rotated(
+                token,
+                replaced_by_hash=replacement_hash,
+                grace_expires_at=now
+                + timedelta(seconds=settings.refresh_token_grace_seconds),
+            )
+        return await self._issue_tokens(
+            user,
+            family_id=token.family_id,
+            raw_refresh=raw_refresh,
+        )
 
     async def logout(self, raw_token: str) -> None:
         token = await self._tokens.get_active(_hash_refresh_token(raw_token))
@@ -251,9 +282,15 @@ class AuthService:
             )
         return user
 
-    async def _issue_tokens(self, user: User) -> LoginResponse:
+    async def _issue_tokens(
+        self,
+        user: User,
+        *,
+        family_id: UUID | None = None,
+        raw_refresh: str | None = None,
+    ) -> LoginResponse:
         access_token = create_access_token(user.id)
-        raw_refresh = secrets.token_urlsafe(32)
+        raw_refresh = raw_refresh or secrets.token_urlsafe(32)
         expires_at = datetime.now(timezone.utc) + timedelta(
             days=settings.refresh_token_expire_days,
         )
@@ -261,6 +298,7 @@ class AuthService:
             user.id,
             _hash_refresh_token(raw_refresh),
             expires_at,
+            family_id=family_id,
         )
         return LoginResponse(
             access_token=access_token,

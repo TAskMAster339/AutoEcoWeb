@@ -7,6 +7,7 @@
  * с total (бесконечный скролл AG Grid), фильтры и баланс строки считает бэкенд.
  */
 import { api } from './client'
+import { transactionPageSchema, transactionSchema } from './validation'
 import type {
   CursorPage,
   Transaction,
@@ -36,6 +37,10 @@ export type TransactionSortBy =
 export interface TransactionsPageParams {
   limit?: number
   offset?: number
+  /** Opaque keyset cursor for the date-ascending mobile feed. */
+  cursor?: string
+  /** Counts matching rows only when the caller needs a fresh total. */
+  include_total?: boolean
   date_from?: string
   date_to?: string
   /** Мультивыбор тегов (IN); пустой/отсутствующий = без фильтра. */
@@ -55,10 +60,13 @@ export interface TransactionsPageParams {
 /** GET /api/v1/transactions — offset-пагинация, фильтры считает бэкенд. */
 export function fetchTransactionsPage(
   params: TransactionsPageParams = {},
+  signal?: AbortSignal,
 ): Promise<CursorPage<Transaction>> {
   const search = new URLSearchParams()
   if (params.limit !== undefined) search.set('limit', String(params.limit))
   if (params.offset !== undefined) search.set('offset', String(params.offset))
+  if (params.cursor) search.set('cursor', params.cursor)
+  if (params.include_total !== undefined) search.set('include_total', String(params.include_total))
   if (params.date_from) search.set('date_from', params.date_from)
   if (params.date_to) search.set('date_to', params.date_to)
   if (params.tag_ids?.length) params.tag_ids.forEach((id) => search.append('tag_ids', id))
@@ -72,43 +80,38 @@ export function fetchTransactionsPage(
   if (params.sort_by) search.set('sort_by', params.sort_by)
   if (params.sort_dir) search.set('sort_dir', params.sort_dir)
   const qs = search.toString()
-  return api.get<CursorPage<Transaction>>(
+  return api.get<unknown>(
     `/api/v1/transactions${qs ? `?${qs}` : ''}`,
-  )
-}
-
-/**
- * Все транзакции (все страницы) — для счётчиков тегов и экспорта.
- * Цикл по total: offset-пагинация вместо keyset-курсора.
- */
-export async function fetchAllTransactions(): Promise<Transaction[]> {
-  const items: Transaction[] = []
-  let offset = 0
-  // защитный лимит: 500 страниц × 100 = 50 000 транзакций
-  for (let i = 0; i < 500; i++) {
-    const page = await fetchTransactionsPage({ limit: 100, offset })
-    items.push(...page.items)
-    if (page.total === null || page.total === undefined || items.length >= page.total) break
-    offset += page.items.length
-  }
-  return items
+    { signal },
+  ).then((data) => transactionPageSchema.parse(data))
 }
 
 /** GET /api/v1/transactions/stores — все магазины пользователя (свои + из чеков). */
-export function fetchTransactionStores(): Promise<Store[]> {
-  return api.get<Store[]>('/api/v1/transactions/stores')
+export function fetchTransactionStores(signal?: AbortSignal): Promise<Store[]> {
+  return api.get<Store[]>('/api/v1/transactions/stores', { signal })
 }
 
 /** POST /api/v1/transactions — ручная транзакция без чека. */
 export function createTransaction(draft: TransactionDraft): Promise<Transaction> {
-  return api.post<Transaction>('/api/v1/transactions', draft)
+  return api.post<unknown>('/api/v1/transactions', draft).then((data) => transactionSchema.parse(data))
 }
 
 export function updateTransaction(
   id: string,
   patch: TransactionUpdatePatch,
 ): Promise<Transaction> {
-  return api.patch<Transaction>(`/api/v1/transactions/${id}`, patch)
+  return api.patch<unknown>(`/api/v1/transactions/${id}`, patch).then((data) => transactionSchema.parse(data))
+}
+
+export async function bulkUpdateTransactions(
+  ids: string[],
+  patch: TransactionUpdatePatch,
+): Promise<number> {
+  const result = await api.patch<{ updated: number }>('/api/v1/transactions/bulk', {
+    ids,
+    patch,
+  })
+  return result.updated
 }
 
 export function deleteTransaction(id: string): Promise<void> {

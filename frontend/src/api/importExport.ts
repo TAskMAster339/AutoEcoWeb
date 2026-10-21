@@ -1,3 +1,5 @@
+import type { components } from "./generated"
+type DeepRequired<T> = T extends readonly (infer U)[] ? DeepRequired<U>[] : T extends object ? { [K in keyof T]-?: DeepRequired<T[K]> } : T
 /**
  * Импорт/экспорт данных (универсальный формат: Дата | Категория | Магазин |
  * Описание | Доход | Расход). Парсинг и валидация — на бэкенде; фронт только
@@ -6,53 +8,13 @@
 
 import { api } from './client'
 
-export interface ImportRowPreview {
-  row_number: number
-  date: string | null
-  category: string | null
-  store: string | null
-  description: string
-  quantity: string | null
-  unit: string | null
-  price: string | null
-  comment: string | null
-  income: string
-  expense: string
-  operation_kind: 'income' | 'expense'
-  errors: string[]
-  duplicate: 'file' | 'existing' | null
-  duplicate_of: number | null
-}
+export type ImportRowPreview = DeepRequired<components["schemas"]["ImportRowPreview"]>
 
-export interface ImportPreview {
-  rows: ImportRowPreview[]
-  total: number
-  valid: number
-  invalid: number
-  duplicates: number
-}
+export type ImportPreview = DeepRequired<components["schemas"]["ImportPreview"]>
 
-export interface ImportRowIn {
-  date: string
-  category: string | null
-  store: string | null
-  description: string
-  quantity: string | null
-  unit: string | null
-  price: string | null
-  comment: string | null
-  income: string
-  expense: string
-  operation_kind: 'income' | 'expense'
-  allow_duplicate?: boolean
-}
+export type ImportRowIn = components["schemas"]["ImportRowIn"]
 
-export interface ImportResult {
-  imported: number
-  skipped: number
-  errors: string[]
-  tags_created: string[]
-}
+export type ImportResult = DeepRequired<components["schemas"]["ImportResult"]>
 
 /** Разобрать файл на бэкенде и вернуть строки предпросмотра (без записи). */
 export async function previewImport(file: File): Promise<ImportPreview> {

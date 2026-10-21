@@ -2,14 +2,18 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from 
 import * as api from '../api/aliases'
 import { useUiStore } from '../store/uiStore'
 import type { AliasDraft, AliasScope, AliasUpdatePatch } from '../api/types'
-import { userQueryKey } from '../lib/querySession'
+import { queryKeys } from '../lib/queryKeys'
+import { invalidateAliasDomain } from '../lib/queryInvalidation'
 
 const PAGE_SIZE = 50
 
 export function useAliases(scope: AliasScope, search = '') {
   return useInfiniteQuery({
-    queryKey: userQueryKey('aliases', scope, search),
-    queryFn: ({ pageParam }) => api.fetchAliasesPage({ scope, limit: PAGE_SIZE, offset: pageParam, search: search.trim() || undefined }),
+    queryKey: queryKeys.aliases.list(scope, search),
+    queryFn: ({ pageParam, signal }) => api.fetchAliasesPage(
+      { scope, limit: PAGE_SIZE, offset: pageParam, search: search.trim() || undefined },
+      signal,
+    ),
     initialPageParam: 0,
     getNextPageParam: (last, pages) => {
       const loaded = pages.reduce((n, p) => n + p.items.length, 0)
@@ -18,18 +22,6 @@ export function useAliases(scope: AliasScope, search = '') {
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   })
-}
-
-function invalidateAfterAliasChange(queryClient: ReturnType<typeof useQueryClient>) {
-  queryClient.setQueryData<number>(userQueryKey('txRevision'), (revision = 0) => revision + 1)
-  void queryClient.invalidateQueries({ queryKey: userQueryKey('aliases') })
-  void queryClient.invalidateQueries({ queryKey: userQueryKey('txPage') })
-  void queryClient.invalidateQueries({ queryKey: userQueryKey('transactions') })
-  void queryClient.invalidateQueries({ queryKey: userQueryKey('receipts') })
-  void queryClient.invalidateQueries({ queryKey: userQueryKey('summary') })
-  void queryClient.invalidateQueries({ queryKey: userQueryKey('analytics') })
-  void queryClient.invalidateQueries({ queryKey: userQueryKey('stores') })
-  void queryClient.invalidateQueries({ queryKey: userQueryKey('user-limits') })
 }
 
 function updateSellerFilterAfterAlias(scope: AliasScope, originalName: string, aliasName: string) {
@@ -49,8 +41,8 @@ function updateProductSearchAfterAlias(scope: AliasScope, originalName: string, 
 
 export function useCreateAlias() {
   const queryClient = useQueryClient()
-  return useMutation({ mutationFn: (draft: AliasDraft) => api.createAlias(draft), onSuccess: (_alias, draft) => { invalidateAfterAliasChange(queryClient); updateSellerFilterAfterAlias(draft.scope ?? 'seller', draft.original_name, draft.alias_name); updateProductSearchAfterAlias(draft.scope ?? 'seller', draft.original_name, draft.alias_name) } })
+  return useMutation({ mutationFn: (draft: AliasDraft) => api.createAlias(draft), onSuccess: (_alias, draft) => { void invalidateAliasDomain(queryClient); updateSellerFilterAfterAlias(draft.scope ?? 'seller', draft.original_name, draft.alias_name); updateProductSearchAfterAlias(draft.scope ?? 'seller', draft.original_name, draft.alias_name) } })
 }
-export function useUpdateAlias() { const queryClient = useQueryClient(); return useMutation({ mutationFn: ({ id, patch }: { id: string; patch: AliasUpdatePatch }) => api.updateAlias(id, patch), onSuccess: () => invalidateAfterAliasChange(queryClient) }) }
-export function useDeleteAlias() { const queryClient = useQueryClient(); return useMutation({ mutationFn: (id: string) => api.deleteAlias(id), onSuccess: () => invalidateAfterAliasChange(queryClient) }) }
-export function useApplyAliases() { const queryClient = useQueryClient(); return useMutation({ mutationFn: (scope?: AliasScope) => api.applyAliases(scope), onSuccess: () => invalidateAfterAliasChange(queryClient) }) }
+export function useUpdateAlias() { const queryClient = useQueryClient(); return useMutation({ mutationFn: ({ id, patch }: { id: string; patch: AliasUpdatePatch }) => api.updateAlias(id, patch), onSuccess: () => invalidateAliasDomain(queryClient) }) }
+export function useDeleteAlias() { const queryClient = useQueryClient(); return useMutation({ mutationFn: (id: string) => api.deleteAlias(id), onSuccess: () => invalidateAliasDomain(queryClient) }) }
+export function useApplyAliases() { const queryClient = useQueryClient(); return useMutation({ mutationFn: (scope?: AliasScope) => api.applyAliases(scope), onSuccess: () => invalidateAliasDomain(queryClient) }) }

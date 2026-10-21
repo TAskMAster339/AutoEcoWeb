@@ -205,9 +205,13 @@ export function ProfilePage() {
     const [pwMsg, setPwMsg] = useState<string | null>(null)
 
     useEffect(() => {
-        fetchProverkachekaTokenStatus()
+        const controller = new AbortController()
+        fetchProverkachekaTokenStatus(controller.signal)
             .then((r) => setHasToken(r.has_token))
-            .catch(() => setHasToken(false))
+            .catch(() => {
+                if (!controller.signal.aborted) setHasToken(false)
+            })
+        return () => controller.abort()
     }, [])
 
     const saveToken = async () => {

@@ -21,6 +21,7 @@ from src.schemas.alias import AliasCreate
 from src.schemas.tag import TagCreate
 from src.schemas.transaction import (
     TransactionCreate,
+    TransactionBulkUpdate,
     TransactionInReceipt,
     TransactionManualIn,
     TransactionOut,
@@ -601,6 +602,56 @@ async def test_delete_other_users_transaction_404(session):
     assert exc_info.value.status_code == 404  # noqa: PLR2004
 
 
+async def test_bulk_update_changes_all_owned_transactions(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    first = await service.create_standalone(
+        user, TransactionCreate(name="First", amount=Decimal("10.00"))
+    )
+    second = await service.create_standalone(
+        user, TransactionCreate(name="Second", amount=Decimal("20.00"))
+    )
+
+    updated = await service.bulk_update(
+        user,
+        TransactionBulkUpdate(
+            ids=[first.id, second.id],
+            patch=TransactionUpdate(comment="Reviewed"),
+        ),
+    )
+
+    assert updated == 2  # noqa: PLR2004
+    assert (await service.get(user, first.id)).comment == "Reviewed"
+    assert (await service.get(user, second.id)).comment == "Reviewed"
+
+
+async def test_bulk_update_checks_every_id_before_mutating(session):
+    owner = await _make_user(session)
+    other = await UserRepository(session).create(
+        email="bulk-other@test.ru",
+        password_hash="x" * 60,
+    )
+    service = _tx_service(session)
+    owned = await service.create_standalone(
+        owner, TransactionCreate(name="Owned", amount=Decimal("10.00"))
+    )
+    foreign = await service.create_standalone(
+        other, TransactionCreate(name="Foreign", amount=Decimal("20.00"))
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.bulk_update(
+            owner,
+            TransactionBulkUpdate(
+                ids=[owned.id, foreign.id],
+                patch=TransactionUpdate(comment="Must not persist"),
+            ),
+        )
+
+    assert exc_info.value.status_code == HTTPStatus.NOT_FOUND
+    assert (await service.get(owner, owned.id)).comment is None
+
+
 # ---------- список / пагинация / фильтры ----------
 
 
@@ -629,6 +680,44 @@ async def test_list_page_offset_paginates(session):
         | {tx.id for tx, _, _ in rows3}
     )
     assert len(ids) == 5  # noqa: PLR2004
+
+
+async def test_list_page_keyset_paginates_without_recounting(session):
+    user = await _make_user(session)
+    service = _tx_service(session)
+    for i in range(5):
+        await service.create_standalone(
+            user,
+            TransactionCreate(
+                name=f"Cursor {i}",
+                amount=Decimal(i),
+                datetime=datetime(2026, 1, 1, tzinfo=timezone.utc)
+                + timedelta(days=i // 2),
+            ),
+        )
+
+    first, total = await service.list_page(
+        user,
+        limit=2,
+        sort_by="date",
+        sort_dir="asc",
+    )
+    last = first[-1][0]
+    second, second_total = await service.list_page(
+        user,
+        limit=2,
+        sort_by="date",
+        sort_dir="asc",
+        after_datetime=last.check_datetime,
+        after_id=last.id,
+        include_total=False,
+    )
+
+    assert total == 5  # noqa: PLR2004
+    assert second_total is None
+    assert len(second) == 2  # noqa: PLR2004
+    assert {row[0].id for row in first}.isdisjoint({row[0].id for row in second})
+    assert second[0][0].check_datetime >= last.check_datetime
 
 
 async def test_list_and_summary_filter_by_amount_range(session):

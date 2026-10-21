@@ -277,7 +277,7 @@ export function TagsPage() {
                                 aria-label="Без иконки"
                                 aria-pressed={icon === null}
                                 sx={{
-                                    height: 40,
+                                    minHeight: 44,
                                     borderRadius: '8px',
                                     border: '1px solid',
                                     borderColor: icon === null ? 'primary.main' : 'divider',
@@ -299,7 +299,7 @@ export function TagsPage() {
                                     aria-label={`Выбрать иконку ${item}`}
                                     aria-pressed={icon === item}
                                     sx={{
-                                        height: 40,
+                                        minHeight: 44,
                                         borderRadius: '8px',
                                         border: '1px solid',
                                         borderColor: icon === item ? 'primary.main' : 'divider',
@@ -366,7 +366,7 @@ export function TagsPage() {
                                     aria-pressed={color === c}
                                     sx={{
                                         position: 'relative',
-                                        height: 40,
+                                        minHeight: 44,
                                         borderRadius: '8px',
                                         bgcolor: c,
                                         border: color === c ? '3px solid' : '1px solid transparent',
@@ -391,7 +391,7 @@ export function TagsPage() {
                                 value={color}
                                 onChange={(e: ChangeEvent<HTMLInputElement>) => setColor(e.target.value.toUpperCase())}
                                 aria-label="Выбрать свой цвет"
-                                sx={{ width: 44, height: 36, p: 0.25, border: '1px solid', borderColor: 'divider', borderRadius: '6px', bgcolor: 'transparent', cursor: 'pointer' }}
+                                sx={{ width: 44, height: 44, p: 0.25, border: '1px solid', borderColor: 'divider', borderRadius: '6px', bgcolor: 'transparent', cursor: 'pointer' }}
                             />
                             <TextField
                                 label="Свой цвет"
