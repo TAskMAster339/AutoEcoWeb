@@ -51,6 +51,10 @@ services:
     # container environment — no per-variable listing. Copy .env.example.
     env_file:
       - .env
+    # The deployment profile is production even on hosts with an older .env.
+    # Keep security validators enabled for both Alembic and the API process.
+    environment:
+      APP_ENV: production
     expose:
       - 80
     depends_on:
