@@ -27,6 +27,18 @@ function currentFilters(): TransactionUrlFilters {
   }
 }
 
+function filtersFromUrl(search: string): TransactionUrlFilters {
+  const params = new URLSearchParams(search)
+  const parsed = parseTransactionFilterSearch(params)
+  // A plain navigation link must preserve the shared period. Explicit date
+  // parameters in deep links still take precedence over the saved selection.
+  if (!['period', 'from', 'to', 'month', 'day'].some((key) => params.has(key))) {
+    const { periodKey, customFrom, customTo, monthYear, dayDate } = currentFilters()
+    return { ...parsed, periodKey, customFrom, customTo, monthYear, dayDate }
+  }
+  return parsed
+}
+
 /** Keeps the transaction filter store synchronized with router navigation. */
 export function useTransactionFilterUrl(): void {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -48,7 +60,7 @@ export function useTransactionFilterUrl(): void {
   })))
 
   useEffect(() => {
-    const parsed = parseTransactionFilterSearch(new URLSearchParams(urlSearch))
+    const parsed = filtersFromUrl(urlSearch)
     if (transactionUrlFiltersEqual(currentFilters(), parsed)) {
       applyingUrl.current = null
       return
@@ -58,7 +70,7 @@ export function useTransactionFilterUrl(): void {
   }, [urlSearch])
 
   useEffect(() => {
-    const parsed = parseTransactionFilterSearch(new URLSearchParams(urlSearch))
+    const parsed = filtersFromUrl(urlSearch)
     if (applyingUrl.current === urlSearch) {
       if (transactionUrlFiltersEqual(filters, parsed)) applyingUrl.current = null
       return

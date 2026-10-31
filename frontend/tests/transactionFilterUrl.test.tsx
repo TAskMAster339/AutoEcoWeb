@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { useTransactionFilterUrl } from '../src/hooks/useTransactionFilterUrl'
@@ -44,6 +44,47 @@ function UrlProbe() {
 }
 
 describe('transaction filter URL contract', () => {
+  it.each([
+    { periodKey: 'thisMonth' as const },
+    { periodKey: 'month' as const, monthYear: '2026-09' },
+    { periodKey: 'day' as const, dayDate: '2026-09-21' },
+    { periodKey: 'custom' as const, customFrom: '2026-09-01', customTo: '2026-09-21' },
+  ])('preserves the shared period on entry and after leaving the table: %j', async (period) => {
+    useUiStore.setState({ ...EMPTY_FILTERS, ...period })
+    function Navigation() {
+      const navigate = useNavigate()
+      return <>
+        <button onClick={() => navigate('/dashboard')}>dashboard</button>
+        <button onClick={() => navigate('/transactions')}>table</button>
+      </>
+    }
+    render(<MemoryRouter initialEntries={['/dashboard']}>
+      <Navigation />
+      <Routes>
+        <Route path="/dashboard" element={<div>Dashboard</div>} />
+        <Route path="/transactions" element={<UrlProbe />} />
+      </Routes>
+    </MemoryRouter>)
+
+    fireEvent.click(screen.getByRole('button', { name: 'table' }))
+    await waitFor(() => expect(screen.getByLabelText('location search').textContent).toContain(`period=${period.periodKey}`))
+    expect(useUiStore.getState()).toMatchObject(period)
+    fireEvent.click(screen.getByRole('button', { name: 'dashboard' }))
+    act(() => useUiStore.getState().setPeriodKey('lastMonth'))
+    fireEvent.click(screen.getByRole('button', { name: 'table' }))
+    await waitFor(() => expect(screen.getByLabelText('location search').textContent).toContain('period=lastMonth'))
+    expect(useUiStore.getState().periodKey).toBe('lastMonth')
+    act(() => useUiStore.getState().setPeriodKey('all'))
+    await waitFor(() => expect(screen.getByLabelText('location search').textContent).toBe(''))
+    expect(useUiStore.getState().periodKey).toBe('all')
+  })
+
+  it.each(['period=all', 'period=lastMonth', 'day=2026-09-21'])('honors an explicit deep-link period: %s', async (query) => {
+    useUiStore.setState({ ...EMPTY_FILTERS, periodKey: 'thisMonth' })
+    render(<MemoryRouter initialEntries={[`/transactions?${query}`]}><UrlProbe /></MemoryRouter>)
+    await waitFor(() => expect(useUiStore.getState()).toMatchObject(parseTransactionFilterSearch(new URLSearchParams(query))))
+  })
+
   it('round-trips normalized filters through pure parse and serialize functions', () => {
     const parsed = parseTransactionFilterSearch(new URLSearchParams(
       'search=кофе&tag=a&tag=b&store=Дом&type=expense&period=month&month=2026-09',

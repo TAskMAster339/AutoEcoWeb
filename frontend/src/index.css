@@ -191,11 +191,12 @@ a {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* AG Grid: mockup look — tight rows, light surface, subtle borders.
-   Light values are scoped to .ag-theme-quartz (specificity 0-2-0) because
+/* AG Grid: tight rows and mode-aware app surfaces, with subtle borders.
+   Both themes use two classes (specificity 0-2-0) because
    AG Grid's own theme CSS is injected later (lazy chunk) and would win any
    tie against a bare .ag-theme-autoeco (0-1-0) selector. */
-.ag-theme-autoeco.ag-theme-quartz {
+.ag-theme-autoeco.ag-theme-quartz,
+.ag-theme-autoeco.ag-theme-quartz-dark {
   --ag-font-family: 'Inter', system-ui, sans-serif;
   --ag-font-size: 13px;
   --ag-border-color: var(--autoeco-grid-border);
@@ -220,21 +221,6 @@ a {
   --ag-checkbox-checked-color: var(--autoeco-grid-checkbox);
   --ag-checkbox-indeterminate-color: var(--autoeco-grid-checkbox);
   --ag-checkbox-unchecked-color: var(--autoeco-grid-secondary-text);
-  /* No blue focus ring on checkbox click (quartz default is a #2196f3 ring). */
-  --ag-input-focus-box-shadow: none;
-}
-
-/* Dark AG Grid: muted, cohesive with the app's dark surface (#17171c).
-   No zebra striping (bright bands), explicit secondary-foreground so
-   pagination/sort icons are not bright white. */
-.ag-theme-autoeco.ag-theme-quartz-dark {
-  /* Match the container's own frame (borderRadius 6px + border on the
-     wrapper Box): AG Grid's .ag-root-wrapper gets the same radius and no
-     border, so no corner gap / double border between the two rectangles. */
-  --ag-border-radius: 6px;
-  --ag-wrapper-border-radius: 6px;
-  --ag-borders: none;
-  --ag-cell-horizontal-padding: 12px;
   /* No blue focus ring on checkbox click (quartz default is a #2196f3 ring). */
   --ag-input-focus-box-shadow: none;
 }
