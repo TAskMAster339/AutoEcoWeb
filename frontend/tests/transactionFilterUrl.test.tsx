@@ -38,6 +38,8 @@ function UrlProbe() {
       <output aria-label="store search">{search}</output>
       <output aria-label="location search">{location.search}</output>
       <button onClick={() => useUiStore.getState().setSearch('из стора')}>store</button>
+      <button onClick={() => useUiStore.getState().setSearch('вод')}>вод</button>
+      <button onClick={() => useUiStore.getState().setSearch('вода')}>вода</button>
       <button onClick={() => navigate(-1)}>back</button>
     </>
   )
@@ -120,5 +122,18 @@ describe('transaction filter URL contract', () => {
       expect(screen.getByLabelText('location search').textContent)
         .toBe('?search=%D0%B8%D0%B7+%D1%81%D1%82%D0%BE%D1%80%D0%B0')
     })
+  })
+
+  it('keeps successive search edits in sync without restoring stale URL text', async () => {
+    render(<MemoryRouter initialEntries={['/transactions']}><UrlProbe /></MemoryRouter>)
+
+    fireEvent.click(screen.getByRole('button', { name: 'store' }))
+    await waitFor(() => expect(screen.getByLabelText('store search').textContent).toBe('из стора'))
+    fireEvent.click(screen.getByRole('button', { name: 'вод' }))
+    await waitFor(() => expect(screen.getByLabelText('store search').textContent).toBe('вод'))
+    await waitFor(() => expect(screen.getByLabelText('location search').textContent).toBe('?search=%D0%B2%D0%BE%D0%B4'))
+    fireEvent.click(screen.getByRole('button', { name: 'вода' }))
+    await waitFor(() => expect(screen.getByLabelText('store search').textContent).toBe('вода'))
+    await waitFor(() => expect(screen.getByLabelText('location search').textContent).toBe('?search=%D0%B2%D0%BE%D0%B4%D0%B0'))
   })
 })

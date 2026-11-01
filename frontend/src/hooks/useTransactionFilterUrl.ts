@@ -44,6 +44,9 @@ export function useTransactionFilterUrl(): void {
   const [searchParams, setSearchParams] = useSearchParams()
   const urlSearch = searchParams.toString()
   const applyingUrl = useRef<string | null>(null)
+  // Router updates from this hook may render before the store subscription effect
+  // has cleared applyingUrl. Keep the URL echo suppressed across those renders.
+  const lastWrittenUrl = useRef<string | null>(null)
   const filters = useUiStore(useShallow((state) => ({
     search: state.search,
     tagFilterIds: state.tagFilterIds,
@@ -61,6 +64,11 @@ export function useTransactionFilterUrl(): void {
 
   useEffect(() => {
     const parsed = filtersFromUrl(urlSearch)
+    if (lastWrittenUrl.current === urlSearch) {
+      lastWrittenUrl.current = null
+      applyingUrl.current = null
+      return
+    }
     if (transactionUrlFiltersEqual(currentFilters(), parsed)) {
       applyingUrl.current = null
       return
@@ -76,6 +84,9 @@ export function useTransactionFilterUrl(): void {
       return
     }
     const next = serializeTransactionFilters(filters).toString()
-    if (next !== urlSearch) setSearchParams(next, { replace: true })
+    if (next !== urlSearch) {
+      lastWrittenUrl.current = next
+      setSearchParams(next, { replace: true })
+    }
   }, [filters, setSearchParams, urlSearch])
 }
